@@ -240,7 +240,7 @@ export function WorkOrderDetail({ workOrderId }: WorkOrderDetailProps) {
       )}
 
       {/* Tab Bar */}
-      <div className="flex border-b border-bd-0 overflow-x-auto scrollbar-hide">
+      <div className="flex border-b border-white/[0.06] overflow-x-auto scrollbar-hide">
         {tabs.map((tab) => {
           const Icon = tab.icon
           return (
@@ -274,7 +274,7 @@ export function WorkOrderDetail({ workOrderId }: WorkOrderDetailProps) {
       </div>
 
       {/* Tab Content */}
-      <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-bd-0 overflow-hidden">
+      <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-white/[0.06] overflow-hidden">
         {activeTab === 'overview' && (
           <OverviewTab
             workOrder={workOrder}
@@ -339,7 +339,7 @@ function OverviewTab({
       {/* Status Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Progress */}
-        <div className="p-4 bg-bg-3/50 rounded-[var(--radius-md)] border border-bd-0/50">
+        <div className="p-4 bg-bg-3/50 rounded-[var(--radius-md)] border border-white/[0.06]/50">
           <div className="flex items-center gap-2 mb-2">
             <CheckCircle className="w-4 h-4 text-status-success" />
             <span className="text-xs font-medium text-fg-1">Progress</span>
@@ -357,7 +357,7 @@ function OverviewTab({
         </div>
 
         {/* Owner */}
-        <div className="p-4 bg-bg-3/50 rounded-[var(--radius-md)] border border-bd-0/50">
+        <div className="p-4 bg-bg-3/50 rounded-[var(--radius-md)] border border-white/[0.06]/50">
           <div className="flex items-center gap-2 mb-2">
             <Clock className="w-4 h-4 text-fg-2" />
             <span className="text-xs font-medium text-fg-1">Owner</span>
@@ -374,7 +374,7 @@ function OverviewTab({
         </div>
 
         {/* Pending Approvals */}
-        <div className="p-4 bg-bg-3/50 rounded-[var(--radius-md)] border border-bd-0/50">
+        <div className="p-4 bg-bg-3/50 rounded-[var(--radius-md)] border border-white/[0.06]/50">
           <div className="flex items-center gap-2 mb-2">
             <AlertCircle className={cn(
               'w-4 h-4',
@@ -451,7 +451,7 @@ function OverviewTab({
               return (
                 <div
                   key={approval.id}
-                  className="flex items-start gap-3 p-3 bg-bg-3/50 rounded-[var(--radius-md)] border border-bd-0/50"
+                  className="flex items-start gap-3 p-3 bg-bg-3/50 rounded-[var(--radius-md)] border border-white/[0.06]/50"
                 >
                   <AlertCircle className="w-4 h-4 text-status-warning mt-0.5 shrink-0" />
                   <div className="flex-1 min-w-0">
@@ -495,7 +495,7 @@ function OverviewTab({
           </div>
           <div>
             <dt className="text-fg-2 mb-1">Created</dt>
-            <dd className="text-fg-1 font-mono text-xs">{workOrder.createdAt.toLocaleDateString()}</dd>
+            <dd className="text-fg-1 font-mono text-xs">{new Date(workOrder.createdAt).toLocaleDateString()}</dd>
           </div>
           <div>
             <dt className="text-fg-2 mb-1">Updated</dt>
@@ -504,7 +504,7 @@ function OverviewTab({
           {workOrder.shippedAt && (
             <div>
               <dt className="text-fg-2 mb-1">Shipped</dt>
-              <dd className="text-fg-1 font-mono text-xs">{workOrder.shippedAt.toLocaleDateString()}</dd>
+              <dd className="text-fg-1 font-mono text-xs">{new Date(workOrder.shippedAt).toLocaleDateString()}</dd>
             </div>
           )}
         </dl>
@@ -549,8 +549,8 @@ function PipelineTab({
                 className={cn(
                   'flex-shrink-0 w-48 p-4 rounded-[var(--radius-md)] border',
                   stageOps.length === 0
-                    ? 'bg-bg-3/30 border-bd-0/50'
-                    : 'bg-bg-3/50 border-bd-0'
+                    ? 'bg-bg-3/30 border-white/[0.03]'
+                    : 'bg-bg-3/50 border-white/[0.06]'
                 )}
               >
                 {/* Stage Header */}
@@ -662,7 +662,7 @@ function OperationsTab({
             {operations.map((op) => (
               <div
                 key={op.id}
-                className="flex items-start gap-3 p-4 bg-bg-3/50 rounded-[var(--radius-md)] border border-bd-0/50 hover:border-bd-0 transition-colors"
+                className="flex items-start gap-3 p-4 bg-bg-3/50 rounded-[var(--radius-md)] border border-white/[0.03] hover:border-white/[0.06] transition-colors"
               >
                 {/* Status */}
                 <OperationStatusPill status={op.status} />
@@ -718,9 +718,9 @@ function OperationsTab({
           />
 
           {/* Dialog */}
-          <div className="relative w-full max-w-md mx-4 bg-bg-1 rounded-[var(--radius-lg)] border border-bd-0 shadow-xl">
+          <div className="relative w-full max-w-md mx-4 bg-bg-1 rounded-[var(--radius-lg)] border border-white/[0.06] shadow-xl">
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-bd-0">
+            <div className="flex items-center justify-between p-4 border-b border-white/[0.06]">
               <h3 className="text-sm font-semibold text-fg-0">New Operation</h3>
               <button
                 onClick={() => setShowCreate(false)}
@@ -748,7 +748,7 @@ function OperationsTab({
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="e.g., Implement authentication flow"
-                  className="w-full px-3 py-2 text-sm bg-bg-2 border border-bd-0 rounded-[var(--radius-md)] text-fg-0 placeholder:text-fg-3 focus:outline-none focus:border-bd-1"
+                  className="w-full px-3 py-2 text-sm bg-bg-2 border border-white/[0.06] rounded-[var(--radius-md)] text-fg-0 placeholder:text-fg-3 focus:outline-none focus:border-bd-1"
                   autoFocus
                 />
               </div>
@@ -761,7 +761,7 @@ function OperationsTab({
                 <select
                   value={station}
                   onChange={(e) => setStation(e.target.value)}
-                  className="w-full px-3 py-2 text-sm bg-bg-2 border border-bd-0 rounded-[var(--radius-md)] text-fg-0 focus:outline-none focus:border-bd-1"
+                  className="w-full px-3 py-2 text-sm bg-bg-2 border border-white/[0.06] rounded-[var(--radius-md)] text-fg-0 focus:outline-none focus:border-bd-1"
                 >
                   {STATIONS.map((s) => (
                     <option key={s} value={s}>
@@ -781,7 +781,7 @@ function OperationsTab({
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Additional context or instructions..."
                   rows={3}
-                  className="w-full px-3 py-2 text-sm bg-bg-2 border border-bd-0 rounded-[var(--radius-md)] text-fg-0 placeholder:text-fg-3 focus:outline-none focus:border-bd-1 resize-none"
+                  className="w-full px-3 py-2 text-sm bg-bg-2 border border-white/[0.06] rounded-[var(--radius-md)] text-fg-0 placeholder:text-fg-3 focus:outline-none focus:border-bd-1 resize-none"
                 />
               </div>
 
@@ -840,7 +840,7 @@ function ActivityTab({
               return (
                 <div
                   key={activity.id}
-                  className="flex items-start gap-3 py-3 border-b border-bd-0/30 last:border-0"
+                  className="flex items-start gap-3 py-3 border-b border-white/[0.06]/30 last:border-0"
                 >
                   {/* Icon */}
                   <div className={cn(

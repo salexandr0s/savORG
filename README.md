@@ -27,7 +27,7 @@ SAVORG Mission Control is a local-first ops console for orchestrating AI agents.
 | **Node.js** | 20+ | See `.nvmrc` |
 | **npm** | 10+ | Included with Node 20 |
 | **OS** | macOS | Linux likely works (untested) |
-| **OpenClaw** | Latest | Must be on PATH for operational mode |
+| **OpenClaw** | 0.1.0+ | Required for operational mode |
 
 ### Checking Prerequisites
 
@@ -37,8 +37,10 @@ node -v  # Should be v20.x or higher
 
 # OpenClaw (optional for demo mode)
 which openclaw  # Should return a path
-openclaw --version
+openclaw --version  # Should be 0.1.0 or higher
 ```
+
+> **Note:** Legacy `clawdbot` CLI is not supported. If you're using clawdbot, please upgrade to OpenClaw first.
 
 ---
 

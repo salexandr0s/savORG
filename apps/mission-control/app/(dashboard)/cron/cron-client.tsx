@@ -100,7 +100,7 @@ export function CronClient({ cronJobs }: Props) {
           }
         />
 
-        <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-bd-0 overflow-hidden">
+        <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-white/[0.06] overflow-hidden">
           <CanonicalTable
             columns={cronColumns}
             rows={cronJobs}
@@ -134,7 +134,7 @@ export function CronClient({ cronJobs }: Props) {
 
 function CronDetail({ job }: { job: CronJobDTO }) {
   return (
-    <div className="p-4 space-y-6">
+    <div className="space-y-6">
       {/* Status */}
       <div className="flex items-center gap-3">
         <span className={cn(
@@ -155,7 +155,7 @@ function CronDetail({ job }: { job: CronJobDTO }) {
 
       {/* Schedule */}
       <PageSection title="Schedule">
-        <div className="p-3 bg-bg-3 rounded-[var(--radius-md)] border border-bd-0">
+        <div className="p-3 bg-bg-3 rounded-[var(--radius-md)] border border-white/[0.06]">
           <code className="font-mono text-sm text-fg-0">{job.schedule}</code>
         </div>
       </PageSection>

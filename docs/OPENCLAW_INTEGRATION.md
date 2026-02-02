@@ -15,57 +15,36 @@ OpenClaw is the CLI for orchestrating AI agents. Mission Control provides a visu
 
 ---
 
-## CLI Binary Support
+## Requirements
 
-Mission Control supports both CLI binary names:
+### Supported Binary
 
-- **`openclaw`** — New/current name
-- **`clawdbot`** — Legacy name (still in use on some systems)
+Mission Control requires **OpenClaw** (the `openclaw` CLI):
 
-### Resolution Order
+| Requirement | Value |
+|-------------|-------|
+| Binary | `openclaw` |
+| Minimum version | `0.1.0` |
+| Install from | https://github.com/openclaw/openclaw |
 
-The binary is resolved at runtime with this priority:
+> **Note:** Legacy `clawdbot` binary is not supported. If you're using clawdbot, please upgrade to OpenClaw first.
 
-1. **`OPENCLAW_BIN` environment variable** — Explicit override
-2. **`openclaw --version`** — Try new name first
-3. **`clawdbot --version`** — Fallback to legacy name
-4. **Graceful degradation** — Demo mode if neither found
-
-### Override via Environment
+### Verification
 
 ```bash
-# Force a specific binary
-OPENCLAW_BIN=clawdbot npm run dev
+# Check installation
+which openclaw
+# Should return: /usr/local/bin/openclaw (or similar)
 
-# Or in .env
-OPENCLAW_BIN=clawdbot
+# Check version
+openclaw --version
+# Should return: 0.1.0 or higher
 ```
 
-### API Response
+### If OpenClaw Is Not Installed
 
-The maintenance API includes CLI info:
+When `openclaw` is not found on PATH:
 
-```json
-{
-  "cliBin": "clawdbot",
-  "cliVersion": "1.2.3",
-  "cliSource": "fallback"
-}
-```
-
----
-
-## Detection
-
-Mission Control detects the CLI binary at runtime:
-
-```typescript
-// packages/adapters-openclaw/src/resolve-bin.ts
-const resolution = await resolveCliBin()
-// { bin: 'clawdbot', version: '1.2.3', source: 'fallback' }
-```
-
-If neither binary is found:
 - Mission Control runs in **demo mode** with mock data
 - All features remain accessible for UI exploration
 - No real commands are executed
@@ -74,25 +53,25 @@ If neither binary is found:
 
 ## Command Allowlist
 
-Mission Control only executes pre-approved commands. Commands are stored as args (without the binary name) and the resolved binary is prepended at runtime.
+Mission Control only executes pre-approved commands. All commands use the `openclaw` binary.
 
 **Current Allowlist (18 commands):**
 
-| Command Args | Description | Dangerous |
-|--------------|-------------|-----------|
-| `health [--json]` | Check gateway health | No |
-| `gateway status [--json]` | Get gateway status | No |
-| `gateway probe` | Probe connectivity | No |
-| `doctor [--json]` | Run diagnostics | No |
-| `doctor --fix` | Auto-fix issues | **Yes** |
-| `gateway start` | Start gateway | No |
-| `gateway stop` | Stop gateway | **Yes** |
-| `gateway restart` | Restart gateway | **Yes** |
-| `logs [--follow]` | View/tail logs | No |
-| `security audit [--deep]` | Run security audit | No |
-| `security audit --fix` | Apply safe guardrails | **Yes** |
-| `status --all` | Comprehensive status | No |
-| `gateway discover` | Scan for gateways | No |
+| Command | Description | Dangerous |
+|---------|-------------|-----------|
+| `openclaw health [--json]` | Check gateway health | No |
+| `openclaw gateway status [--json]` | Get gateway status | No |
+| `openclaw gateway probe` | Probe connectivity | No |
+| `openclaw doctor [--json]` | Run diagnostics | No |
+| `openclaw doctor --fix` | Auto-fix issues | **Yes** |
+| `openclaw gateway start` | Start gateway | No |
+| `openclaw gateway stop` | Stop gateway | **Yes** |
+| `openclaw gateway restart` | Restart gateway | **Yes** |
+| `openclaw logs [--follow]` | View/tail logs | No |
+| `openclaw security audit [--deep]` | Run security audit | No |
+| `openclaw security audit --fix` | Apply safe guardrails | **Yes** |
+| `openclaw status --all` | Comprehensive status | No |
+| `openclaw gateway discover` | Scan for gateways | No |
 
 See [openclaw-command-allowlist.md](audit/openclaw-command-allowlist.md) for full documentation and verification status.
 
@@ -102,7 +81,6 @@ New commands must be added to the allowlist in `packages/adapters-openclaw/src/c
 
 ```typescript
 export const ALLOWED_COMMANDS = {
-  // Commands are binary-agnostic (args only)
   'health': { args: ['health'], danger: false, description: 'Check gateway health' },
   'gateway.restart': { args: ['gateway', 'restart'], danger: true, description: 'Restart the gateway' },
   // ... add new commands here
@@ -120,8 +98,10 @@ export const ALLOWED_COMMANDS = {
 All commands use Node's `spawn()` with array arguments to prevent shell injection:
 
 ```typescript
+import { OPENCLAW_BIN } from './resolve-bin'
+
 // SAFE: Arguments as array
-spawn('openclaw', ['run', agentId, taskDescription])
+spawn(OPENCLAW_BIN, ['run', agentId, taskDescription])
 
 // UNSAFE (never used): Shell interpolation
 exec(`openclaw run ${agentId} "${taskDescription}"`)  // DON'T DO THIS
@@ -249,16 +229,29 @@ Activity types include:
 
 ## Error Handling
 
-### OpenClaw Unavailable
+### OpenClaw Not Installed
 
 When OpenClaw is not on PATH:
 
 ```typescript
 // Returns mock data instead of real execution
-if (!isOpenClawAvailable()) {
+if (!isCliAvailable()) {
   return mockCommandResult(command)
 }
 ```
+
+### Version Below Minimum
+
+When OpenClaw version is below 0.1.0:
+
+```typescript
+const check = await checkOpenClaw()
+if (check.belowMinVersion) {
+  console.warn(check.error) // "OpenClaw version X.X.X is below minimum 0.1.0"
+}
+```
+
+The system will still function but may have compatibility issues.
 
 ### Command Failures
 
@@ -320,6 +313,12 @@ Commands return simulated results:
 1. Verify installation: `which openclaw`
 2. Check PATH includes OpenClaw location
 3. Restart Mission Control after installing
+
+### "Version below minimum"
+
+1. Check current version: `openclaw --version`
+2. Upgrade OpenClaw: follow [upgrade guide](https://docs.openclaw.ai/upgrade)
+3. Minimum required: 0.1.0
 
 ### "Permission denied"
 

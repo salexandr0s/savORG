@@ -131,7 +131,7 @@ function LayoutModeCard({
         'flex flex-col items-start p-4 rounded-[var(--radius-lg)] border transition-all text-left',
         selected
           ? 'bg-bg-3 border-status-info/50 ring-1 ring-status-info/20'
-          : 'bg-bg-2 border-bd-0 hover:border-bd-1 hover:bg-bg-3/50'
+          : 'bg-bg-2 border-white/[0.06] hover:border-bd-1 hover:bg-bg-3/50'
       )}
     >
       <div className="flex items-center justify-between w-full mb-2">
@@ -164,7 +164,7 @@ function ThemeCard({
         'flex items-center justify-between p-4 rounded-[var(--radius-lg)] border transition-all text-left',
         selected
           ? 'bg-bg-3 border-status-info/50'
-          : 'bg-bg-2 border-bd-0',
+          : 'bg-bg-2 border-white/[0.06]',
         disabled && 'opacity-50 cursor-not-allowed'
       )}
     >
@@ -194,7 +194,7 @@ function DensityCard({
         'flex items-center justify-between p-4 rounded-[var(--radius-lg)] border transition-all text-left',
         selected
           ? 'bg-bg-3 border-status-info/50'
-          : 'bg-bg-2 border-bd-0 hover:border-bd-1 hover:bg-bg-3/50'
+          : 'bg-bg-2 border-white/[0.06] hover:border-bd-1 hover:bg-bg-3/50'
       )}
     >
       <div>

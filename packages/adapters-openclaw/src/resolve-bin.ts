@@ -1,48 +1,51 @@
 /**
- * CLI Binary Resolution
+ * OpenClaw CLI Binary Check
  *
- * Resolves the OpenClaw CLI binary name at runtime to support both:
- * - `openclaw` (new name)
- * - `clawdbot` (legacy name)
+ * Verifies that the `openclaw` CLI is available on PATH.
+ * This project requires OpenClaw only (no legacy binary support).
  *
- * Resolution order:
- * 1. OPENCLAW_BIN environment variable (explicit override)
- * 2. Try `openclaw --version`
- * 3. Try `clawdbot --version`
- * 4. Return null (graceful degradation)
+ * If openclaw is not found, Mission Control runs in demo mode.
  */
 
 import { spawn } from 'child_process'
 
 // ============================================================================
+// CONSTANTS
+// ============================================================================
+
+/** The only supported CLI binary */
+export const OPENCLAW_BIN = 'openclaw'
+
+/** Minimum supported OpenClaw version (semver) */
+export const MIN_OPENCLAW_VERSION = '0.1.0'
+
+// ============================================================================
 // TYPES
 // ============================================================================
 
-export type CliBinary = 'openclaw' | 'clawdbot'
-
-export interface BinResolution {
-  /** The resolved binary name, or null if not found */
-  bin: CliBinary | null
+export interface CliCheck {
+  /** Whether openclaw is available on PATH */
+  available: boolean
   /** Version string from --version output */
   version: string | null
-  /** How the binary was resolved */
-  source: 'env' | 'auto' | 'fallback' | 'none'
-  /** Error message if resolution failed */
+  /** Error message if not available */
   error?: string
+  /** Whether version is below minimum */
+  belowMinVersion?: boolean
 }
 
 // ============================================================================
 // CACHE
 // ============================================================================
 
-let cached: BinResolution | null = null
+let cached: CliCheck | null = null
 let cacheTime = 0
 const CACHE_TTL = 60_000 // 60 seconds
 
 /**
- * Get the cached binary resolution, or null if not cached/expired
+ * Get the cached CLI check result, or null if not cached/expired
  */
-export function getCachedBin(): BinResolution | null {
+export function getCachedCheck(): CliCheck | null {
   if (cached && Date.now() - cacheTime < CACHE_TTL) {
     return cached
   }
@@ -50,23 +53,58 @@ export function getCachedBin(): BinResolution | null {
 }
 
 /**
- * Clear the binary resolution cache
+ * Clear the CLI check cache
  */
-export function clearBinCache(): void {
+export function clearCache(): void {
   cached = null
   cacheTime = 0
 }
 
 // ============================================================================
-// RESOLUTION
+// VERSION COMPARISON
 // ============================================================================
 
 /**
- * Try to run a binary with --version and return the version string
+ * Extract the first semver-looking x.y.z from a string
  */
-async function tryBinary(bin: string): Promise<string | null> {
+function extractSemver(version: string): string | null {
+  const match = version.trim().match(/(\d+\.\d+\.\d+)/)
+  return match ? match[1] : null
+}
+
+/**
+ * Parse a semver string into [major, minor, patch]
+ */
+function parseSemver(version: string): [number, number, number] | null {
+  const normalized = extractSemver(version)
+  if (!normalized) return null
+  const [major, minor, patch] = normalized.split('.')
+  return [parseInt(major, 10), parseInt(minor, 10), parseInt(patch, 10)]
+}
+
+/**
+ * Check if version A is less than version B
+ */
+function isVersionBelow(versionA: string, versionB: string): boolean {
+  const a = parseSemver(versionA)
+  const b = parseSemver(versionB)
+  if (!a || !b) return false
+
+  if (a[0] !== b[0]) return a[0] < b[0]
+  if (a[1] !== b[1]) return a[1] < b[1]
+  return a[2] < b[2]
+}
+
+// ============================================================================
+// CLI CHECK
+// ============================================================================
+
+/**
+ * Try to run openclaw --version and return the version string
+ */
+async function tryOpenClaw(): Promise<string | null> {
   return new Promise((resolve) => {
-    const child = spawn(bin, ['--version'], {
+    const child = spawn(OPENCLAW_BIN, ['--version'], {
       timeout: 5000,
       stdio: ['ignore', 'pipe', 'pipe'],
     })
@@ -83,9 +121,8 @@ async function tryBinary(bin: string): Promise<string | null> {
 
     child.on('close', (code) => {
       if (code === 0) {
-        // Extract version number from output
-        const version = stdout.trim().match(/\d+\.\d+\.\d+/)?.[0] || stdout.trim().split('\n')[0]
-        resolve(version || 'unknown')
+        const output = stdout.trim()
+        resolve(output || null)
       } else {
         resolve(null)
       }
@@ -94,57 +131,41 @@ async function tryBinary(bin: string): Promise<string | null> {
 }
 
 /**
- * Resolve the CLI binary to use
+ * Check if OpenClaw CLI is available
  *
- * Resolution order:
- * 1. OPENCLAW_BIN env var (if set and valid)
- * 2. Try 'openclaw --version'
- * 3. Try 'clawdbot --version'
- * 4. Return null
+ * Returns availability status, version, and any errors.
+ * Result is cached for 60 seconds.
  */
-export async function resolveCliBin(): Promise<BinResolution> {
+export async function checkOpenClaw(): Promise<CliCheck> {
   // Check cache first
-  const cachedResult = getCachedBin()
+  const cachedResult = getCachedCheck()
   if (cachedResult) {
     return cachedResult
   }
 
-  let result: BinResolution
+  const versionOutput = await tryOpenClaw()
 
-  // 1. Check OPENCLAW_BIN env var
-  const envBin = process.env.OPENCLAW_BIN
-  if (envBin) {
-    if (envBin === 'openclaw' || envBin === 'clawdbot') {
-      const version = await tryBinary(envBin)
-      if (version) {
-        result = { bin: envBin, version, source: 'env' }
-      } else {
-        result = { bin: null, version: null, source: 'none', error: `OPENCLAW_BIN=${envBin} not found` }
-      }
-    } else {
-      // Custom binary path - try it
-      const version = await tryBinary(envBin)
-      if (version) {
-        // Treat custom path as 'openclaw' for type purposes
-        result = { bin: 'openclaw', version, source: 'env' }
-      } else {
-        result = { bin: null, version: null, source: 'none', error: `OPENCLAW_BIN=${envBin} not executable` }
-      }
+  let result: CliCheck
+
+  if (versionOutput) {
+    const normalizedVersion = extractSemver(versionOutput)
+    const displayVersion = normalizedVersion ?? 'unknown'
+    const belowMin = normalizedVersion
+      ? isVersionBelow(normalizedVersion, MIN_OPENCLAW_VERSION)
+      : false
+    result = {
+      available: true,
+      version: displayVersion,
+      belowMinVersion: belowMin,
+      error: belowMin
+        ? `OpenClaw version ${displayVersion} is below minimum ${MIN_OPENCLAW_VERSION}. Please upgrade.`
+        : undefined,
     }
   } else {
-    // 2. Try 'openclaw' first (new name)
-    const openclawVersion = await tryBinary('openclaw')
-    if (openclawVersion) {
-      result = { bin: 'openclaw', version: openclawVersion, source: 'auto' }
-    } else {
-      // 3. Try 'clawdbot' (legacy name)
-      const clawdbotVersion = await tryBinary('clawdbot')
-      if (clawdbotVersion) {
-        result = { bin: 'clawdbot', version: clawdbotVersion, source: 'fallback' }
-      } else {
-        // 4. Neither found
-        result = { bin: null, version: null, source: 'none', error: 'Neither openclaw nor clawdbot found in PATH' }
-      }
+    result = {
+      available: false,
+      version: null,
+      error: `OpenClaw CLI not found. Install from https://github.com/openclaw/openclaw and ensure 'openclaw' is on PATH.`,
     }
   }
 
@@ -156,20 +177,20 @@ export async function resolveCliBin(): Promise<BinResolution> {
 }
 
 /**
- * Get the resolved binary name, throwing if not available
+ * Check if CLI is available (non-throwing, simple boolean)
  */
-export async function requireCliBin(): Promise<CliBinary> {
-  const resolution = await resolveCliBin()
-  if (!resolution.bin) {
-    throw new Error(resolution.error || 'CLI binary not found')
-  }
-  return resolution.bin
+export async function isCliAvailable(): Promise<boolean> {
+  const check = await checkOpenClaw()
+  return check.available
 }
 
 /**
- * Check if CLI is available (non-throwing)
+ * Get OpenClaw version, throwing if not available
  */
-export async function isCliAvailable(): Promise<boolean> {
-  const resolution = await resolveCliBin()
-  return resolution.bin !== null
+export async function requireOpenClaw(): Promise<string> {
+  const check = await checkOpenClaw()
+  if (!check.available) {
+    throw new Error(check.error || 'OpenClaw CLI not found')
+  }
+  return check.version || 'unknown'
 }

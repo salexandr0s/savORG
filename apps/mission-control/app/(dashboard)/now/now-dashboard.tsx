@@ -290,7 +290,7 @@ function StatCard({
   }
 
   return (
-    <div className="bg-bg-2 rounded-[var(--radius-md)] border border-bd-0 p-3 flex flex-col items-center justify-center text-center h-[72px]">
+    <div className="bg-bg-2 rounded-[var(--radius-md)] border border-white/[0.06] p-3 flex flex-col items-center justify-center text-center h-[72px]">
       <Icon className={cn('w-[18px] h-[18px] mb-1.5', statusColors[status])} />
       <div className={cn('font-mono text-sm font-semibold leading-none', statusColors[status])}>
         {value}
@@ -314,13 +314,13 @@ function Card({
   className?: string
 }) {
   return (
-    <div className={cn("bg-bg-2 rounded-[var(--radius-lg)] border border-bd-0 overflow-hidden relative", className)}>
+    <div className={cn("bg-bg-2 rounded-[var(--radius-lg)] border border-white/[0.06] overflow-hidden relative", className)}>
       {/* Left accent bar for attention */}
       {accent && (
         <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-status-warning" />
       )}
       <div className={cn(
-        "flex items-center justify-between px-4 py-3 border-b border-bd-0",
+        "flex items-center justify-between px-4 py-3 border-b border-white/[0.06]",
         accent && "pl-[18px]"
       )}>
         <h2 className="terminal-header">{title}</h2>

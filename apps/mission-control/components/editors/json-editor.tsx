@@ -214,10 +214,10 @@ export function JsonEditor({
   return (
     <div
       ref={editorRef}
-      className="flex flex-col bg-bg-2 rounded-[var(--radius-lg)] border border-bd-0 overflow-hidden"
+      className="flex flex-col bg-bg-2 rounded-[var(--radius-lg)] border border-white/[0.06] overflow-hidden"
     >
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-bd-0 bg-bg-1">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-white/[0.06] bg-bg-1">
         {/* File path + validation status */}
         <div className="flex items-center gap-2 min-w-0">
           {filePath && (

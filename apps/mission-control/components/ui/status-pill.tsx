@@ -44,7 +44,7 @@ export function StatusPill({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-pill border',
+        'inline-flex items-center gap-1.5 rounded-pill border whitespace-nowrap',
         classes.bg,
         classes.border,
         size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-sm',
@@ -127,13 +127,13 @@ export function OperationStatusPill({
     return (
       <span
         className={cn(
-          'inline-flex items-center gap-1.5 rounded-pill border px-2 py-0.5 text-xs',
+          'inline-flex items-center gap-1.5 rounded-pill border whitespace-nowrap px-2 py-0.5 text-xs',
           statusToneClasses[toneMap[status] ?? 'muted'].bg,
           statusToneClasses[toneMap[status] ?? 'muted'].border,
           className
         )}
       >
-        <Icon className={cn('w-3 h-3', statusToneClasses[toneMap[status] ?? 'muted'].icon)} />
+        <Icon className={cn('w-3 h-3 shrink-0', statusToneClasses[toneMap[status] ?? 'muted'].icon)} />
         <span className={cn(statusToneClasses[toneMap[status] ?? 'muted'].text, 'font-medium')}>
           {labelMap[status] ?? status}
         </span>

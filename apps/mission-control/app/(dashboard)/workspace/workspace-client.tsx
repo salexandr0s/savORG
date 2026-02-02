@@ -177,7 +177,7 @@ export function WorkspaceClient({ initialFiles }: Props) {
       default:
         // For unknown file types, use a basic text display
         return (
-          <div className="p-4">
+          <div>
             <p className="text-sm text-fg-2">
               No editor available for .{ext} files
             </p>
@@ -222,9 +222,9 @@ export function WorkspaceClient({ initialFiles }: Props) {
         </div>
 
         {/* File List */}
-        <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-bd-0 overflow-hidden">
+        <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-white/[0.06] overflow-hidden">
           {files.length > 0 ? (
-            <div className="divide-y divide-bd-0/50">
+            <div className="divide-y divide-white/[0.04]">
               {files.map((file) => (
                 <FileRow
                   key={file.id}

@@ -384,7 +384,7 @@ export function SkillsClient({ skills: initialSkills, agents }: Props) {
               <button
                 disabled
                 title="Coming soon"
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm bg-bg-2 border border-bd-0 rounded-[var(--radius-md)] text-fg-2 cursor-not-allowed opacity-60"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm bg-bg-2 border border-white/[0.06] rounded-[var(--radius-md)] text-fg-2 cursor-not-allowed opacity-60"
               >
                 <Upload className="w-3.5 h-3.5" />
                 Install
@@ -392,7 +392,7 @@ export function SkillsClient({ skills: initialSkills, agents }: Props) {
               <button
                 disabled
                 title="Coming soon"
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm bg-bg-2 border border-bd-0 rounded-[var(--radius-md)] text-fg-2 cursor-not-allowed opacity-60"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm bg-bg-2 border border-white/[0.06] rounded-[var(--radius-md)] text-fg-2 cursor-not-allowed opacity-60"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Create
@@ -402,7 +402,7 @@ export function SkillsClient({ skills: initialSkills, agents }: Props) {
         />
 
         {/* Scope Tabs */}
-        <div className="flex items-center gap-1 p-1 bg-bg-2 rounded-[var(--radius-md)] border border-bd-0 w-fit">
+        <div className="flex items-center gap-1 p-1 bg-bg-2 rounded-[var(--radius-md)] border border-white/[0.06] w-fit">
           {scopeTabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -424,7 +424,7 @@ export function SkillsClient({ skills: initialSkills, agents }: Props) {
         </div>
 
         {/* Skills Table */}
-        <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-bd-0 overflow-hidden">
+        <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-white/[0.06] overflow-hidden">
           <CanonicalTable
             columns={skillColumns}
             rows={filteredSkills}
@@ -466,8 +466,8 @@ export function SkillsClient({ skills: initialSkills, agents }: Props) {
         ) : selectedSkill ? (
           <div className="space-y-6">
             {/* Header Info */}
-            <div className="p-4 border-b border-bd-0">
-              <div className="flex items-center gap-3 mb-3">
+            <div className="pb-4 border-b border-white/[0.06]">
+              <div className="flex items-center gap-3 mb-4">
                 <StatusPill
                   tone={selectedSkill.enabled ? 'success' : 'muted'}
                   label={selectedSkill.enabled ? 'Enabled' : 'Disabled'}
@@ -490,12 +490,12 @@ export function SkillsClient({ skills: initialSkills, agents }: Props) {
                 </div>
               </div>
 
-              {/* Actions */}
-              <div className="flex flex-wrap gap-2">
+              {/* Actions - grid layout for consistent sizing */}
+              <div className="grid grid-cols-3 gap-2">
                 <button
                   onClick={handleToggleEnabled}
                   disabled={isSaving}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm bg-bg-3 border border-bd-0 rounded-[var(--radius-md)] text-fg-1 hover:bg-bg-2 transition-colors disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs bg-bg-3 border border-white/[0.06] rounded-[var(--radius-md)] text-fg-1 hover:bg-bg-2 transition-colors disabled:opacity-50"
                 >
                   <Power className="w-3.5 h-3.5" />
                   {selectedSkill.enabled ? 'Disable' : 'Enable'}
@@ -503,7 +503,7 @@ export function SkillsClient({ skills: initialSkills, agents }: Props) {
                 <button
                   onClick={handleValidate}
                   disabled={isValidating}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm bg-bg-3 border border-bd-0 rounded-[var(--radius-md)] text-fg-1 hover:bg-bg-2 transition-colors disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs bg-bg-3 border border-white/[0.06] rounded-[var(--radius-md)] text-fg-1 hover:bg-bg-2 transition-colors disabled:opacity-50"
                 >
                   {isValidating ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -515,7 +515,7 @@ export function SkillsClient({ skills: initialSkills, agents }: Props) {
                 <button
                   onClick={handleExport}
                   disabled={isSaving}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm bg-bg-3 border border-bd-0 rounded-[var(--radius-md)] text-fg-1 hover:bg-bg-2 transition-colors disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs bg-bg-3 border border-white/[0.06] rounded-[var(--radius-md)] text-fg-1 hover:bg-bg-2 transition-colors disabled:opacity-50"
                 >
                   <Download className="w-3.5 h-3.5" />
                   Export
@@ -523,7 +523,7 @@ export function SkillsClient({ skills: initialSkills, agents }: Props) {
                 <button
                   onClick={() => setShowDuplicateModal(true)}
                   disabled={isSaving}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm bg-bg-3 border border-bd-0 rounded-[var(--radius-md)] text-fg-1 hover:bg-bg-2 transition-colors disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs bg-bg-3 border border-white/[0.06] rounded-[var(--radius-md)] text-fg-1 hover:bg-bg-2 transition-colors disabled:opacity-50"
                 >
                   <Copy className="w-3.5 h-3.5" />
                   Duplicate
@@ -531,7 +531,7 @@ export function SkillsClient({ skills: initialSkills, agents }: Props) {
                 <button
                   onClick={handleUninstall}
                   disabled={isSaving}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm bg-bg-3 border border-bd-0 rounded-[var(--radius-md)] text-status-danger hover:bg-status-danger/10 transition-colors disabled:opacity-50"
+                  className="col-span-2 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs bg-bg-3 border border-white/[0.06] rounded-[var(--radius-md)] text-status-danger hover:bg-status-danger/10 transition-colors disabled:opacity-50"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   Uninstall
@@ -546,7 +546,7 @@ export function SkillsClient({ skills: initialSkills, agents }: Props) {
 
             {/* Duplicate Modal */}
             {showDuplicateModal && (
-              <div className="p-4 bg-bg-3 rounded-[var(--radius-md)] border border-bd-0">
+              <div className="p-4 bg-bg-3 rounded-[var(--radius-md)] border border-white/[0.06]">
                 <h4 className="text-sm font-medium text-fg-0 mb-3">Duplicate to:</h4>
                 <div className="space-y-3">
                   <div className="flex items-center gap-4">
@@ -577,7 +577,7 @@ export function SkillsClient({ skills: initialSkills, agents }: Props) {
                     <select
                       value={duplicateTarget.agentId}
                       onChange={(e) => setDuplicateTarget({ scope: 'agent', agentId: e.target.value })}
-                      className="w-full px-3 py-2 bg-bg-2 border border-bd-0 rounded-[var(--radius-md)] text-sm text-fg-1"
+                      className="w-full px-3 py-2 bg-bg-2 border border-white/[0.06] rounded-[var(--radius-md)] text-sm text-fg-1"
                     >
                       {agents.map((agent) => (
                         <option key={agent.id} value={agent.id}>
@@ -596,7 +596,7 @@ export function SkillsClient({ skills: initialSkills, agents }: Props) {
                     </button>
                     <button
                       onClick={() => setShowDuplicateModal(false)}
-                      className="px-3 py-1.5 bg-bg-2 border border-bd-0 text-sm text-fg-1 rounded-[var(--radius-md)] hover:bg-bg-1"
+                      className="px-3 py-1.5 bg-bg-2 border border-white/[0.06] text-sm text-fg-1 rounded-[var(--radius-md)] hover:bg-bg-1"
                     >
                       Cancel
                     </button>

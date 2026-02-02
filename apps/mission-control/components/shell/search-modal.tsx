@@ -130,7 +130,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
       <div className="fixed left-1/2 top-[15%] z-50 w-full max-w-xl -translate-x-1/2">
         <div className="bg-bg-1 border border-bd-1 rounded-[var(--radius-lg)] shadow-2xl overflow-hidden">
           {/* Search Input */}
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-bd-0">
+          <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06]">
             <Search className="w-4 h-4 text-fg-2 shrink-0" />
             <input
               ref={inputRef}
@@ -202,7 +202,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between px-4 py-2 border-t border-bd-0 bg-bg-2/50 text-xs text-fg-3">
+          <div className="flex items-center justify-between px-4 py-2 border-t border-white/[0.06] bg-bg-2/50 text-xs text-fg-3">
             <span>
               <kbd className="kbd">↑↓</kbd> to navigate
             </span>

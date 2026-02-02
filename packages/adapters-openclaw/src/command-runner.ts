@@ -3,15 +3,14 @@
  *
  * Executes OpenClaw CLI commands with:
  * - Command allowlist for security
- * - Binary-agnostic execution (supports both 'openclaw' and 'clawdbot')
  * - Streamed output for real-time receipt updates
  * - Exit code handling and duration tracking
- * - Graceful degradation for missing commands
+ * - Graceful degradation when CLI is not available
  */
 
 import { spawn, type ChildProcess } from 'child_process'
 import type { CommandOutput } from './types'
-import { resolveCliBin, type BinResolution } from './resolve-bin'
+import { checkOpenClaw, OPENCLAW_BIN, type CliCheck } from './resolve-bin'
 
 // ============================================================================
 // COMMAND ALLOWLIST
@@ -21,8 +20,7 @@ import { resolveCliBin, type BinResolution } from './resolve-bin'
  * Allowed OpenClaw commands.
  * Only commands in this list can be executed.
  *
- * Note: Commands are stored as args arrays (without the binary name).
- * The binary (openclaw or clawdbot) is resolved at runtime.
+ * Commands are stored as args arrays (binary is always 'openclaw').
  */
 export const ALLOWED_COMMANDS = {
   // Health & Status
@@ -61,7 +59,7 @@ export const ALLOWED_COMMANDS = {
 export type AllowedCommandId = keyof typeof ALLOWED_COMMANDS
 
 export interface CommandSpec {
-  /** Command arguments (without binary name - resolved at runtime) */
+  /** Command arguments (without binary name) */
   args: readonly string[]
   /** Whether this command is considered dangerous */
   danger: boolean
@@ -80,8 +78,6 @@ export interface CommandExecutionResult {
   stderr: string
   timedOut: boolean
   error?: string
-  /** The binary that was used (openclaw or clawdbot) */
-  bin?: string
 }
 
 export interface StreamingCommandOptions {
@@ -115,28 +111,26 @@ export function getCommandSpec(commandId: AllowedCommandId): CommandSpec {
 
 /**
  * Check if OpenClaw CLI is available
- * Uses the binary resolution system to support both openclaw and clawdbot
  */
 export async function checkOpenClawAvailable(): Promise<{
   available: boolean
   version?: string
-  bin?: string
-  source?: BinResolution['source']
   error?: string
+  belowMinVersion?: boolean
 }> {
-  const resolution = await resolveCliBin()
+  const check = await checkOpenClaw()
 
-  if (resolution.bin) {
+  if (check.available) {
     return {
       available: true,
-      version: resolution.version || undefined,
-      bin: resolution.bin,
-      source: resolution.source,
+      version: check.version || undefined,
+      belowMinVersion: check.belowMinVersion,
+      error: check.error,
     }
   } else {
     return {
       available: false,
-      error: resolution.error || 'CLI binary not found',
+      error: check.error || 'OpenClaw CLI not found',
     }
   }
 }
@@ -148,13 +142,13 @@ export async function* executeCommand(
   commandId: AllowedCommandId,
   options: StreamingCommandOptions = {}
 ): AsyncGenerator<CommandOutput, CommandExecutionResult, unknown> {
-  // Resolve the binary first
-  const resolution = await resolveCliBin()
+  // Check CLI availability first
+  const cliCheck = await checkOpenClaw()
 
-  if (!resolution.bin) {
+  if (!cliCheck.available) {
     const errorOutput: CommandOutput = {
       type: 'stderr',
-      chunk: `CLI not available: ${resolution.error || 'Neither openclaw nor clawdbot found'}\n`,
+      chunk: `OpenClaw CLI not available: ${cliCheck.error}\n`,
     }
     yield errorOutput
     await options.onChunk?.(errorOutput)
@@ -167,14 +161,13 @@ export async function* executeCommand(
       exitCode: 127,
       durationMs: 0,
       stdout: '',
-      stderr: `CLI not available: ${resolution.error}\n`,
+      stderr: `OpenClaw CLI not available: ${cliCheck.error}\n`,
       timedOut: false,
-      error: 'CLI not available',
+      error: 'OpenClaw CLI not available',
     }
   }
 
   const spec = getCommandSpec(commandId)
-  const cmd = resolution.bin
   const args = spec.args as string[]
   const timeout = options.timeout ?? 60000
 
@@ -185,7 +178,7 @@ export async function* executeCommand(
   let child: ChildProcess | null = null
 
   try {
-    child = spawn(cmd, args, {
+    child = spawn(OPENCLAW_BIN, args, {
       cwd: options.cwd,
       env: { ...process.env, ...options.env },
       timeout,
@@ -239,7 +232,6 @@ export async function* executeCommand(
       stdout,
       stderr,
       timedOut,
-      bin: cmd,
     }
   } catch (err) {
     const durationMs = Date.now() - startTime
@@ -247,7 +239,7 @@ export async function* executeCommand(
 
     // Handle command not found
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      const errorOutput: CommandOutput = { type: 'stderr', chunk: `Command not found: ${cmd}\n` }
+      const errorOutput: CommandOutput = { type: 'stderr', chunk: `Command not found: ${OPENCLAW_BIN}\n` }
       yield errorOutput
       await options.onChunk?.(errorOutput)
 
@@ -259,10 +251,9 @@ export async function* executeCommand(
         exitCode: 127,
         durationMs,
         stdout,
-        stderr: stderr + `Command not found: ${cmd}\n`,
+        stderr: stderr + `Command not found: ${OPENCLAW_BIN}\n`,
         timedOut: false,
         error: 'Command not found',
-        bin: cmd,
       }
     }
 
@@ -282,7 +273,6 @@ export async function* executeCommand(
       stderr: stderr + `Error: ${error}\n`,
       timedOut,
       error,
-      bin: cmd,
     }
   }
 }
@@ -310,25 +300,23 @@ export async function runCommand(
 export async function runCommandJson<T = unknown>(
   commandId: AllowedCommandId,
   options: Omit<StreamingCommandOptions, 'onChunk'> = {}
-): Promise<{ data?: T; error?: string; exitCode: number; bin?: string }> {
+): Promise<{ data?: T; error?: string; exitCode: number }> {
   const result = await runCommand(commandId, options)
 
   if (result.exitCode !== 0) {
     return {
       error: result.stderr || result.error || `Command failed with exit code ${result.exitCode}`,
       exitCode: result.exitCode,
-      bin: result.bin,
     }
   }
 
   try {
     const data = JSON.parse(result.stdout) as T
-    return { data, exitCode: 0, bin: result.bin }
+    return { data, exitCode: 0 }
   } catch {
     return {
       error: 'Failed to parse JSON output',
       exitCode: result.exitCode,
-      bin: result.bin,
     }
   }
 }

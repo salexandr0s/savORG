@@ -1,20 +1,21 @@
 import { NextResponse } from 'next/server'
-import { getDefaultAdapter, resolveCliBin } from '@savorgos/adapters-openclaw'
+import { getDefaultAdapter, checkOpenClaw, OPENCLAW_BIN, MIN_OPENCLAW_VERSION } from '@savorgos/adapters-openclaw'
 
 /**
  * GET /api/maintenance
  * Get current gateway status and health
  *
- * Response includes CLI binary info for compatibility display:
- * - cliBin: 'openclaw' | 'clawdbot' | null
- * - cliVersion: version string
- * - cliSource: 'env' | 'auto' | 'fallback' | 'none'
+ * Response includes CLI info:
+ * - cliAvailable: boolean
+ * - cliVersion: version string or null
+ * - cliBin: 'openclaw' (constant)
+ * - minVersion: minimum required version
  */
 export async function GET() {
   const adapter = getDefaultAdapter()
 
-  // Resolve CLI binary (supports both openclaw and clawdbot)
-  const cliResolution = await resolveCliBin()
+  // Check OpenClaw CLI availability
+  const cliCheck = await checkOpenClaw()
 
   try {
     const [health, status, probe] = await Promise.all([
@@ -26,10 +27,13 @@ export async function GET() {
     return NextResponse.json({
       data: {
         mode: adapter.mode,
-        // CLI binary info
-        cliBin: cliResolution.bin,
-        cliVersion: cliResolution.version,
-        cliSource: cliResolution.source,
+        // CLI info
+        cliBin: OPENCLAW_BIN,
+        cliAvailable: cliCheck.available,
+        cliVersion: cliCheck.version,
+        minVersion: MIN_OPENCLAW_VERSION,
+        belowMinVersion: cliCheck.belowMinVersion,
+        cliError: cliCheck.error,
         // Gateway status
         health,
         status,
@@ -41,11 +45,13 @@ export async function GET() {
     return NextResponse.json({
       data: {
         mode: adapter.mode,
-        // CLI binary info (even on error)
-        cliBin: cliResolution.bin,
-        cliVersion: cliResolution.version,
-        cliSource: cliResolution.source,
-        cliError: cliResolution.error,
+        // CLI info (even on error)
+        cliBin: OPENCLAW_BIN,
+        cliAvailable: cliCheck.available,
+        cliVersion: cliCheck.version,
+        minVersion: MIN_OPENCLAW_VERSION,
+        belowMinVersion: cliCheck.belowMinVersion,
+        cliError: cliCheck.error,
         // Error state
         health: {
           status: 'down',

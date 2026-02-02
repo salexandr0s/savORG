@@ -233,7 +233,7 @@ export function ApprovalsClient({ approvals: initialApprovals, workOrderMap }: P
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
-            className="px-3 py-1.5 text-xs bg-bg-2 border border-bd-0 rounded-[var(--radius-md)] text-fg-1"
+            className="px-3 py-1.5 text-xs bg-bg-2 border border-white/[0.06] rounded-[var(--radius-md)] text-fg-1"
           >
             <option value="all">All Types</option>
             {Object.entries(APPROVAL_TYPE_LABELS).map(([key, label]) => (
@@ -243,7 +243,7 @@ export function ApprovalsClient({ approvals: initialApprovals, workOrderMap }: P
         </div>
 
         {/* Table */}
-        <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-bd-0 overflow-hidden">
+        <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-white/[0.06] overflow-hidden">
           <CanonicalTable
             columns={columns}
             rows={filteredApprovals}
@@ -334,7 +334,7 @@ function ApprovalDetail({
   }
 
   return (
-    <div className="p-4 space-y-6">
+    <div className="space-y-6">
       {/* Status */}
       <div className="flex items-center gap-2">
         {approval.status === 'pending' && (
@@ -355,7 +355,7 @@ function ApprovalDetail({
 
       {/* Request */}
       <PageSection title="Request">
-        <div className="p-3 bg-bg-3 rounded-[var(--radius-md)] border border-bd-0">
+        <div className="p-3 bg-bg-3 rounded-[var(--radius-md)] border border-white/[0.06]">
           <p className="text-sm text-fg-0">{approval.questionMd}</p>
         </div>
       </PageSection>
@@ -365,7 +365,7 @@ function ApprovalDetail({
         <PageSection title="Work Order">
           <Link
             href={`/work-orders/${approval.workOrderId}`}
-            className="flex items-center gap-2 p-3 bg-bg-3 rounded-[var(--radius-md)] border border-bd-0 hover:border-bd-1 transition-colors"
+            className="flex items-center gap-2 p-3 bg-bg-3 rounded-[var(--radius-md)] border border-white/[0.06] hover:border-bd-1 transition-colors"
           >
             <span className="font-mono text-sm text-status-info">{workOrder.code}</span>
             <span className="text-sm text-fg-1 truncate">{workOrder.title}</span>
@@ -423,7 +423,7 @@ function ApprovalDetail({
                 }}
                 placeholder="Add context for your decision..."
                 rows={3}
-                className="w-full px-3 py-2 text-sm bg-bg-2 border border-bd-0 rounded-[var(--radius-md)] text-fg-0 placeholder:text-fg-3 focus:outline-none focus:border-bd-1 resize-none"
+                className="w-full px-3 py-2 text-sm bg-bg-2 border border-white/[0.06] rounded-[var(--radius-md)] text-fg-0 placeholder:text-fg-3 focus:outline-none focus:border-bd-1 resize-none"
               />
             </div>
           )}

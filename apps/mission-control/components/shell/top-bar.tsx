@@ -25,7 +25,7 @@ export function TopBar({
   return (
     <header
       className={cn(
-        'h-[var(--topbar-height)] flex items-center gap-4 px-4 border-b border-bd-0 bg-bg-1 shrink-0',
+        'h-[var(--topbar-height)] flex items-center gap-4 px-4 border-b border-white/[0.06] bg-bg-1 shrink-0',
         className
       )}
     >
@@ -69,7 +69,7 @@ export function TopBar({
           onClick={onSearchClick}
           className={cn(
             'flex items-center gap-2 px-3 py-1.5 rounded-[var(--radius-md)]',
-            'bg-bg-2 border border-bd-0 hover:border-bd-1 transition-colors',
+            'bg-bg-2 border border-white/[0.06] hover:border-bd-1 transition-colors',
             'text-fg-2 hover:text-fg-1'
           )}
         >

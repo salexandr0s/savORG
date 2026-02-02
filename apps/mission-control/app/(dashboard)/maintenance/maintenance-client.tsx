@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { PageHeader, PageSection, TypedConfirmModal } from '@savorgos/ui'
 import { StatusPill } from '@/components/ui/status-pill'
 import { RightDrawer } from '@/components/shell/right-drawer'
 import { YamlEditor } from '@/components/editors/yaml-editor'
-import { playbooksApi, maintenanceApi, type PlaybookWithContent, HttpError } from '@/lib/http'
+import { playbooksApi, maintenanceApi, type PlaybookWithContent, type MaintenanceStatus, HttpError } from '@/lib/http'
 import { useProtectedAction } from '@/lib/hooks/useProtectedAction'
 import type { GatewayStatusDTO } from '@/lib/data'
 import type { ActionKind } from '@savorgos/core'
@@ -106,8 +106,46 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
     message: string
     receiptId?: string
   } | null>(null)
+  const [cliStatus, setCliStatus] = useState<{
+    available: boolean
+    version: string | null
+    minVersion: string
+    belowMinVersion?: boolean
+    error?: string
+  } | null>(null)
 
   const protectedAction = useProtectedAction()
+
+  const applyMaintenanceStatus = useCallback((status: MaintenanceStatus) => {
+    setGateway((prev) => ({
+      ...prev,
+      status: status.health.status,
+      latencyMs: status.probe.latencyMs,
+      version: status.status.version || prev.version,
+      uptime: status.status.uptime || prev.uptime,
+      lastCheckAt: new Date(status.timestamp),
+    }))
+    setCliStatus({
+      available: status.cliAvailable,
+      version: status.cliVersion,
+      minVersion: status.minVersion,
+      belowMinVersion: status.belowMinVersion,
+      error: status.cliError,
+    })
+  }, [])
+
+  const refreshStatus = useCallback(async () => {
+    try {
+      const statusResult = await maintenanceApi.getStatus()
+      applyMaintenanceStatus(statusResult.data)
+    } catch (err) {
+      console.error('Failed to refresh maintenance status:', err)
+    }
+  }, [applyMaintenanceStatus])
+
+  useEffect(() => {
+    refreshStatus()
+  }, [refreshStatus])
 
   // Handle playbook click - open in drawer
   const handlePlaybookClick = useCallback(async (id: string) => {
@@ -203,19 +241,7 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
 
             // Refresh gateway status after recovery
             if (success) {
-              try {
-                const statusResult = await maintenanceApi.getStatus()
-                setGateway({
-                  ...gateway,
-                  status: statusResult.data.health.status,
-                  latencyMs: statusResult.data.probe.latencyMs,
-                  version: statusResult.data.status.version || gateway.version,
-                  uptime: statusResult.data.status.uptime || gateway.uptime,
-                  lastCheckAt: new Date(statusResult.data.timestamp),
-                })
-              } catch {
-                // Ignore status refresh errors
-              }
+              await refreshStatus()
             }
           } else {
             const result = await maintenanceApi.runAction(action, typedConfirmText)
@@ -257,7 +283,12 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
         setRunningAction(null)
       },
     })
-  }, [gateway, protectedAction])
+  }, [gateway, protectedAction, refreshStatus])
+
+  const cliVersionLabel = cliStatus?.version ?? 'unknown'
+  const showCliTooOld = cliStatus?.available && cliStatus.belowMinVersion
+  const showCliUnknown = cliStatus?.available && !cliStatus.belowMinVersion && cliVersionLabel === 'unknown'
+  const blockCriticalActions = cliStatus?.belowMinVersion === true
 
   return (
     <>
@@ -266,6 +297,19 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
           title="Maintenance"
           subtitle="Gateway console and system tools"
         />
+
+        {(showCliTooOld || showCliUnknown) && (
+          <div className="p-3 rounded-md border flex items-start gap-2 bg-status-warning/10 border-status-warning/30">
+            <AlertTriangle className="w-4 h-4 text-status-warning shrink-0 mt-0.5" />
+            <div className="text-sm text-status-warning">
+              {showCliTooOld ? (
+                <>OpenClaw version too old: {cliVersionLabel} (min: {cliStatus?.minVersion}). Some commands may fail.</>
+              ) : (
+                <>OpenClaw version unknown (min: {cliStatus?.minVersion}). Some commands may fail.</>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Last Result Banner */}
         {lastResult && (
@@ -297,7 +341,7 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
         )}
 
         {/* Gateway Status */}
-        <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-bd-0 p-4 space-y-4">
+        <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-white/[0.06] p-4 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-medium text-fg-0">Gateway Status</h2>
             <div className="flex items-center gap-2">
@@ -344,7 +388,7 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
           </div>
 
           {/* Connections */}
-          <div className="pt-4 border-t border-bd-0">
+          <div className="pt-4 border-t border-white/[0.06]">
             <h3 className="text-xs font-medium text-fg-2 mb-3">Connections</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <ConnectionCard
@@ -380,7 +424,7 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
               action="doctor-fix"
               config={ACTION_CONFIG['doctor-fix']}
               isRunning={runningAction === 'doctor-fix'}
-              disabled={runningAction !== null}
+              disabled={runningAction !== null || blockCriticalActions}
               onClick={() => handleAction('doctor-fix')}
               danger
             />
@@ -405,7 +449,7 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
 
         {/* Recovery */}
         <PageSection title="Recovery" description="One-click gateway recovery playbook">
-          <div className="p-4 bg-bg-3 rounded-[var(--radius-lg)] border border-bd-0">
+          <div className="p-4 bg-bg-3 rounded-[var(--radius-lg)] border border-white/[0.06]">
             <div className="flex items-start gap-4">
               <div className="p-2 bg-status-warning/10 rounded-lg">
                 <Wrench className="w-6 h-6 text-status-warning" />
@@ -416,10 +460,15 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
                   Runs the full recovery playbook: health check → diagnostics → auto-fix → restart → verify.
                   Use this when the gateway is unhealthy or unresponsive.
                 </p>
+                {blockCriticalActions && (
+                  <p className="text-xs text-status-warning mt-2">
+                    Requires OpenClaw {cliStatus?.minVersion} or newer.
+                  </p>
+                )}
               </div>
               <button
                 onClick={() => handleAction('recover')}
-                disabled={runningAction !== null}
+                disabled={runningAction !== null || blockCriticalActions}
                 className="btn-primary flex items-center gap-1.5"
               >
                 {runningAction === 'recover' ? (
@@ -505,7 +554,7 @@ function StatusCard({
   icon: React.ComponentType<{ className?: string }>
 }) {
   return (
-    <div className="p-3 bg-bg-3 rounded-[var(--radius-md)] border border-bd-0">
+    <div className="p-3 bg-bg-3 rounded-[var(--radius-md)] border border-white/[0.06]">
       <div className="flex items-center gap-2 mb-1">
         <Icon className="w-3.5 h-3.5 text-fg-2" />
         <span className="text-xs text-fg-2">{label}</span>
@@ -525,7 +574,7 @@ function ConnectionCard({
   icon: React.ComponentType<{ className?: string }>
 }) {
   return (
-    <div className="flex items-center justify-between p-3 bg-bg-3 rounded-[var(--radius-md)] border border-bd-0">
+    <div className="flex items-center justify-between p-3 bg-bg-3 rounded-[var(--radius-md)] border border-white/[0.06]">
       <div className="flex items-center gap-2">
         <Icon className="w-4 h-4 text-fg-2" />
         <span className="text-sm text-fg-1">{label}</span>
@@ -564,10 +613,10 @@ function LiveActionCard({
       className={cn(
         'flex items-start gap-3 p-4 rounded-[var(--radius-lg)] border text-left transition-colors',
         disabled && !isRunning
-          ? 'bg-bg-3/50 border-bd-0/50 cursor-not-allowed opacity-60'
+          ? 'bg-bg-3/50 border-white/[0.03] cursor-not-allowed opacity-60'
           : danger
-            ? 'bg-bg-3 border-bd-0 hover:bg-status-error/10 hover:border-status-error/30'
-            : 'bg-bg-3 border-bd-0 hover:bg-bg-2 hover:border-bd-1'
+            ? 'bg-bg-3 border-white/[0.06] hover:bg-status-error/10 hover:border-status-error/30'
+            : 'bg-bg-3 border-white/[0.06] hover:bg-bg-2 hover:border-bd-1'
       )}
     >
       {isRunning ? (
@@ -613,7 +662,7 @@ function PlaybookCard({
   return (
     <button
       onClick={onClick}
-      className="w-full flex items-center justify-between p-3 bg-bg-3 rounded-[var(--radius-md)] border border-bd-0 hover:bg-bg-2 hover:border-bd-1 transition-colors text-left"
+      className="w-full flex items-center justify-between p-3 bg-bg-3 rounded-[var(--radius-md)] border border-white/[0.06] hover:bg-bg-2 hover:border-bd-1 transition-colors text-left"
     >
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">

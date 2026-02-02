@@ -256,8 +256,9 @@ SQLite with WAL mode supports single-writer, multiple-reader:
 | Governor bypass | enforceTypedConfirm() on mutations | ✅ Implemented |
 | Audit tampering | Immutable activity log | ✅ Implemented |
 | Malicious template | Path validation on import | ✅ Implemented |
-| SSE exhaustion | Max listeners set | ⚠️ Basic |
-| Symlink escape | Not yet (mock implementation) | 🔄 Future |
+| SSE exhaustion | 50-connection limit per endpoint, 429 response | ✅ Implemented |
+| Symlink escape | realpathSync() validation in path-policy | ✅ Implemented |
+| Zip slip | Entry name validation, size limits | ✅ Implemented |
 
 ---
 
