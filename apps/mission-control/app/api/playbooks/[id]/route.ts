@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { mockPlaybooks } from '@savorgos/core'
+import { mockPlaybooks } from '@savorg/core'
 import { enforceTypedConfirm } from '@/lib/with-governor'
-import type { ActionKind } from '@savorgos/core'
+import type { ActionKind } from '@savorg/core'
 
 // Playbook edit action - uses caution level
 const PLAYBOOK_ACTION: ActionKind = 'action.caution'

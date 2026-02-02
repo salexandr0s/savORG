@@ -6,9 +6,9 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { cn } from '@/lib/utils'
-import type { StatusTone } from '@savorgos/ui/theme'
-import { statusToneClasses } from '@savorgos/ui/theme'
-import type { WorkOrderState } from '@savorgos/core'
+import type { StatusTone } from '@savorg/ui/theme'
+import { statusToneClasses } from '@savorg/ui/theme'
+import type { WorkOrderState } from '@savorg/core'
 import type { WorkOrderWithOpsDTO } from '@/lib/repo'
 import { KanbanCard } from './kanban-card'
 import type { DropIndicator } from '@/lib/kanban-helpers'

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { PageHeader, PageSection, EmptyState } from '@savorgos/ui'
+import { PageHeader, PageSection, EmptyState } from '@savorg/ui'
 import { CanonicalTable, type Column } from '@/components/ui/canonical-table'
 import { OperationStatusPill } from '@/components/ui/status-pill'
 import { RightDrawer } from '@/components/shell/right-drawer'

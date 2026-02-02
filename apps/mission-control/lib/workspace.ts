@@ -5,8 +5,8 @@
  * Includes path safety checks and template generation.
  */
 
-import { mockWorkspaceFiles, mockFileContents } from '@savorgos/core'
-import type { Station } from '@savorgos/core'
+import { mockWorkspaceFiles, mockFileContents } from '@savorg/core'
+import type { Station } from '@savorg/core'
 import { isValidWorkspacePath } from './fs/path-policy'
 
 // Re-export path validation for backward compatibility

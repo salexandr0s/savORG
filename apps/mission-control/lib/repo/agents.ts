@@ -5,7 +5,7 @@
  */
 
 import { prisma } from '../db'
-import { mockAgents } from '@savorgos/core'
+import { mockAgents } from '@savorg/core'
 import type { AgentDTO, AgentFilters } from './types'
 
 // ============================================================================

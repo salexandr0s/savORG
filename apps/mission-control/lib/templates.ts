@@ -12,8 +12,8 @@ import {
   type AgentTemplate,
   type AgentTemplateConfig,
   type TemplateValidationResult,
-} from '@savorgos/core'
-import { mockWorkspaceFiles, mockFileContents } from '@savorgos/core'
+} from '@savorg/core'
+import { mockWorkspaceFiles, mockFileContents } from '@savorg/core'
 
 // ============================================================================
 // VALIDATOR

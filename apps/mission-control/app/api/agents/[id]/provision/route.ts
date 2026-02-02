@@ -4,7 +4,7 @@ import { getRepos } from '@/lib/repo'
 import {
   checkOpenClawAvailable,
   runCommand,
-} from '@savorgos/adapters-openclaw'
+} from '@savorg/adapters-openclaw'
 
 /**
  * POST /api/agents/:id/provision

@@ -10,7 +10,7 @@ import {
   PlayCircle,
   AlertOctagon,
 } from 'lucide-react'
-import type { StatusTone } from '@savorgos/ui/theme'
+import type { StatusTone } from '@savorg/ui/theme'
 
 type ChipStatus = 'ok' | 'degraded' | 'down' | 'unknown'
 

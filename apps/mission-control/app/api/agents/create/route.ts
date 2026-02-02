@@ -7,7 +7,7 @@ import {
   createAgentFiles,
   AGENT_ROLE_MAP,
 } from '@/lib/workspace'
-import type { Station } from '@savorgos/core'
+import type { Station } from '@savorg/core'
 
 /**
  * POST /api/agents/create

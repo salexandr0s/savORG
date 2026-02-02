@@ -17,7 +17,7 @@ import {
   mockCronJobs,
   mockGatewayStatus,
   mockWorkspaceFiles,
-} from '@savorgos/core'
+} from '@savorg/core'
 
 import type {
   WorkOrderDTO,

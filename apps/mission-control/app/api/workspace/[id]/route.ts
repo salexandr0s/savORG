@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { mockWorkspaceFiles, mockFileContents } from '@savorgos/core'
+import { mockWorkspaceFiles, mockFileContents } from '@savorg/core'
 import { enforceTypedConfirm } from '@/lib/with-governor'
-import type { ActionKind } from '@savorgos/core'
+import type { ActionKind } from '@savorg/core'
 
 // Protected file mapping
 const PROTECTED_FILES: Record<string, ActionKind> = {

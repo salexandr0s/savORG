@@ -15,7 +15,7 @@ import {
 } from '@dnd-kit/core'
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import { cn } from '@/lib/utils'
-import type { WorkOrderState } from '@savorgos/core'
+import type { WorkOrderState } from '@savorg/core'
 import type { WorkOrderWithOpsDTO } from '@/lib/repo'
 import {
   KANBAN_COLUMNS,

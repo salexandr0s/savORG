@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { PageHeader, PageSection, EmptyState } from '@savorgos/ui'
+import { PageHeader, PageSection, EmptyState } from '@savorg/ui'
 import { CanonicalTable, type Column } from '@/components/ui/canonical-table'
 import { StatusPill } from '@/components/ui/status-pill'
 import { RightDrawer } from '@/components/shell/right-drawer'
@@ -10,7 +10,7 @@ import { agentsApi, operationsApi, templatesApi, type TemplateSummary } from '@/
 import type { AgentDTO, OperationDTO } from '@/lib/repo'
 import { cn } from '@/lib/utils'
 import { Bot, Plus, Loader2, X, Check, Zap, MessageSquare, LayoutTemplate, ChevronRight, ChevronLeft, FileCode, Eye } from 'lucide-react'
-import type { StatusTone } from '@savorgos/ui/theme'
+import type { StatusTone } from '@savorg/ui/theme'
 
 // ============================================================================
 // CONSTANTS

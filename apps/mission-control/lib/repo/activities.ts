@@ -6,7 +6,7 @@
  */
 
 import { prisma } from '../db'
-import { mockActivities } from '@savorgos/core'
+import { mockActivities } from '@savorg/core'
 import { publishActivity } from '../pubsub'
 import type { ActivityDTO, ActivityFilters, PaginationOptions } from './types'
 

@@ -5,7 +5,7 @@
  */
 
 import { prisma } from '../db'
-import { mockApprovals } from '@savorgos/core'
+import { mockApprovals } from '@savorg/core'
 import type { ApprovalDTO, ApprovalFilters } from './types'
 
 // ============================================================================

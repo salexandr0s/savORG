@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { mockPlugins, mockPluginConfigs } from '@savorgos/core'
+import { mockPlugins, mockPluginConfigs } from '@savorg/core'
 import { enforceTypedConfirm } from '@/lib/with-governor'
 import { getRepos } from '@/lib/repo'
 import Ajv from 'ajv'

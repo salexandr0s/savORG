@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRepos } from '@/lib/repo'
 import { enforceTypedConfirm } from '@/lib/with-governor'
-import type { ActionKind } from '@savorgos/core'
+import type { ActionKind } from '@savorg/core'
 
 interface RouteContext {
   params: Promise<{ id: string }>

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRepos } from '@/lib/repo'
-import { checkOpenClawAvailable } from '@savorgos/adapters-openclaw'
+import { checkOpenClawAvailable } from '@savorg/adapters-openclaw'
 
 /**
  * POST /api/agents/:id/test

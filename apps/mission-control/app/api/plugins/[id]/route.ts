@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { mockPlugins, mockPluginConfigs } from '@savorgos/core'
+import { mockPlugins, mockPluginConfigs } from '@savorg/core'
 import { enforceTypedConfirm } from '@/lib/with-governor'
 import { getRepos } from '@/lib/repo'
-import type { ActionKind } from '@savorgos/core'
+import type { ActionKind } from '@savorg/core'
 
 function findPlugin(id: string) {
   return mockPlugins.find((p) => p.id === id)

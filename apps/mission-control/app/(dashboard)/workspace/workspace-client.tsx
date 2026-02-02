@@ -1,14 +1,14 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { PageHeader, EmptyState, TypedConfirmModal } from '@savorgos/ui'
+import { PageHeader, EmptyState, TypedConfirmModal } from '@savorg/ui'
 import { RightDrawer } from '@/components/shell/right-drawer'
 import { MarkdownEditor } from '@/components/editors/markdown-editor'
 import { YamlEditor } from '@/components/editors/yaml-editor'
 import { JsonEditor } from '@/components/editors/json-editor'
 import { workspaceApi, HttpError } from '@/lib/http'
 import { useProtectedAction } from '@/lib/hooks/useProtectedAction'
-import { ACTION_POLICIES, type ActionKind } from '@savorgos/core'
+import { ACTION_POLICIES, type ActionKind } from '@savorg/core'
 import type { WorkspaceFileDTO } from '@/lib/data'
 import { cn } from '@/lib/utils'
 import {

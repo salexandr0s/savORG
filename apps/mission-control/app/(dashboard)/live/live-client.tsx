@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { PageHeader, EmptyState } from '@savorgos/ui'
+import { PageHeader, EmptyState } from '@savorg/ui'
 import { activitiesApi } from '@/lib/http'
 import { useSseStream, type SseConnectionState } from '@/lib/hooks/useSseStream'
 import type { ActivityDTO } from '@/lib/repo'

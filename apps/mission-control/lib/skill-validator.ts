@@ -9,7 +9,7 @@ import type {
   SkillValidationResult,
   SkillValidationError,
   SkillValidationStatus,
-} from '@savorgos/core'
+} from '@savorg/core'
 
 // ============================================================================
 // CONSTANTS

@@ -1,6 +1,6 @@
 # Mission Control Build Plan
 
-**Project**: SavorgOS Mission Control
+**Project**: savorg Mission Control
 **Type**: Local-first multi-agent orchestration platform
 **Runtime**: OpenClaw (external dependency)
 **Stack**: Next.js 14 (App Router) + TypeScript + SQLite + Prisma + Tailwind + shadcn/ui
@@ -76,7 +76,7 @@
 ## Repository Structure
 
 ```
-savorgOS/
+savorg/
 ├── apps/
 │   └── mission-control/          # Next.js 14 App Router
 │       ├── app/
@@ -194,7 +194,7 @@ savorgOS/
 **Files to create**:
 
 ```
-savorgOS/
+savorg/
 ├── package.json
 ├── pnpm-workspace.yaml
 ├── turbo.json
@@ -230,7 +230,7 @@ savorgOS/
 **package.json (root)**:
 ```json
 {
-  "name": "savorgos",
+  "name": "savorg",
   "private": true,
   "packageManager": "pnpm@9.0.0",
   "scripts": {
@@ -1771,8 +1771,8 @@ export function getTemplate(id: string): RoutingTemplate | undefined {
 ```typescript
 import { workOrdersRepo } from '../db/repos/work-orders'
 import { operationsRepo } from '../db/repos/operations'
-import { getTemplate } from '@savorgos/core/routing'
-import { canTransitionWorkOrder } from '@savorgos/core/state-machines'
+import { getTemplate } from '@savorg/core/routing'
+import { canTransitionWorkOrder } from '@savorg/core/state-machines'
 
 export const workOrderService = {
   async create(input: {

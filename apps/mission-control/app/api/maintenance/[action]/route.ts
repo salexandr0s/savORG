@@ -6,8 +6,8 @@ import {
   isAllowedCommand,
   getCommandSpec,
   type AllowedCommandId,
-} from '@savorgos/adapters-openclaw'
-import type { ActionKind } from '@savorgos/core'
+} from '@savorg/adapters-openclaw'
+import type { ActionKind } from '@savorg/core'
 
 // Map action paths to command IDs and Governor action kinds
 const ACTION_MAP: Record<string, {

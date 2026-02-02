@@ -6,7 +6,7 @@ import {
   getValidWorkOrderTransitions,
   type WorkOrderState,
   type ActionKind,
-} from '@savorgos/core'
+} from '@savorg/core'
 
 interface RouteContext {
   params: Promise<{ id: string }>

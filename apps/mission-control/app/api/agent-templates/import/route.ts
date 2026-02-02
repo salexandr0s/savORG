@@ -6,7 +6,7 @@ import {
   validateTemplateConfig,
   scanTemplates,
 } from '@/lib/templates'
-import { mockWorkspaceFiles, mockFileContents } from '@savorgos/core'
+import { mockWorkspaceFiles, mockFileContents } from '@savorg/core'
 import { validateZipEntryName, MAX_FILE_SIZE, MAX_TOTAL_SIZE, MAX_FILES } from '@/lib/fs/zip-safety'
 
 interface ImportTemplatePayload {

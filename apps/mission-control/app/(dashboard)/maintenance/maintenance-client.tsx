@@ -1,14 +1,14 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { PageHeader, PageSection, TypedConfirmModal } from '@savorgos/ui'
+import { PageHeader, PageSection, TypedConfirmModal } from '@savorg/ui'
 import { StatusPill } from '@/components/ui/status-pill'
 import { RightDrawer } from '@/components/shell/right-drawer'
 import { YamlEditor } from '@/components/editors/yaml-editor'
 import { playbooksApi, maintenanceApi, type PlaybookWithContent, type MaintenanceStatus, HttpError } from '@/lib/http'
 import { useProtectedAction } from '@/lib/hooks/useProtectedAction'
 import type { GatewayStatusDTO } from '@/lib/data'
-import type { ActionKind } from '@savorgos/core'
+import type { ActionKind } from '@savorg/core'
 import { cn } from '@/lib/utils'
 import {
   RefreshCw,

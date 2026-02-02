@@ -3,9 +3,9 @@ import {
   mockGlobalSkills,
   mockAgentSkills,
   mockSkillContents,
-} from '@savorgos/core'
+} from '@savorg/core'
 import { validateSkill } from '@/lib/skill-validator'
-import type { SkillScope } from '@savorgos/core'
+import type { SkillScope } from '@savorg/core'
 
 function getSkillsArray(scope: SkillScope) {
   return scope === 'global' ? mockGlobalSkills : mockAgentSkills

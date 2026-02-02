@@ -1,5 +1,5 @@
 /**
- * @savorgos/core
+ * @savorg/core
  *
  * Shared domain types, state machines, validation, and invariants
  * for the SAVORG Mission Control system.

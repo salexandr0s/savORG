@@ -4,11 +4,11 @@ import {
   mockAgentSkills,
   mockSkillContents,
   mockAgents,
-} from '@savorgos/core'
+} from '@savorg/core'
 import { enforceTypedConfirm } from '@/lib/with-governor'
 import { validateSkill } from '@/lib/skill-validator'
 import { getRepos } from '@/lib/repo'
-import type { ActionKind, SkillScope, Skill } from '@savorgos/core'
+import type { ActionKind, SkillScope, Skill } from '@savorg/core'
 
 /**
  * POST /api/skills/:scope/:id/duplicate

@@ -10,8 +10,8 @@ import {
   Info,
   RotateCcw,
 } from 'lucide-react'
-import type { StatusTone } from '@savorgos/ui/theme'
-import { statusToneClasses } from '@savorgos/ui/theme'
+import type { StatusTone } from '@savorg/ui/theme'
+import { statusToneClasses } from '@savorg/ui/theme'
 
 const statusIcons: Record<StatusTone, React.ComponentType<{ className?: string }>> = {
   success: CheckCircle,

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { mockPlugins } from '@savorgos/core'
+import { mockPlugins } from '@savorg/core'
 import { enforceTypedConfirm } from '@/lib/with-governor'
 import { getRepos } from '@/lib/repo'
-import type { Plugin, PluginSourceType } from '@savorgos/core'
+import type { Plugin, PluginSourceType } from '@savorg/core'
 
 // Validation helpers
 const ALLOWED_LOCAL_BASES = ['/usr/local/lib/savorg/plugins', '/opt/savorg/plugins']

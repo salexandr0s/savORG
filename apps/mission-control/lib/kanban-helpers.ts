@@ -5,14 +5,14 @@
  * integrating with the Governor policy system.
  */
 
-import type { WorkOrderState } from '@savorgos/core'
+import type { WorkOrderState } from '@savorg/core'
 import {
   canTransitionWorkOrder,
   getValidWorkOrderTransitions,
   ACTION_POLICIES,
   type ActionKind,
-} from '@savorgos/core'
-import type { StatusTone } from '@savorgos/ui/theme'
+} from '@savorg/core'
+import type { StatusTone } from '@savorg/ui/theme'
 
 // ============================================================================
 // CONSTANTS
