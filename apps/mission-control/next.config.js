@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ['@savorgos/core', '@savorgos/ui', '@savorgos/adapters-openclaw'],
+  transpilePackages: ['@savorg/core', '@savorg/ui', '@savorg/adapters-openclaw'],
   typedRoutes: true,
 }
 

@@ -7,7 +7,7 @@ import {
   previewTemplateRender,
 } from '@/lib/templates'
 import { generateAgentName, generateSessionKey, AGENT_ROLE_MAP } from '@/lib/workspace'
-import type { Station } from '@savorgos/core'
+import type { Station } from '@savorg/core'
 
 interface CreateFromTemplateInput {
   templateId: string

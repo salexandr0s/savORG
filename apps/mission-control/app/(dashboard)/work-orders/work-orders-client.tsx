@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { PageHeader, EmptyState } from '@savorgos/ui'
+import { PageHeader, EmptyState } from '@savorg/ui'
 import { CanonicalTable, type Column } from '@/components/ui/canonical-table'
 import { WorkOrderStatePill, PriorityPill } from '@/components/ui/status-pill'
 import { ViewToggle, type ViewMode } from '@/components/ui/view-toggle'
@@ -11,7 +11,7 @@ import { RightDrawer } from '@/components/shell/right-drawer'
 import { workOrdersApi } from '@/lib/http'
 import { useWorkOrderStream } from '@/lib/hooks/useWorkOrderStream'
 import type { WorkOrderWithOpsDTO } from '@/lib/repo'
-import type { WorkOrderState } from '@savorgos/core'
+import type { WorkOrderState } from '@savorg/core'
 import { cn, formatRelativeTime } from '@/lib/utils'
 import { ClipboardList, Plus, Filter, Loader2 } from 'lucide-react'
 

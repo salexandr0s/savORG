@@ -13,7 +13,7 @@ import {
   type ActionKind,
   type ActionPolicy,
   type ApprovalType,
-} from '@savorgos/core'
+} from '@savorg/core'
 
 // ============================================================================
 // TYPES

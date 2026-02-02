@@ -12,7 +12,7 @@ import {
   validateTypedConfirm,
   type ActionKind,
   type ConfirmMode,
-} from '@savorgos/core'
+} from '@savorg/core'
 import {
   validateApprovalGate,
   type ApprovalGateResult,

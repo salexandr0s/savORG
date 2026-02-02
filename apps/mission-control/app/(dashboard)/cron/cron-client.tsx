@@ -1,14 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { PageHeader, PageSection, EmptyState, DisabledAction } from '@savorgos/ui'
+import { PageHeader, PageSection, EmptyState, DisabledAction } from '@savorg/ui'
 import { CanonicalTable, type Column } from '@/components/ui/canonical-table'
 import { StatusPill } from '@/components/ui/status-pill'
 import { RightDrawer } from '@/components/shell/right-drawer'
 import type { CronJobDTO } from '@/lib/data'
 import { cn } from '@/lib/utils'
 import { Clock, Plus, Play, Pause } from 'lucide-react'
-import type { StatusTone } from '@savorgos/ui/theme'
+import type { StatusTone } from '@savorg/ui/theme'
 
 interface Props {
   cronJobs: CronJobDTO[]

@@ -4,7 +4,7 @@ import {
   validateOperationTransition,
   getValidOperationTransitions,
   type OperationStatus,
-} from '@savorgos/core'
+} from '@savorg/core'
 
 interface RouteContext {
   params: Promise<{ id: string }>

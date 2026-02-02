@@ -25,8 +25,8 @@ This guide covers detailed setup instructions for both demo mode and operational
 
 ```bash
 # Clone repository
-git clone https://github.com/your-org/savorgos.git
-cd savorgos
+git clone https://github.com/your-org/savorg.git
+cd savorg
 
 # Install dependencies
 npm install
@@ -57,7 +57,7 @@ curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
 source ~/.bashrc  # or ~/.zshrc
 
 # Install and use correct Node version
-cd savorgos
+cd savorg
 nvm install
 nvm use
 ```
@@ -170,7 +170,7 @@ your-project/
 
 ```bash
 cd your-project
-npm run dev --prefix /path/to/savorgos/apps/mission-control
+npm run dev --prefix /path/to/savorg/apps/mission-control
 ```
 
 Or symlink the Mission Control into your project for convenience.

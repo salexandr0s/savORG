@@ -17,8 +17,8 @@ import {
   Loader2,
 } from 'lucide-react'
 import type { VisualizerNode, VisualizerEntityType, ExecutionState } from '../visualizer-store'
-import type { StatusTone } from '@savorgos/ui/theme'
-import { statusToneClasses } from '@savorgos/ui/theme'
+import type { StatusTone } from '@savorg/ui/theme'
+import { statusToneClasses } from '@savorg/ui/theme'
 
 interface EntityNodeProps {
   node: VisualizerNode

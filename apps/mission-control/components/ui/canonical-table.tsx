@@ -2,8 +2,8 @@
 
 import { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
-import type { DensityPreset } from '@savorgos/ui/theme'
-import { densityClasses } from '@savorgos/ui/theme'
+import type { DensityPreset } from '@savorg/ui/theme'
+import { densityClasses } from '@savorg/ui/theme'
 
 // ============================================================================
 // TABLE TYPES

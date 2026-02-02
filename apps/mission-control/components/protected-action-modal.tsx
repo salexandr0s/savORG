@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, type ReactNode } from 'react'
-import { TypedConfirmModal } from '@savorgos/ui'
+import { TypedConfirmModal } from '@savorg/ui'
 import { useProtectedAction, type ProtectedActionConfig } from '@/lib/hooks/useProtectedAction'
 
 // ============================================================================

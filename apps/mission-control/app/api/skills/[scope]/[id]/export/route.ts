@@ -4,8 +4,8 @@ import {
   mockAgentSkills,
   mockSkillContents,
   mockAgents,
-} from '@savorgos/core'
-import type { SkillScope, SkillManifest } from '@savorgos/core'
+} from '@savorg/core'
+import type { SkillScope, SkillManifest } from '@savorg/core'
 import JSZip from 'jszip'
 
 /**

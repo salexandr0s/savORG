@@ -7,7 +7,7 @@ import {
   type ActionPolicy,
   type RiskLevel,
   type ConfirmMode,
-} from '@savorgos/core'
+} from '@savorg/core'
 
 // ============================================================================
 // TYPES

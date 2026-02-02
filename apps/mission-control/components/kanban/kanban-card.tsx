@@ -7,7 +7,7 @@ import { formatRelativeTime } from '@/lib/utils'
 import { PriorityPill } from '@/components/ui/status-pill'
 import { isWorkOrderStale, getStaleDurationHours } from '@/lib/kanban-helpers'
 import type { WorkOrderWithOpsDTO } from '@/lib/repo'
-import type { WorkOrderState } from '@savorgos/core'
+import type { WorkOrderState } from '@savorg/core'
 import { Clock } from 'lucide-react'
 
 interface KanbanCardProps {

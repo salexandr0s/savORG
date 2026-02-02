@@ -5,7 +5,7 @@
  */
 
 import { prisma } from '../db'
-import { mockOperations } from '@savorgos/core'
+import { mockOperations } from '@savorg/core'
 import type { OperationDTO, OperationFilters } from './types'
 
 // ============================================================================

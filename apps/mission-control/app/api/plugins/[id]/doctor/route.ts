@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { mockPlugins } from '@savorgos/core'
+import { mockPlugins } from '@savorg/core'
 import { enforceTypedConfirm } from '@/lib/with-governor'
 import { getRepos } from '@/lib/repo'
-import type { PluginDoctorResult, PluginDoctorCheck } from '@savorgos/core'
+import type { PluginDoctorResult, PluginDoctorCheck } from '@savorg/core'
 
 function findPluginIndex(id: string) {
   return mockPlugins.findIndex((p) => p.id === id)

@@ -1,5 +1,5 @@
 /**
- * @savorgos/ui
+ * @savorg/ui
  *
  * Canonical UI components for Mission Control
  * Design system based on ops-dark theme

@@ -4,13 +4,13 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
-import { PageHeader, PageSection, EmptyState, DisabledAction } from '@savorgos/ui'
+import { PageHeader, PageSection, EmptyState, DisabledAction } from '@savorg/ui'
 import { OperationStatusPill, WorkOrderStatePill, PriorityPill } from '@/components/ui/status-pill'
 import { workOrdersApi, operationsApi, activitiesApi, approvalsApi } from '@/lib/http'
 import type { WorkOrderWithOpsDTO, OperationDTO, ActivityDTO, ApprovalDTO } from '@/lib/repo'
 import { cn } from '@/lib/utils'
 import { useProtectedActionTrigger } from '@/components/protected-action-modal'
-import { getValidWorkOrderTransitions, type WorkOrderState } from '@savorgos/core'
+import { getValidWorkOrderTransitions, type WorkOrderState } from '@savorg/core'
 import {
   ArrowLeft,
   Loader2,

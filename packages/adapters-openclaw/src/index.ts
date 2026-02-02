@@ -1,5 +1,5 @@
 /**
- * @savorgos/adapters-openclaw
+ * @savorg/adapters-openclaw
  *
  * OpenClaw CLI adapter with multiple modes:
  * - mock: For development/testing when OpenClaw is not installed

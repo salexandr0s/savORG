@@ -1,5 +1,5 @@
 import { getGatewayStatus } from '@/lib/data'
-import { mockPlaybooks } from '@savorgos/core'
+import { mockPlaybooks } from '@savorg/core'
 import { MaintenanceClient } from './maintenance-client'
 
 export default async function MaintenancePage() {

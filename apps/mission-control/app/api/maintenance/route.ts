@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getDefaultAdapter, checkOpenClaw, OPENCLAW_BIN, MIN_OPENCLAW_VERSION } from '@savorgos/adapters-openclaw'
+import { getDefaultAdapter, checkOpenClaw, OPENCLAW_BIN, MIN_OPENCLAW_VERSION } from '@savorg/adapters-openclaw'
 
 /**
  * GET /api/maintenance

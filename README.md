@@ -14,6 +14,7 @@ SAVORG Mission Control is a local-first ops console for orchestrating AI agents.
 - **Agent Management** — Configure, monitor, and control AI agents via souls and overlays
 - **Approval Gates** — Governor-enforced typed confirmation for dangerous actions
 - **Live View** — Real-time streaming of agent activities and command receipts
+- **Kanban Board** — Visualize work orders across stations and states
 - **Workspace** — Browse and edit agent files (souls, overlays, skills, playbooks)
 - **Plugins & Skills** — Install and manage agent capabilities
 - **Templates** — Create agents from validated templates with parameterized rendering
@@ -48,8 +49,8 @@ openclaw --version  # Should be 0.1.0 or higher
 
 ```bash
 # 1. Clone and install
-git clone https://github.com/your-org/savorgos.git
-cd savorgos
+git clone https://github.com/your-org/savorg.git
+cd savorg
 npm install
 
 # 2. Configure environment
@@ -105,7 +106,8 @@ To enable operational mode:
 |-----|-------------|
 | [localhost:3000](http://localhost:3000) | Dashboard home |
 | [localhost:3000/now](http://localhost:3000/now) | Live activity stream |
-| [localhost:3000/work-orders](http://localhost:3000/work-orders) | Work order management |
+| [localhost:3000/live](http://localhost:3000/live) | Live view + visualizer |
+| [localhost:3000/work-orders](http://localhost:3000/work-orders) | Work order management + Kanban board |
 | [localhost:3000/agents](http://localhost:3000/agents) | Agent configuration |
 | [localhost:3000/agent-templates](http://localhost:3000/agent-templates) | Agent templates |
 | [localhost:3000/approvals](http://localhost:3000/approvals) | Pending approval gates |
@@ -197,7 +199,7 @@ Always read the [CHANGELOG](CHANGELOG.md) before updating.
 ## Project Structure
 
 ```
-savorgos/
+savorg/
 ├── apps/
 │   └── mission-control/     # Next.js dashboard
 │       ├── app/             # App router pages
@@ -243,5 +245,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
 
 ## Support
 
-- **Issues:** [GitHub Issues](https://github.com/your-org/savorgos/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/your-org/savorgos/discussions)
+- **Issues:** [GitHub Issues](https://github.com/your-org/savorg/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/your-org/savorg/discussions)

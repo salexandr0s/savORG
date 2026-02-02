@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { mockPlaybooks } from '@savorgos/core'
+import { mockPlaybooks } from '@savorg/core'
 
 /**
  * GET /api/playbooks

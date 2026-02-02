@@ -8,7 +8,7 @@ import {
   getTemplateFileContent,
   scanTemplates,
 } from '@/lib/templates'
-import { mockWorkspaceFiles, mockFileContents } from '@savorgos/core'
+import { mockWorkspaceFiles, mockFileContents } from '@savorg/core'
 
 /**
  * GET /api/agent-templates/:id

@@ -2,13 +2,13 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { PageHeader, PageSection, EmptyState } from '@savorgos/ui'
+import { PageHeader, PageSection, EmptyState } from '@savorg/ui'
 import { CanonicalTable, type Column } from '@/components/ui/canonical-table'
 import { StatusPill } from '@/components/ui/status-pill'
 import { RightDrawer } from '@/components/shell/right-drawer'
 import { approvalsApi } from '@/lib/http'
 import type { ApprovalDTO, WorkOrderDTO } from '@/lib/repo'
-import { ACTION_POLICIES, type ApprovalType } from '@savorgos/core'
+import { ACTION_POLICIES, type ApprovalType } from '@savorg/core'
 import { cn } from '@/lib/utils'
 import {
   CheckCircle,

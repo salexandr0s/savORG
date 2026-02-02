@@ -5,7 +5,7 @@ import {
   executeCommand,
   runCommandJson,
   checkOpenClawAvailable,
-} from '@savorgos/adapters-openclaw'
+} from '@savorg/adapters-openclaw'
 
 /**
  * Recovery Playbook Steps

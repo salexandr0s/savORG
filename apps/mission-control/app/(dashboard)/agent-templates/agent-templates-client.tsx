@@ -1,13 +1,13 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { PageHeader, EmptyState, TypedConfirmModal } from '@savorgos/ui'
+import { PageHeader, EmptyState, TypedConfirmModal } from '@savorg/ui'
 import { CanonicalTable, type Column } from '@/components/ui/canonical-table'
 import { StatusPill } from '@/components/ui/status-pill'
 import { RightDrawer } from '@/components/shell/right-drawer'
 import { useProtectedAction } from '@/lib/hooks/useProtectedAction'
 import { templatesApi, type TemplateWithFiles, type TemplateFile } from '@/lib/http'
-import type { AgentTemplate } from '@savorgos/core'
+import type { AgentTemplate } from '@savorg/core'
 import { cn } from '@/lib/utils'
 import {
   LayoutTemplate,

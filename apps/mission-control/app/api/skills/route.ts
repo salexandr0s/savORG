@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { mockGlobalSkills, mockAgentSkills, mockAgents } from '@savorgos/core'
+import { mockGlobalSkills, mockAgentSkills, mockAgents } from '@savorg/core'
 import { enforceTypedConfirm } from '@/lib/with-governor'
 import { getRepos } from '@/lib/repo'
-import type { ActionKind, SkillScope } from '@savorgos/core'
+import type { ActionKind, SkillScope } from '@savorg/core'
 
 /**
  * GET /api/skills

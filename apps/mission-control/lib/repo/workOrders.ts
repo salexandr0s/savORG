@@ -6,7 +6,7 @@
 
 import { prisma } from '../db'
 import { indexWorkOrder } from '../db/fts'
-import { mockWorkOrders, mockOperations } from '@savorgos/core'
+import { mockWorkOrders, mockOperations } from '@savorg/core'
 import type {
   WorkOrderDTO,
   WorkOrderWithOpsDTO,
