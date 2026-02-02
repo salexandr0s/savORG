@@ -56,7 +56,7 @@ function StatusChipItem({ chip, onClick }: StatusChipProps) {
       onClick={onClick}
       className={cn(
         'flex items-center gap-2 px-2.5 py-1.5 rounded-[var(--radius-md)]',
-        'bg-bg-2 border border-bd-0 hover:border-bd-1 transition-colors',
+        'bg-bg-2 border border-white/[0.06] hover:border-bd-1 transition-colors',
         'h-7 min-w-0'
       )}
     >

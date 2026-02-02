@@ -403,7 +403,7 @@ export function AgentTemplatesClient({ templates: initialTemplates }: Props) {
           }
         />
 
-        <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-bd-0 overflow-hidden">
+        <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-white/[0.06] overflow-hidden">
           <CanonicalTable
             columns={templateColumns}
             rows={templates}
@@ -458,7 +458,7 @@ export function AgentTemplatesClient({ templates: initialTemplates }: Props) {
             className="absolute inset-0 bg-black/50"
             onClick={() => setShowCreateModal(false)}
           />
-          <div className="relative bg-bg-1 border border-bd-0 rounded-lg shadow-xl w-full max-w-md p-6">
+          <div className="relative bg-bg-1 border border-white/[0.06] rounded-lg shadow-xl w-full max-w-md p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-fg-0">New Template</h2>
               <button
@@ -485,7 +485,7 @@ export function AgentTemplatesClient({ templates: initialTemplates }: Props) {
                   value={createId}
                   onChange={(e) => setCreateId(e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, ''))}
                   placeholder="savorg-custom-agent"
-                  className="w-full px-3 py-2 bg-bg-2 border border-bd-0 rounded-md font-mono text-sm text-fg-0 placeholder:text-fg-3 focus:outline-none focus:ring-2 focus:ring-accent-primary/50"
+                  className="w-full px-3 py-2 bg-bg-2 border border-white/[0.06] rounded-md font-mono text-sm text-fg-0 placeholder:text-fg-3 focus:outline-none focus:ring-2 focus:ring-accent-primary/50"
                 />
                 <p className="mt-1 text-xs text-fg-2">
                   Lowercase letters, numbers, dashes, and underscores only
@@ -501,7 +501,7 @@ export function AgentTemplatesClient({ templates: initialTemplates }: Props) {
                   value={createName}
                   onChange={(e) => setCreateName(e.target.value)}
                   placeholder="My Custom Agent Template"
-                  className="w-full px-3 py-2 bg-bg-2 border border-bd-0 rounded-md text-sm text-fg-0 placeholder:text-fg-3 focus:outline-none focus:ring-2 focus:ring-accent-primary/50"
+                  className="w-full px-3 py-2 bg-bg-2 border border-white/[0.06] rounded-md text-sm text-fg-0 placeholder:text-fg-3 focus:outline-none focus:ring-2 focus:ring-accent-primary/50"
                 />
               </div>
 
@@ -518,7 +518,7 @@ export function AgentTemplatesClient({ templates: initialTemplates }: Props) {
                         'px-3 py-1.5 text-xs font-mono rounded-md border transition-colors',
                         createRole === role
                           ? 'bg-accent-primary/10 border-accent-primary text-accent-primary'
-                          : 'border-bd-0 text-fg-2 hover:text-fg-1 hover:border-bd-1'
+                          : 'border-white/[0.06] text-fg-2 hover:text-fg-1 hover:border-bd-1'
                       )}
                     >
                       {role}
@@ -559,7 +559,7 @@ export function AgentTemplatesClient({ templates: initialTemplates }: Props) {
             className="absolute inset-0 bg-black/50"
             onClick={() => setShowImportModal(false)}
           />
-          <div className="relative bg-bg-1 border border-bd-0 rounded-lg shadow-xl w-full max-w-lg p-6">
+          <div className="relative bg-bg-1 border border-white/[0.06] rounded-lg shadow-xl w-full max-w-lg p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-fg-0">Import Template</h2>
               <button
@@ -589,7 +589,7 @@ export function AgentTemplatesClient({ templates: initialTemplates }: Props) {
                   onChange={(e) => setImportData(e.target.value)}
                   placeholder='{"templateId": "...", "files": {...}}'
                   rows={10}
-                  className="w-full px-3 py-2 bg-bg-2 border border-bd-0 rounded-md font-mono text-xs text-fg-0 placeholder:text-fg-3 focus:outline-none focus:ring-2 focus:ring-accent-primary/50 resize-none"
+                  className="w-full px-3 py-2 bg-bg-2 border border-white/[0.06] rounded-md font-mono text-xs text-fg-0 placeholder:text-fg-3 focus:outline-none focus:ring-2 focus:ring-accent-primary/50 resize-none"
                 />
               </div>
             </div>
@@ -679,8 +679,8 @@ function TemplateDetail({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-bd-0 px-4">
+      {/* Tabs - negative margin to extend to drawer edges */}
+      <div className="flex gap-1 border-b border-white/[0.06] -mx-4 px-4">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -703,13 +703,13 @@ function TemplateDetail({
 
       {/* Error Banner */}
       {error && (
-        <div className="mx-4 mt-4 p-3 bg-status-error/10 border border-status-error/30 rounded-md text-sm text-status-error">
+        <div className="mt-4 p-3 bg-status-error/10 border border-status-error/30 rounded-md text-sm text-status-error">
           {error}
         </div>
       )}
 
-      {/* Tab Content */}
-      <div className="flex-1 overflow-auto p-4">
+      {/* Tab Content - no extra padding since drawer provides it */}
+      <div className="flex-1 overflow-auto pt-4">
         {activeTab === 'overview' && (
           <OverviewTab
             template={template}
@@ -916,7 +916,7 @@ function FilesTab({
   return (
     <div className="space-y-4">
       {/* File list */}
-      <div className="bg-bg-1 rounded-md divide-y divide-bd-0">
+      <div className="bg-bg-1 rounded-md divide-y divide-white/[0.06]">
         {template.files.map((file) => (
           <div
             key={file.id}
@@ -945,7 +945,7 @@ function FilesTab({
       {/* File preview */}
       {previewFile && (
         <div className="bg-bg-1 rounded-md">
-          <div className="flex items-center justify-between p-3 border-b border-bd-0">
+          <div className="flex items-center justify-between p-3 border-b border-white/[0.06]">
             <span className="text-sm font-mono text-fg-1">{previewFile.name}</span>
             <button onClick={onClosePreview} className="text-fg-2 hover:text-fg-0">
               <X className="w-4 h-4" />

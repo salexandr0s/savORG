@@ -55,13 +55,13 @@ export function RailNav({ collapsed, onToggle }: RailNavProps) {
   return (
     <nav
       className={cn(
-        'flex flex-col bg-bg-1 border-r border-bd-0 transition-all duration-200 shrink-0 h-screen',
+        'flex flex-col bg-bg-1 border-r border-white/[0.06] transition-all duration-200 shrink-0 h-screen',
         collapsed ? 'w-[56px]' : 'w-[200px]'
       )}
     >
       {/* Logo */}
       <div className={cn(
-        "h-[var(--topbar-height)] flex items-center border-b border-bd-0 shrink-0",
+        "h-[var(--topbar-height)] flex items-center border-b border-white/[0.06] shrink-0",
         collapsed ? "justify-center px-0" : "px-4"
       )}>
         <span className="text-sm font-semibold text-fg-0 tracking-wide">S</span>
@@ -108,7 +108,7 @@ export function RailNav({ collapsed, onToggle }: RailNavProps) {
 
       {/* Settings + Collapse */}
       <div className={cn(
-        "py-2 border-t border-bd-0 space-y-0.5 shrink-0",
+        "py-2 border-t border-white/[0.06] space-y-0.5 shrink-0",
         collapsed ? "px-1.5" : "px-2"
       )}>
         <Link

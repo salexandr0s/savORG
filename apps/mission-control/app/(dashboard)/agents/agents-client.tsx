@@ -295,7 +295,7 @@ export function AgentsClient() {
             <div className="flex gap-2">
               <button
                 onClick={() => setShowTemplateWizard(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] border border-bd-0 text-fg-1 hover:bg-bg-3 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] border border-white/[0.06] text-fg-1 hover:bg-bg-3 transition-colors"
               >
                 <LayoutTemplate className="w-3.5 h-3.5" />
                 From Template
@@ -338,7 +338,7 @@ export function AgentsClient() {
           </div>
         )}
 
-        <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-bd-0 overflow-hidden">
+        <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-white/[0.06] overflow-hidden">
           <CanonicalTable
             columns={agentColumns}
             rows={agents}
@@ -441,9 +441,9 @@ function CreateAgentModal({
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-lg bg-bg-1 rounded-[var(--radius-lg)] border border-bd-0 shadow-xl">
+      <div className="relative w-full max-w-lg bg-bg-1 rounded-[var(--radius-lg)] border border-white/[0.06] shadow-xl">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-bd-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
           <div>
             <h2 className="text-lg font-semibold text-fg-0">Create Agent</h2>
             <p className="text-sm text-fg-2">Configure a new agent for your workspace</p>
@@ -459,7 +459,7 @@ function CreateAgentModal({
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {/* Name Preview */}
-          <div className="p-4 bg-bg-3 rounded-[var(--radius-md)] border border-bd-0">
+          <div className="p-4 bg-bg-3 rounded-[var(--radius-md)] border border-white/[0.06]">
             <div className="flex items-center gap-3">
               <Bot className="w-8 h-8 text-status-progress" />
               <div>
@@ -482,7 +482,7 @@ function CreateAgentModal({
                     'p-3 text-left rounded-[var(--radius-md)] border transition-colors',
                     role === opt.value
                       ? 'border-status-progress bg-status-progress/10'
-                      : 'border-bd-0 hover:border-bd-1'
+                      : 'border-white/[0.06] hover:border-bd-1'
                   )}
                 >
                   <p className={cn(
@@ -505,7 +505,7 @@ function CreateAgentModal({
               onChange={(e) => setPurpose(e.target.value)}
               placeholder="Describe what this agent will do..."
               rows={3}
-              className="w-full px-3 py-2 bg-bg-2 border border-bd-0 rounded-[var(--radius-md)] text-sm text-fg-0 placeholder:text-fg-3 focus:outline-none focus:border-status-progress resize-none"
+              className="w-full px-3 py-2 bg-bg-2 border border-white/[0.06] rounded-[var(--radius-md)] text-sm text-fg-0 placeholder:text-fg-3 focus:outline-none focus:border-status-progress resize-none"
             />
           </div>
 
@@ -522,7 +522,7 @@ function CreateAgentModal({
                     'px-3 py-1.5 text-xs rounded-full border transition-colors',
                     capabilities.includes(cap)
                       ? 'border-status-progress bg-status-progress/10 text-status-progress'
-                      : 'border-bd-0 text-fg-2 hover:border-bd-1'
+                      : 'border-white/[0.06] text-fg-2 hover:border-bd-1'
                   )}
                 >
                   {cap}
@@ -542,7 +542,7 @@ function CreateAgentModal({
           )}
 
           {/* Actions */}
-          <div className="flex justify-end gap-3 pt-4 border-t border-bd-0">
+          <div className="flex justify-end gap-3 pt-4 border-t border-white/[0.06]">
             <button
               type="button"
               onClick={onClose}
@@ -700,9 +700,9 @@ function CreateFromTemplateWizard({
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative w-full max-w-2xl bg-bg-1 rounded-[var(--radius-lg)] border border-bd-0 shadow-xl max-h-[90vh] flex flex-col">
+      <div className="relative w-full max-w-2xl bg-bg-1 rounded-[var(--radius-lg)] border border-white/[0.06] shadow-xl max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-bd-0 shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06] shrink-0">
           <div className="flex items-center gap-3">
             <LayoutTemplate className="w-5 h-5 text-status-progress" />
             <div>
@@ -721,7 +721,7 @@ function CreateFromTemplateWizard({
         </div>
 
         {/* Step Indicator */}
-        <div className="flex items-center gap-2 px-6 py-3 border-b border-bd-0 shrink-0">
+        <div className="flex items-center gap-2 px-6 py-3 border-b border-white/[0.06] shrink-0">
           {(['select', 'params', 'preview'] as WizardStep[]).map((s, idx) => (
             <div key={s} className="flex items-center">
               {idx > 0 && <ChevronRight className="w-4 h-4 text-fg-3 mx-1" />}
@@ -770,7 +770,7 @@ function CreateFromTemplateWizard({
                       'w-full p-4 text-left rounded-[var(--radius-md)] border transition-colors',
                       selectedTemplateId === template.id
                         ? 'border-status-progress bg-status-progress/5'
-                        : 'border-bd-0 hover:border-bd-1'
+                        : 'border-white/[0.06] hover:border-bd-1'
                     )}
                   >
                     <div className="flex items-start justify-between">
@@ -806,7 +806,7 @@ function CreateFromTemplateWizard({
                         <select
                           value={String(params[key] || '')}
                           onChange={(e) => handleParamChange(key, e.target.value)}
-                          className="w-full px-3 py-2 bg-bg-2 border border-bd-0 rounded-[var(--radius-md)] text-sm text-fg-0"
+                          className="w-full px-3 py-2 bg-bg-2 border border-white/[0.06] rounded-[var(--radius-md)] text-sm text-fg-0"
                         >
                           <option value="">Select...</option>
                           {prop.enum.map((val) => (
@@ -821,7 +821,7 @@ function CreateFromTemplateWizard({
                           value={String(params[key] || '')}
                           onChange={(e) => handleParamChange(key, e.target.value)}
                           placeholder={prop.default ? String(prop.default) : ''}
-                          className="w-full px-3 py-2 bg-bg-2 border border-bd-0 rounded-[var(--radius-md)] text-sm text-fg-0 placeholder:text-fg-3"
+                          className="w-full px-3 py-2 bg-bg-2 border border-white/[0.06] rounded-[var(--radius-md)] text-sm text-fg-0 placeholder:text-fg-3"
                         />
                       )}
                     </div>
@@ -841,7 +841,7 @@ function CreateFromTemplateWizard({
               {previewFiles.map((file, idx) => (
                 <div
                   key={idx}
-                  className="p-4 bg-bg-2 rounded-[var(--radius-md)] border border-bd-0"
+                  className="p-4 bg-bg-2 rounded-[var(--radius-md)] border border-white/[0.06]"
                 >
                   <div className="flex items-center gap-2 mb-2">
                     <FileCode className="w-4 h-4 text-fg-2" />
@@ -855,7 +855,7 @@ function CreateFromTemplateWizard({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-bd-0 shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-white/[0.06] shrink-0">
           <div>
             {step !== 'select' && (
               <button
@@ -922,7 +922,7 @@ function AgentDetail({
   }
 
   return (
-    <div className="p-4 space-y-6">
+    <div className="space-y-6">
       {/* Status */}
       <div className="flex items-center gap-3">
         <StatusPill tone={toneMap[agent.status]} label={agent.status} />
@@ -958,7 +958,7 @@ function AgentDetail({
           {assignedOps.map((op) => (
             <div
               key={op.id}
-              className="flex items-center justify-between p-3 bg-bg-3 rounded-[var(--radius-md)] border border-bd-0"
+              className="flex items-center justify-between p-3 bg-bg-3 rounded-[var(--radius-md)] border border-white/[0.06]"
             >
               <div className="min-w-0">
                 <p className="text-sm text-fg-0 truncate">{op.title}</p>
@@ -988,7 +988,7 @@ function AgentDetail({
             .map(([cap]) => (
               <span
                 key={cap}
-                className="px-2 py-1 text-xs bg-bg-3 rounded text-fg-1 border border-bd-0"
+                className="px-2 py-1 text-xs bg-bg-3 rounded text-fg-1 border border-white/[0.06]"
               >
                 {cap}
               </span>
@@ -1008,7 +1008,7 @@ function AgentDetail({
             {agent.lastHeartbeatAt ? formatRelativeTime(agent.lastHeartbeatAt) : 'Never'}
           </dd>
           <dt className="text-fg-2">Registered</dt>
-          <dd className="text-fg-1 font-mono text-xs">{agent.createdAt.toLocaleDateString()}</dd>
+          <dd className="text-fg-1 font-mono text-xs">{new Date(agent.createdAt).toLocaleDateString()}</dd>
         </dl>
       </PageSection>
     </div>

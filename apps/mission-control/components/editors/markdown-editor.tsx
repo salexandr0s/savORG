@@ -152,10 +152,10 @@ export function MarkdownEditor({
   return (
     <div
       ref={editorRef}
-      className="flex flex-col bg-bg-2 rounded-[var(--radius-lg)] border border-bd-0 overflow-hidden"
+      className="flex flex-col bg-bg-2 rounded-[var(--radius-lg)] border border-white/[0.06] overflow-hidden"
     >
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-bd-0 bg-bg-1">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-white/[0.06] bg-bg-1">
         {/* File path */}
         <div className="flex items-center gap-2 min-w-0">
           {filePath && (
@@ -267,7 +267,7 @@ export function MarkdownEditor({
       <div
         className={cn(
           'flex-1 overflow-hidden',
-          mode === 'split' && 'grid grid-cols-2 divide-x divide-bd-0'
+          mode === 'split' && 'grid grid-cols-2 divide-x divide-white/[0.06]'
         )}
         style={{ height }}
       >
@@ -383,16 +383,16 @@ export function MarkdownEditor({
                     <thead className="bg-bg-3">{children}</thead>
                   ),
                   th: ({ children }) => (
-                    <th className="px-3 py-2 text-left text-xs font-medium text-fg-1 border border-bd-0">
+                    <th className="px-3 py-2 text-left text-xs font-medium text-fg-1 border border-white/[0.06]">
                       {children}
                     </th>
                   ),
                   td: ({ children }) => (
-                    <td className="px-3 py-2 text-fg-1 border border-bd-0">
+                    <td className="px-3 py-2 text-fg-1 border border-white/[0.06]">
                       {children}
                     </td>
                   ),
-                  hr: () => <hr className="border-bd-0 my-4" />,
+                  hr: () => <hr className="border-white/[0.06] my-4" />,
                 }}
               >
                 {content || '_No content_'}

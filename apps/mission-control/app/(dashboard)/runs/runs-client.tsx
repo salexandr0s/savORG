@@ -152,7 +152,7 @@ export function RunsClient() {
               <select
                 value={statusFilter || ''}
                 onChange={(e) => setStatusFilter(e.target.value || null)}
-                className="px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] bg-bg-3 text-fg-1 border border-bd-0 focus:outline-none focus:border-bd-1"
+                className="px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] bg-bg-3 text-fg-1 border border-white/[0.06] focus:outline-none focus:border-bd-1"
               >
                 <option value="">All statuses</option>
                 <option value="todo">Todo</option>
@@ -165,7 +165,7 @@ export function RunsClient() {
           }
         />
 
-        <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-bd-0 overflow-hidden">
+        <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-white/[0.06] overflow-hidden">
           <CanonicalTable
             columns={operationColumns}
             rows={filteredOps}
@@ -217,7 +217,7 @@ function OperationDetail({
     .filter(Boolean)
 
   return (
-    <div className="p-4 space-y-6">
+    <div className="space-y-6">
       {/* Status */}
       <div className="flex items-center gap-3">
         <OperationStatusPill status={operation.status} />
@@ -227,7 +227,7 @@ function OperationDetail({
       {/* Work Order Link */}
       {workOrder && (
         <PageSection title="Work Order">
-          <div className="p-3 bg-bg-3 rounded-[var(--radius-md)] border border-bd-0">
+          <div className="p-3 bg-bg-3 rounded-[var(--radius-md)] border border-white/[0.06]">
             <p className="font-mono text-xs text-fg-2">{workOrder.code}</p>
             <p className="text-sm text-fg-0 mt-1">{workOrder.title}</p>
           </div>
@@ -279,7 +279,7 @@ function OperationDetail({
           <dt className="text-fg-2">WIP Class</dt>
           <dd className="text-fg-1">{operation.wipClass}</dd>
           <dt className="text-fg-2">Created</dt>
-          <dd className="text-fg-1 font-mono text-xs">{operation.createdAt.toLocaleDateString()}</dd>
+          <dd className="text-fg-1 font-mono text-xs">{new Date(operation.createdAt).toLocaleDateString()}</dd>
           <dt className="text-fg-2">Updated</dt>
           <dd className="text-fg-1 font-mono text-xs">{formatRelativeTime(operation.updatedAt)}</dd>
         </dl>

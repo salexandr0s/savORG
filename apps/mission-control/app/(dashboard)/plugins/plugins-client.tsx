@@ -76,13 +76,13 @@ const pluginColumns: Column<PluginDTO>[] = [
   {
     key: 'name',
     header: 'Plugin',
-    width: '180px',
+    width: '160px',
     mono: true,
     render: (row) => (
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 whitespace-nowrap">
         <span
           className={cn(
-            'w-2 h-2 rounded-full',
+            'w-2 h-2 rounded-full shrink-0',
             row.status === 'error'
               ? 'bg-status-error'
               : row.enabled
@@ -91,21 +91,28 @@ const pluginColumns: Column<PluginDTO>[] = [
           )}
         />
         <span className="text-fg-0">{row.name}</span>
-        <DoctorStatusIcon status={row.doctorResult?.status} />
       </div>
     ),
+  },
+  {
+    key: 'health',
+    header: 'Health',
+    width: '60px',
+    align: 'center',
+    render: (row) => <DoctorStatusIcon status={row.doctorResult?.status} />,
   },
   {
     key: 'description',
     header: 'Description',
     render: (row) => (
-      <span className="text-fg-1 truncate max-w-[220px] inline-block">{row.description}</span>
+      <span className="text-fg-1 truncate max-w-[300px] inline-block">{row.description}</span>
     ),
   },
   {
     key: 'sourceType',
     header: 'Source',
-    width: '80px',
+    width: '70px',
+    align: 'center',
     render: (row) => (
       <span className="text-fg-2 text-xs font-mono">{row.sourceType}</span>
     ),
@@ -114,13 +121,15 @@ const pluginColumns: Column<PluginDTO>[] = [
     key: 'version',
     header: 'Version',
     width: '80px',
+    align: 'center',
     mono: true,
     render: (row) => <span className="text-fg-2">{row.version}</span>,
   },
   {
     key: 'status',
     header: 'Status',
-    width: '100px',
+    width: '110px',
+    align: 'right',
     render: (row) => <PluginStatusPill status={row.status} enabled={row.enabled} />,
   },
 ]
@@ -449,7 +458,7 @@ export function PluginsClient({ plugins: initialPlugins }: Props) {
           </div>
         )}
 
-        <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-bd-0 overflow-hidden">
+        <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-white/[0.06] overflow-hidden">
           <CanonicalTable
             columns={pluginColumns}
             rows={plugins}
@@ -501,7 +510,7 @@ export function PluginsClient({ plugins: initialPlugins }: Props) {
             className="absolute inset-0 bg-black/50"
             onClick={() => setShowInstallModal(false)}
           />
-          <div className="relative bg-bg-1 border border-bd-0 rounded-lg shadow-xl w-full max-w-md p-6">
+          <div className="relative bg-bg-1 border border-white/[0.06] rounded-lg shadow-xl w-full max-w-md p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-fg-0">Install Plugin</h2>
               <button
@@ -532,7 +541,7 @@ export function PluginsClient({ plugins: initialPlugins }: Props) {
                         'px-3 py-1.5 text-sm font-mono rounded-md border transition-colors',
                         installSourceType === type
                           ? 'bg-accent-primary/10 border-accent-primary text-accent-primary'
-                          : 'border-bd-0 text-fg-2 hover:text-fg-1 hover:border-bd-1'
+                          : 'border-white/[0.06] text-fg-2 hover:text-fg-1 hover:border-bd-1'
                       )}
                     >
                       {type}
@@ -561,7 +570,7 @@ export function PluginsClient({ plugins: initialPlugins }: Props) {
                           ? '/usr/local/lib/savorg/plugins/my-plugin'
                           : '/path/to/plugin.tgz'
                   }
-                  className="w-full px-3 py-2 bg-bg-2 border border-bd-0 rounded-md font-mono text-sm text-fg-0 placeholder:text-fg-3 focus:outline-none focus:ring-2 focus:ring-accent-primary/50"
+                  className="w-full px-3 py-2 bg-bg-2 border border-white/[0.06] rounded-md font-mono text-sm text-fg-0 placeholder:text-fg-3 focus:outline-none focus:ring-2 focus:ring-accent-primary/50"
                 />
               </div>
             </div>
@@ -647,8 +656,8 @@ function PluginDetail({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-bd-0 px-4">
+      {/* Tabs - negative margin to extend to drawer edges */}
+      <div className="flex gap-1 border-b border-white/[0.06] -mx-4 px-4">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -668,21 +677,21 @@ function PluginDetail({
 
       {/* Error Banner */}
       {error && (
-        <div className="mx-4 mt-4 p-3 bg-status-error/10 border border-status-error/30 rounded-md text-sm text-status-error">
+        <div className="mt-4 p-3 bg-status-error/10 border border-status-error/30 rounded-md text-sm text-status-error">
           {error}
         </div>
       )}
 
       {/* Restart Required Banner */}
       {plugin.restartRequired && (
-        <div className="mx-4 mt-4 p-3 bg-status-warning/10 border border-status-warning/30 rounded-md text-sm text-status-warning flex items-center gap-2">
+        <div className="mt-4 p-3 bg-status-warning/10 border border-status-warning/30 rounded-md text-sm text-status-warning flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>Gateway restart required for changes to take effect</span>
         </div>
       )}
 
-      {/* Tab Content */}
-      <div className="flex-1 overflow-auto p-4">
+      {/* Tab Content - no extra padding since drawer provides it */}
+      <div className="flex-1 overflow-auto pt-4">
         {activeTab === 'overview' && (
           <OverviewTab
             plugin={plugin}
@@ -901,7 +910,7 @@ function ConfigTab({
               'w-full h-[200px] bg-bg-2 border rounded-md p-3 font-mono text-xs text-fg-0 resize-none focus:outline-none focus:ring-2',
               parseError
                 ? 'border-status-error focus:ring-status-error/50'
-                : 'border-bd-0 focus:ring-accent-primary/50'
+                : 'border-white/[0.06] focus:ring-accent-primary/50'
             )}
           />
           {parseError && (

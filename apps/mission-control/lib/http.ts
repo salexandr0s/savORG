@@ -855,6 +855,12 @@ export const pluginsApi = {
 
 export interface MaintenanceStatus {
   mode: string
+  cliBin: string
+  cliAvailable: boolean
+  cliVersion: string | null
+  minVersion: string
+  belowMinVersion?: boolean
+  cliError?: string
   health: {
     status: 'ok' | 'degraded' | 'down'
     message?: string

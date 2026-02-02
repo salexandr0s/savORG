@@ -70,10 +70,8 @@ export function RightDrawer({
       {/* Backdrop */}
       <div
         className={cn(
-          'fixed inset-0 bg-bg-0/80 backdrop-blur-sm z-40 transition-opacity',
-          open ? 'opacity-100' : 'opacity-0 pointer-events-none',
-          // Hide backdrop on desktop when drawer is side-panel
-          'sm:bg-transparent sm:backdrop-blur-none sm:pointer-events-none'
+          'fixed inset-0 bg-bg-0/60 backdrop-blur-sm z-40 transition-opacity duration-300',
+          open ? 'opacity-100' : 'opacity-0 pointer-events-none'
         )}
         onClick={onClose}
         aria-hidden="true"
@@ -84,18 +82,15 @@ export function RightDrawer({
         ref={drawerRef}
         tabIndex={-1}
         className={cn(
-          'fixed z-50 flex flex-col bg-bg-1 border-bd-0',
-          'transition-transform duration-200 ease-out',
+          'fixed z-50 flex flex-col bg-bg-1 border-white/[0.06]',
+          'transition-transform duration-300 ease-out',
           // Mobile: bottom sheet (full width, slides up from bottom)
           'inset-x-0 bottom-0 max-h-[85vh] rounded-t-[var(--radius-lg)] border-t',
           open ? 'translate-y-0' : 'translate-y-full',
-          // Desktop: right panel (slides in from right)
+          // Desktop: right sidebar (slides in from right edge)
           'sm:inset-y-0 sm:right-0 sm:left-auto sm:max-h-full sm:rounded-none sm:border-t-0 sm:border-l',
           widthClasses[width],
           open ? 'sm:translate-x-0 sm:translate-y-0' : 'sm:translate-x-full sm:translate-y-0',
-          // On larger screens, position relative within the shell
-          'sm:relative sm:z-0 sm:transition-none',
-          !open && 'sm:hidden',
           className
         )}
       >
@@ -106,7 +101,7 @@ export function RightDrawer({
 
         {/* Header */}
         {(title || description) && (
-          <header className="flex items-start justify-between gap-4 px-4 py-3 border-b border-bd-0 sm:p-4">
+          <header className="flex items-start justify-between gap-4 px-4 py-3 border-b border-white/[0.08] sm:p-4">
             <div className="min-w-0 flex-1">
               {title && (
                 <h2 className="text-sm font-semibold text-fg-0 truncate">{title}</h2>
@@ -126,7 +121,7 @@ export function RightDrawer({
         )}
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto overscroll-contain">
+        <div className="flex-1 overflow-y-auto overscroll-contain p-4">
           {children}
         </div>
       </aside>
@@ -157,8 +152,8 @@ export function TabbedDrawer({
 
   return (
     <RightDrawer {...props}>
-      {/* Tab bar */}
-      <div className="flex border-b border-bd-0 px-4 overflow-x-auto scrollbar-hide">
+      {/* Tab bar - negative margin to extend to drawer edges */}
+      <div className="flex border-b border-white/[0.06] -mx-4 px-4 overflow-x-auto scrollbar-hide">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -178,8 +173,8 @@ export function TabbedDrawer({
         ))}
       </div>
 
-      {/* Content */}
-      <div className="p-4">{activeContent}</div>
+      {/* Content - no extra padding since drawer already provides it */}
+      <div className="pt-4">{activeContent}</div>
     </RightDrawer>
   )
 }

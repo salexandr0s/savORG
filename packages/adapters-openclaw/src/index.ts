@@ -1,16 +1,17 @@
 /**
  * @savorgos/adapters-openclaw
  *
- * OpenClaw adapter with multiple modes:
- * - mock: For development/testing
- * - local_cli: Default - uses local `openclaw` or `clawdbot` CLI commands
+ * OpenClaw CLI adapter with multiple modes:
+ * - mock: For development/testing when OpenClaw is not installed
+ * - local_cli: Default - uses local `openclaw` CLI commands
  * - remote_http: Optional - HTTP API for remote Gateway
  * - remote_ws: Optional - WebSocket for richer events
  * - remote_cli_over_ssh: Fallback - SSH tunnel to remote CLI
  *
- * Binary Resolution:
- * Supports both 'openclaw' (new) and 'clawdbot' (legacy) binaries.
- * Set OPENCLAW_BIN env var to override auto-detection.
+ * Requirements:
+ * - OpenClaw CLI must be installed and on PATH for operational mode
+ * - Minimum version: 0.1.0
+ * - Install from: https://github.com/openclaw/openclaw
  */
 
 export * from './types'

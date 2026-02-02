@@ -19,11 +19,16 @@ import {
   Wifi,
   WifiOff,
   AlertCircle,
+  LayoutGrid,
+  List,
 } from 'lucide-react'
+import { VisualizerView } from './visualizer'
 
 type ActivityType = 'all' | 'work_order' | 'operation' | 'agent' | 'system' | 'approval'
+type ViewMode = 'timeline' | 'visualizer'
 
 export function LiveClient() {
+  const [viewMode, setViewMode] = useState<ViewMode>('timeline')
   const [activities, setActivities] = useState<ActivityDTO[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -108,68 +113,110 @@ export function LiveClient() {
         title="Live Activity"
         subtitle="Real-time event stream"
         actions={
-          <div className="flex items-center gap-2">
-            {/* Filter */}
-            <select
-              value={filter}
-              onChange={(e) => setFilter(e.target.value as ActivityType)}
-              className="px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] bg-bg-3 text-fg-1 border border-bd-0 focus:outline-none focus:border-bd-1"
-            >
-              <option value="all">All events</option>
-              <option value="work_order">Work Orders</option>
-              <option value="operation">Operations</option>
-              <option value="approval">Approvals</option>
-              <option value="agent">Agents</option>
-              <option value="system">System</option>
-            </select>
+          <div className="flex items-center gap-3">
+            {/* Mode Switch */}
+            <div className="flex items-center gap-1 bg-bg-2 rounded-[var(--radius-md)] border border-white/[0.06] p-0.5">
+              <button
+                onClick={() => setViewMode('timeline')}
+                className={cn(
+                  'flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-[var(--radius-sm)] transition-colors',
+                  viewMode === 'timeline'
+                    ? 'bg-bg-3 text-fg-0'
+                    : 'text-fg-2 hover:text-fg-1'
+                )}
+              >
+                <List className="w-3.5 h-3.5" />
+                Timeline
+              </button>
+              <button
+                onClick={() => setViewMode('visualizer')}
+                className={cn(
+                  'flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-[var(--radius-sm)] transition-colors',
+                  viewMode === 'visualizer'
+                    ? 'bg-bg-3 text-fg-0'
+                    : 'text-fg-2 hover:text-fg-1'
+                )}
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                Visualizer
+              </button>
+            </div>
 
-            {/* Tail Mode Toggle */}
-            <button
-              onClick={() => setTailMode(!tailMode)}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] border transition-colors',
-                tailMode
-                  ? 'bg-status-progress/10 text-status-progress border-status-progress/30'
-                  : 'bg-bg-3 text-fg-2 border-bd-0 hover:border-bd-1'
-              )}
-            >
-              {tailMode ? (
-                <Pause className="w-3.5 h-3.5" />
-              ) : (
-                <Play className="w-3.5 h-3.5" />
-              )}
-              Tail
-            </button>
+            {/* Timeline-specific controls */}
+            {viewMode === 'timeline' && (
+              <>
+                {/* Filter */}
+                <select
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value as ActivityType)}
+                  className="px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] bg-bg-3 text-fg-1 border border-white/[0.06] focus:outline-none focus:border-bd-1"
+                >
+                  <option value="all">All events</option>
+                  <option value="work_order">Work Orders</option>
+                  <option value="operation">Operations</option>
+                  <option value="approval">Approvals</option>
+                  <option value="agent">Agents</option>
+                  <option value="system">System</option>
+                </select>
+
+                {/* Tail Mode Toggle */}
+                <button
+                  onClick={() => setTailMode(!tailMode)}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] border transition-colors',
+                    tailMode
+                      ? 'bg-status-progress/10 text-status-progress border-status-progress/30'
+                      : 'bg-bg-3 text-fg-2 border-white/[0.06] hover:border-bd-1'
+                  )}
+                >
+                  {tailMode ? (
+                    <Pause className="w-3.5 h-3.5" />
+                  ) : (
+                    <Play className="w-3.5 h-3.5" />
+                  )}
+                  Tail
+                </button>
+              </>
+            )}
           </div>
         }
       />
 
-      {/* Connection Status */}
-      <ConnectionStatus state={connectionState} onReconnect={reconnect} />
+      {/* View content based on mode */}
+      {viewMode === 'timeline' ? (
+        <>
+          {/* Connection Status */}
+          <ConnectionStatus state={connectionState} onReconnect={reconnect} />
 
-      {/* Activity Timeline */}
-      <div
-        ref={timelineRef}
-        className="bg-bg-2 rounded-[var(--radius-lg)] border border-bd-0 overflow-hidden max-h-[calc(100vh-280px)] overflow-y-auto"
-      >
-        {filteredActivities.length > 0 ? (
-          <div className="divide-y divide-bd-0/50">
-            {filteredActivities.map((activity) => (
-              <ActivityRow
-                key={activity.id}
-                activity={activity}
-                typeIcons={typeIcons}
+          {/* Activity Timeline */}
+          <div
+            ref={timelineRef}
+            className="bg-bg-2 rounded-[var(--radius-lg)] border border-white/[0.06] overflow-hidden max-h-[calc(100vh-280px)] overflow-y-auto"
+          >
+            {filteredActivities.length > 0 ? (
+              <div className="divide-y divide-white/[0.06]">
+                {filteredActivities.map((activity) => (
+                  <ActivityRow
+                    key={activity.id}
+                    activity={activity}
+                    typeIcons={typeIcons}
+                  />
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                icon={<ActivityIcon className="w-8 h-8" />}
+                title="No activity"
+                description="Events will appear here as they happen"
               />
-            ))}
+            )}
           </div>
-        ) : (
-          <EmptyState
-            icon={<ActivityIcon className="w-8 h-8" />}
-            title="No activity"
-            description="Events will appear here as they happen"
-          />
-        )}
-      </div>
+        </>
+      ) : (
+        <div className="h-[calc(100vh-200px)]">
+          <VisualizerView />
+        </div>
+      )}
     </div>
   )
 }
@@ -185,10 +232,10 @@ function ConnectionStatus({
     <div
       className={cn(
         'flex items-center gap-2 px-3 py-2 rounded-[var(--radius-md)] border',
-        state === 'connected' && 'bg-status-success/5 border-status-success/30',
-        state === 'connecting' && 'bg-status-warning/5 border-status-warning/30',
-        state === 'disconnected' && 'bg-bg-2 border-bd-0',
-        state === 'error' && 'bg-status-error/5 border-status-error/30'
+        state === 'connected' && 'bg-status-success/5 border-white/[0.08]',
+        state === 'connecting' && 'bg-status-warning/5 border-white/[0.08]',
+        state === 'disconnected' && 'bg-bg-2 border-white/[0.06]',
+        state === 'error' && 'bg-status-error/5 border-white/[0.08]'
       )}
     >
       {state === 'connected' && (

@@ -40,7 +40,7 @@ const monoCellClass = 'font-mono text-xs font-medium tracking-tight text-fg-1'
 const textCellClass = 'text-[13px] text-fg-0'
 
 // Row states - subtle visual hierarchy
-const rowBaseClass = 'border-b border-bd-0/60 transition-colors duration-100'
+const rowBaseClass = 'border-b border-white/[0.06] transition-colors duration-100'
 const rowHoverClass = 'hover:bg-bg-2/70'
 const rowSelectedClass = 'bg-bg-3/80 border-l-2 border-l-status-info'
 const rowClickableClass = 'cursor-pointer'
@@ -78,7 +78,7 @@ export function CanonicalTable<T>({
           <tr
             className={cn(
               stickyHeader && 'sticky top-0 z-10',
-              'bg-bg-1 border-b border-bd-0'
+              'bg-bg-1 border-b border-white/[0.08]'
             )}
           >
             {columns.map((col) => (
@@ -185,7 +185,7 @@ export function StackedRows<T>({
               onRowClick && 'cursor-pointer',
               isSelected
                 ? 'bg-bg-3/80 border-status-info/30 border-l-2 border-l-status-info'
-                : 'bg-bg-2 border-bd-0 hover:bg-bg-3/50 hover:border-bd-1'
+                : 'bg-bg-2 border-white/[0.06] hover:bg-bg-3/50 hover:border-bd-1'
             )}
           >
             {columns.map((col) => (
