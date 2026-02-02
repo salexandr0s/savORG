@@ -1,19 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import {
-  mockGlobalSkills,
-  mockAgentSkills,
-  mockSkillContents,
-} from '@savorg/core'
-import { validateSkill } from '@/lib/skill-validator'
+import { getRepos } from '@/lib/repo'
 import type { SkillScope } from '@savorg/core'
-
-function getSkillsArray(scope: SkillScope) {
-  return scope === 'global' ? mockGlobalSkills : mockAgentSkills
-}
 
 /**
  * POST /api/skills/:scope/:id/validate
- * Validate a skill and store the result
+ * Validate a skill and return the result
  */
 export async function POST(
   _request: NextRequest,
@@ -25,35 +16,21 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid scope' }, { status: 400 })
   }
 
-  const skillsArray = getSkillsArray(scope as SkillScope)
-  const skillIndex = skillsArray.findIndex((s) => s.id === id)
+  const repos = getRepos()
 
-  if (skillIndex === -1) {
-    return NextResponse.json({ error: 'Skill not found' }, { status: 404 })
+  try {
+    const validationResult = await repos.skills.validate(scope as SkillScope, id)
+
+    return NextResponse.json({
+      data: {
+        validation: validationResult,
+      },
+    })
+  } catch (err) {
+    // If skill not found, validate() will throw
+    if (err instanceof Error && err.message.includes('not found')) {
+      return NextResponse.json({ error: 'Skill not found' }, { status: 404 })
+    }
+    throw err
   }
-
-  const skill = skillsArray[skillIndex]
-  const content = mockSkillContents[id]
-
-  // Run validation
-  const validationResult = validateSkill({
-    name: skill.name,
-    files: {
-      skillMd: content?.skillMd,
-      config: content?.config,
-    },
-    hasEntrypoint: skill.hasEntrypoint,
-  })
-
-  // Update skill with validation result
-  skillsArray[skillIndex] = {
-    ...skill,
-    validation: validationResult,
-  }
-
-  return NextResponse.json({
-    data: {
-      validation: validationResult,
-    },
-  })
 }

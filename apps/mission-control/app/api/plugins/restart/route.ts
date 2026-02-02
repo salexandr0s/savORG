@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { mockPlugins } from '@savorg/core'
 import { enforceTypedConfirm } from '@/lib/with-governor'
 import { getRepos } from '@/lib/repo'
+import { PluginUnsupportedError } from '@/lib/repo/plugins'
 
 /**
  * POST /api/plugins/restart
@@ -17,12 +17,15 @@ export async function POST(request: NextRequest) {
     // Body might be empty
   }
 
+  const repos = getRepos()
+
   // Find plugins that require restart
-  const pluginsNeedingRestart = mockPlugins.filter((p) => p.restartRequired)
+  const { data: allPlugins, meta: listMeta } = await repos.plugins.list()
+  const pluginsNeedingRestart = allPlugins.filter((p) => p.restartRequired)
 
   if (pluginsNeedingRestart.length === 0) {
     return NextResponse.json(
-      { error: 'No plugins require restart' },
+      { error: 'No plugins require restart', meta: listMeta },
       { status: 400 }
     )
   }
@@ -43,8 +46,6 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const repos = getRepos()
-
   // Create a receipt for the restart operation
   const receipt = await repos.receipts.create({
     workOrderId: 'system',
@@ -56,49 +57,66 @@ export async function POST(request: NextRequest) {
     },
   })
 
-  // Simulate restart process - clear restartRequired flags
-  const restartedPlugins: string[] = []
-  for (let i = 0; i < mockPlugins.length; i++) {
-    if (mockPlugins[i].restartRequired) {
-      restartedPlugins.push(mockPlugins[i].name)
-      mockPlugins[i] = {
-        ...mockPlugins[i],
-        restartRequired: false,
-        updatedAt: new Date(),
-      }
-    }
-  }
+  try {
+    // Restart plugins via repo
+    const { data: { pluginsRestarted }, meta } = await repos.plugins.restart()
 
-  // Finalize receipt
-  await repos.receipts.finalize(receipt.id, {
-    exitCode: 0,
-    durationMs: 3000 + Math.random() * 2000, // Simulate 3-5s restart
-    parsedJson: {
-      status: 'restarted',
-      pluginsRestarted: restartedPlugins,
-      message: `Successfully restarted ${restartedPlugins.length} plugin(s)`,
-    },
-  })
+    // Finalize receipt
+    await repos.receipts.finalize(receipt.id, {
+      exitCode: 0,
+      durationMs: 3000 + Math.random() * 2000, // Simulate 3-5s restart
+      parsedJson: {
+        status: 'restarted',
+        pluginsRestarted,
+        message: `Successfully restarted ${pluginsRestarted.length} plugin(s)`,
+      },
+    })
 
-  // Log activity
-  await repos.activities.create({
-    type: 'plugin.restarted',
-    actor: 'user',
-    entityType: 'plugin',
-    entityId: 'system',
-    summary: `Restarted ${restartedPlugins.length} plugin(s) to apply configuration changes`,
-    payloadJson: {
-      pluginsRestarted: restartedPlugins,
+    // Log activity
+    await repos.activities.create({
+      type: 'plugin.restarted',
+      actor: 'user',
+      entityType: 'plugin',
+      entityId: 'system',
+      summary: `Restarted ${pluginsRestarted.length} plugin(s) to apply configuration changes`,
+      payloadJson: {
+        pluginsRestarted,
+        receiptId: receipt.id,
+      },
+    })
+
+    return NextResponse.json({
+      data: {
+        status: 'restarted',
+        pluginsRestarted,
+        message: `Successfully restarted ${pluginsRestarted.length} plugin(s)`,
+      },
+      meta,
       receiptId: receipt.id,
-    },
-  })
+    })
+  } catch (err) {
+    // Handle unsupported operation
+    if (err instanceof PluginUnsupportedError) {
+      await repos.receipts.finalize(receipt.id, {
+        exitCode: 1,
+        durationMs: 100,
+        parsedJson: {
+          status: 'unsupported',
+          error: err.message,
+          operation: err.operation,
+        },
+      })
 
-  return NextResponse.json({
-    data: {
-      status: 'restarted',
-      pluginsRestarted: restartedPlugins,
-      message: `Successfully restarted ${restartedPlugins.length} plugin(s)`,
-    },
-    receiptId: receipt.id,
-  })
+      return NextResponse.json(
+        {
+          error: err.code,
+          message: err.message,
+          operation: err.operation,
+          capabilities: err.capabilities,
+        },
+        { status: err.httpStatus }
+      )
+    }
+    throw err
+  }
 }

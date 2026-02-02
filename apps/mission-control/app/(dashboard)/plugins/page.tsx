@@ -1,7 +1,8 @@
-import { getPlugins } from '@/lib/data'
+import { getRepos } from '@/lib/repo'
 import { PluginsClient } from './plugins-client'
 
 export default async function PluginsPage() {
-  const plugins = await getPlugins()
-  return <PluginsClient plugins={plugins} />
+  const repos = getRepos()
+  const { data: plugins, meta } = await repos.plugins.list()
+  return <PluginsClient plugins={plugins} meta={meta} />
 }

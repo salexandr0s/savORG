@@ -59,6 +59,19 @@ export const ALLOWED_COMMANDS = {
 
   // Gateway Discovery (documented at docs.openclaw.ai/cli/gateway)
   'gateway.discover': { args: ['gateway', 'discover', '--json'], danger: false, description: 'Scan for gateways on network' },
+
+  // Plugin Management
+  'plugins.list': { args: ['plugins', 'list'], danger: false, description: 'List installed plugins' },
+  'plugins.list.json': { args: ['plugins', 'list', '--json'], danger: false, description: 'List installed plugins (JSON output)' },
+  'plugins.info': { args: ['plugins', 'info'], danger: false, description: 'Get plugin info' },
+  'plugins.info.json': { args: ['plugins', 'info', '--json'], danger: false, description: 'Get plugin info (JSON output)' },
+  'plugins.doctor': { args: ['plugins', 'doctor'], danger: false, description: 'Run plugin diagnostics' },
+  'plugins.doctor.json': { args: ['plugins', 'doctor', '--json'], danger: false, description: 'Run plugin diagnostics (JSON output)' },
+  'plugins.install': { args: ['plugins', 'install'], danger: true, description: 'Install a plugin' },
+  'plugins.uninstall': { args: ['plugins', 'uninstall'], danger: true, description: 'Uninstall a plugin' },
+  'plugins.enable': { args: ['plugins', 'enable'], danger: true, description: 'Enable a plugin' },
+  'plugins.disable': { args: ['plugins', 'disable'], danger: true, description: 'Disable a plugin' },
+  'plugins.config': { args: ['plugins', 'config'], danger: true, description: 'Configure a plugin' },
 } as const
 
 export type AllowedCommandId = keyof typeof ALLOWED_COMMANDS

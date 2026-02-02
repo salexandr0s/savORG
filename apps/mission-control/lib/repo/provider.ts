@@ -12,6 +12,8 @@ import { createDbApprovalsRepo, createMockApprovalsRepo, type ApprovalsRepo } fr
 import { createDbActivitiesRepo, createMockActivitiesRepo, type ActivitiesRepo } from './activities'
 import { createDbReceiptsRepo, createMockReceiptsRepo, type ReceiptsRepo } from './receipts'
 import { createDbSearchRepo, createMockSearchRepo, type SearchRepo } from './search'
+import { createMockSkillsRepo, createFsSkillsRepo, type SkillsRepo } from './skills'
+import { createMockPluginsRepo, createCliPluginsRepo, type PluginsRepo } from './plugins'
 
 // ============================================================================
 // REPOSITORY CONTAINER
@@ -25,6 +27,8 @@ export interface Repos {
   activities: ActivitiesRepo
   receipts: ReceiptsRepo
   search: SearchRepo
+  skills: SkillsRepo
+  plugins: PluginsRepo
 }
 
 // ============================================================================
@@ -54,7 +58,7 @@ export function createRepos(): Repos {
 
   // Log data mode once (server-side only)
   if (!hasLoggedMode && typeof window === 'undefined') {
-    console.log(`[repo] Data mode: ${isMock ? 'MOCK' : 'DB'}`)
+    console.log(`[repo] Data mode: ${isMock ? 'MOCK' : 'DB/FS/CLI'}`)
     hasLoggedMode = true
   }
 
@@ -67,6 +71,8 @@ export function createRepos(): Repos {
       activities: createMockActivitiesRepo(),
       receipts: createMockReceiptsRepo(),
       search: createMockSearchRepo(),
+      skills: createMockSkillsRepo(),
+      plugins: createMockPluginsRepo(),
     }
   }
 
@@ -78,6 +84,8 @@ export function createRepos(): Repos {
     activities: createDbActivitiesRepo(),
     receipts: createDbReceiptsRepo(),
     search: createDbSearchRepo(),
+    skills: createFsSkillsRepo(),
+    plugins: createCliPluginsRepo(),
   }
 }
 

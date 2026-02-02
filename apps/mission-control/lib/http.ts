@@ -668,6 +668,26 @@ export type PluginSourceType = 'local' | 'npm' | 'tgz' | 'git'
 export type PluginStatus = 'active' | 'inactive' | 'error' | 'updating'
 export type PluginDoctorStatus = 'healthy' | 'warning' | 'unhealthy' | 'unchecked'
 
+// Plugin capabilities (from OpenClaw probe)
+export interface PluginCapabilities {
+  supported: boolean
+  listJson: boolean
+  infoJson: boolean
+  doctor: boolean
+  install: boolean
+  enable: boolean
+  disable: boolean
+  uninstall: boolean
+  setConfig: boolean
+}
+
+export interface PluginResponseMeta {
+  source: 'openclaw_cli' | 'openclaw_status' | 'mock' | 'cache' | 'unsupported'
+  capabilities: PluginCapabilities
+  degraded: boolean
+  message?: string
+}
+
 export interface PluginDoctorCheck {
   name: string
   status: 'pass' | 'warn' | 'fail'
@@ -722,9 +742,21 @@ export const pluginsApi = {
   list: (filters?: {
     status?: PluginStatus
     enabled?: boolean
-  }) => apiGet<{ data: PluginSummary[] }>('/api/plugins', filters as Record<string, string | number | boolean | undefined>),
+  }) => apiGet<{ data: PluginSummary[]; meta: PluginResponseMeta }>('/api/plugins', filters as Record<string, string | number | boolean | undefined>),
 
-  get: (id: string) => apiGet<{ data: PluginWithConfig }>(`/api/plugins/${id}`),
+  get: (id: string) => apiGet<{ data: PluginWithConfig; meta: PluginResponseMeta }>(`/api/plugins/${id}`),
+
+  getCapabilities: (options?: { refresh?: boolean }) => apiGet<{
+    data: {
+      version: string | null
+      available: boolean
+      plugins: PluginCapabilities
+      sources: { cli: boolean; http: boolean }
+      probedAt: string
+      degradedReason?: string
+    }
+    meta: { cacheHit: boolean; cacheTtlMs: number; refreshed?: boolean }
+  }>('/api/openclaw/capabilities', options?.refresh ? { refresh: 1 } : undefined),
 
   update: (id: string, data: {
     enabled?: boolean

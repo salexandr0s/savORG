@@ -15,6 +15,9 @@ export type { ApprovalsRepo, CreateApprovalInput } from './approvals'
 export type { ActivitiesRepo, CreateActivityInput } from './activities'
 export type { ReceiptsRepo, CreateReceiptInput } from './receipts'
 export type { SearchRepo, SearchResult, SearchOptions, SearchScope } from './search'
+export type { SkillsRepo, SkillFilters, CreateSkillInput, UpdateSkillInput, SkillWithContentDTO, DuplicateSkillTarget } from './skills'
+export type { PluginsRepo, PluginFilters, InstallPluginInput, UpdatePluginInput, PluginResponseMeta } from './plugins'
+export { PluginUnsupportedError } from './plugins'
 
 // Types (DTOs for UI consumption)
 export type {
@@ -36,7 +39,17 @@ export type {
   CronJobDTO,
   SkillDTO,
   SkillScope,
+  SkillValidationResult,
+  SkillValidationError,
+  SkillValidationStatus,
   PluginDTO,
+  PluginWithConfigDTO,
+  PluginSourceType,
+  PluginStatus,
+  PluginDoctorResult,
+  PluginDoctorCheck,
+  PluginDoctorStatus,
+  PluginConfigSchema,
   DashboardStatsDTO,
   GatewayStatusDTO,
   WorkspaceFileDTO,

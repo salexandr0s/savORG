@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { mockGlobalSkills, mockAgentSkills, mockAgents } from '@savorg/core'
 import { enforceTypedConfirm } from '@/lib/with-governor'
 import { getRepos } from '@/lib/repo'
-import type { ActionKind, SkillScope } from '@savorg/core'
+import type { ActionKind } from '@savorg/core'
+import type { SkillScope } from '@/lib/repo'
 
 /**
  * GET /api/skills
@@ -13,32 +13,13 @@ export async function GET(request: NextRequest) {
   const scope = searchParams.get('scope') as SkillScope | null
   const agentId = searchParams.get('agentId')
 
-  let skills = [...mockGlobalSkills, ...mockAgentSkills]
-
-  // Filter by scope
-  if (scope === 'global') {
-    skills = skills.filter((s) => s.scope === 'global')
-  } else if (scope === 'agent') {
-    skills = skills.filter((s) => s.scope === 'agent')
-    // Further filter by agentId if provided
-    if (agentId) {
-      skills = skills.filter((s) => s.agentId === agentId)
-    }
-  }
-
-  // Get agent names for agent-scoped skills
-  const skillsWithAgentNames = skills.map((skill) => {
-    if (skill.scope === 'agent' && skill.agentId) {
-      const agent = mockAgents.find((a) => a.id === skill.agentId)
-      return {
-        ...skill,
-        agentName: agent?.name ?? 'Unknown',
-      }
-    }
-    return skill
+  const repos = getRepos()
+  const skills = await repos.skills.list({
+    scope: scope ?? undefined,
+    agentId: agentId ?? undefined,
   })
 
-  return NextResponse.json({ data: skillsWithAgentNames })
+  return NextResponse.json({ data: skills })
 }
 
 /**
@@ -47,7 +28,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { name, description, scope, agentId, typedConfirmText } = body
+  const { name, description, scope, agentId, skillMd, typedConfirmText } = body
 
   // Validate required fields
   if (!name || typeof name !== 'string') {
@@ -64,19 +45,18 @@ export async function POST(request: NextRequest) {
 
   // Validate skill name (path safety)
   const safeNameRegex = /^[a-z0-9][a-z0-9-]*[a-z0-9]$/
-  if (!safeNameRegex.test(name) || name.includes('..') || name.startsWith('-') || name.endsWith('-')) {
+  if (name.length < 2 || (!safeNameRegex.test(name) && !/^[a-z0-9]$/.test(name)) || name.includes('..')) {
     return NextResponse.json(
       { error: 'Invalid skill name. Use lowercase letters, numbers, and hyphens only.' },
       { status: 400 }
     )
   }
 
+  const repos = getRepos()
+
   // Check for existing skill with same name
-  const existingSkills = scope === 'global' ? mockGlobalSkills : mockAgentSkills
-  const exists = existingSkills.some(
-    (s) => s.name === name && (scope === 'global' || s.agentId === agentId)
-  )
-  if (exists) {
+  const existing = await repos.skills.getByName(scope, name, agentId)
+  if (existing) {
     return NextResponse.json({ error: 'Skill with this name already exists' }, { status: 409 })
   }
 
@@ -97,44 +77,33 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // Create new skill
-  const newSkill = {
-    id: `skill_${scope === 'global' ? 'g' : 'a'}_${Date.now()}`,
-    name,
-    description: description || '',
-    version: '1.0.0',
-    scope: scope as SkillScope,
-    agentId: scope === 'agent' ? agentId : undefined,
-    enabled: true,
-    usageCount: 0,
-    lastUsedAt: null,
-    installedAt: new Date(),
-    modifiedAt: new Date(),
-    hasConfig: false,
-    hasEntrypoint: false,
+  try {
+    // Create new skill via repo
+    const newSkill = await repos.skills.create({
+      name,
+      description: description || '',
+      scope: scope as SkillScope,
+      agentId: scope === 'agent' ? agentId : undefined,
+      skillMd: skillMd || `# ${name}\n\nSkill description goes here.`,
+    })
+
+    // Log activity
+    await repos.activities.create({
+      type: 'skill.installed',
+      actor: 'user',
+      entityType: 'skill',
+      entityId: newSkill.id,
+      summary: `Installed skill: ${name}`,
+      payloadJson: {
+        scope,
+        agentId: scope === 'agent' ? agentId : null,
+        version: newSkill.version,
+      },
+    })
+
+    return NextResponse.json({ data: newSkill }, { status: 201 })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to create skill'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
-
-  // Add to mock data (in real implementation, write to disk)
-  if (scope === 'global') {
-    mockGlobalSkills.push(newSkill)
-  } else {
-    mockAgentSkills.push(newSkill)
-  }
-
-  // Log activity
-  const repos = getRepos()
-  await repos.activities.create({
-    type: 'skill.installed',
-    actor: 'user',
-    entityType: 'skill',
-    entityId: newSkill.id,
-    summary: `Installed skill: ${name}`,
-    payloadJson: {
-      scope,
-      agentId: scope === 'agent' ? agentId : null,
-      version: newSkill.version,
-    },
-  })
-
-  return NextResponse.json({ data: newSkill }, { status: 201 })
 }

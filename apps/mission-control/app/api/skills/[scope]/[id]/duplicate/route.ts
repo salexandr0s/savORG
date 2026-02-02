@@ -1,14 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import {
-  mockGlobalSkills,
-  mockAgentSkills,
-  mockSkillContents,
-  mockAgents,
-} from '@savorg/core'
 import { enforceTypedConfirm } from '@/lib/with-governor'
-import { validateSkill } from '@/lib/skill-validator'
 import { getRepos } from '@/lib/repo'
-import type { ActionKind, SkillScope, Skill } from '@savorg/core'
+import type { ActionKind, SkillScope } from '@savorg/core'
 
 /**
  * POST /api/skills/:scope/:id/duplicate
@@ -24,9 +17,10 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid scope' }, { status: 400 })
   }
 
-  const sourceSkills = scope === 'global' ? mockGlobalSkills : mockAgentSkills
-  const sourceSkill = sourceSkills.find((s) => s.id === id)
+  const repos = getRepos()
 
+  // Get source skill
+  const sourceSkill = await repos.skills.getById(scope as SkillScope, id)
   if (!sourceSkill) {
     return NextResponse.json({ error: 'Skill not found' }, { status: 404 })
   }
@@ -46,7 +40,7 @@ export async function POST(
 
   // Validate agent exists
   if (targetScope === 'agent') {
-    const agent = mockAgents.find((a) => a.id === targetAgentId)
+    const agent = await repos.agents.getById(targetAgentId)
     if (!agent) {
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
     }
@@ -65,11 +59,8 @@ export async function POST(
   }
 
   // Check for existing skill with same name in target scope
-  const targetSkills = targetScope === 'global' ? mockGlobalSkills : mockAgentSkills
-  const exists = targetSkills.some(
-    (s) => s.name === skillName && (targetScope === 'global' || s.agentId === targetAgentId)
-  )
-  if (exists) {
+  const existingSkill = await repos.skills.getByName(targetScope as SkillScope, skillName, targetAgentId)
+  if (existingSkill) {
     return NextResponse.json({ error: 'Skill with this name already exists in target scope' }, { status: 409 })
   }
 
@@ -97,51 +88,14 @@ export async function POST(
     )
   }
 
-  // Get source content
-  const sourceContent = mockSkillContents[id]
-
-  // Validate the skill before copying
-  const validationResult = validateSkill({
-    name: skillName,
-    files: {
-      skillMd: sourceContent?.skillMd,
-      config: sourceContent?.config,
-    },
-    hasEntrypoint: sourceSkill.hasEntrypoint,
-  })
-
-  // Create new skill
-  const newSkill: Skill = {
-    id: `skill_${targetScope === 'global' ? 'g' : 'a'}_${Date.now()}`,
-    name: skillName,
-    description: sourceSkill.description,
-    version: sourceSkill.version,
+  // Duplicate the skill using repo
+  const newSkill = await repos.skills.duplicate(scope as SkillScope, id, {
     scope: targetScope as SkillScope,
     agentId: targetScope === 'agent' ? targetAgentId : undefined,
-    enabled: false, // Start disabled
-    usageCount: 0,
-    lastUsedAt: null,
-    installedAt: new Date(),
-    modifiedAt: new Date(),
-    hasConfig: sourceSkill.hasConfig,
-    hasEntrypoint: sourceSkill.hasEntrypoint,
-    validation: validationResult,
-  }
-
-  // Add to target array
-  if (targetScope === 'global') {
-    mockGlobalSkills.push(newSkill)
-  } else {
-    mockAgentSkills.push(newSkill)
-  }
-
-  // Copy content
-  if (sourceContent) {
-    mockSkillContents[newSkill.id] = { ...sourceContent }
-  }
+    newName: skillName,
+  })
 
   // Log activity
-  const repos = getRepos()
   await repos.activities.create({
     type: 'skill.duplicated',
     actor: 'user',
@@ -153,14 +107,14 @@ export async function POST(
       sourceId: id,
       targetScope,
       targetAgentId: targetScope === 'agent' ? targetAgentId : null,
-      validationStatus: validationResult.status,
+      validationStatus: newSkill.validation?.status ?? 'unknown',
     },
   })
 
   // Get agent name for response
   let agentName: string | undefined
   if (targetScope === 'agent' && targetAgentId) {
-    const agent = mockAgents.find((a) => a.id === targetAgentId)
+    const agent = await repos.agents.getById(targetAgentId)
     agentName = agent?.name
   }
 

@@ -1,198 +1,136 @@
-# savORG Mission Control
+# SAVORG Mission Control
 
-Mission Control for [OpenClaw](https://github.com/openclaw/openclaw): a multi-agent operating system with governance, live monitoring, receipts, and approval gates.
+**Local-first ops console for AI agent orchestration.**
 
-**Status:** Alpha (v0.1.0) — suitable for local development and experimentation.
-
----
-
-## What It Is
-
-SAVORG Mission Control is a local-first ops console for orchestrating AI agents. It provides:
-
-- **Work Orders** — Track feature work through spec → build → QA → ship stations
-- **Agent Management** — Configure, monitor, and control AI agents via souls and overlays
-- **Approval Gates** — Governor-enforced typed confirmation for dangerous actions
-- **Live View** — Real-time streaming of agent activities and command receipts
-- **Kanban Board** — Visualize work orders across stations and states
-- **Workspace** — Browse and edit agent files (souls, overlays, skills, playbooks)
-- **Plugins & Skills** — Install and manage agent capabilities
-- **Templates** — Create agents from validated templates with parameterized rendering
-
----
-
-## Requirements
-
-| Requirement | Version | Notes |
-|-------------|---------|-------|
-| **Node.js** | 20+ | See `.nvmrc` |
-| **npm** | 10+ | Included with Node 20 |
-| **OS** | macOS | Linux likely works (untested) |
-| **OpenClaw** | 0.1.0+ | Required for operational mode |
-
-### Checking Prerequisites
+Built on [OpenClaw](https://github.com/openclaw/openclaw). Track work orders, govern dangerous actions, stream agent activity in real-time.
 
 ```bash
-# Node version
-node -v  # Should be v20.x or higher
-
-# OpenClaw (optional for demo mode)
-which openclaw  # Should return a path
-openclaw --version  # Should be 0.1.0 or higher
+npm install && npm run db:migrate && npm run dev
+# → http://localhost:3000
 ```
 
-> **Note:** Legacy `clawdbot` CLI is not supported. If you're using clawdbot, please upgrade to OpenClaw first.
+---
+
+## Why Mission Control
+
+| Problem | Solution |
+|---------|----------|
+| AI agents run commands without oversight | **Governor** — typed confirmation for dangerous actions |
+| No visibility into what agents are doing | **Live View** — real-time activity stream + receipt tailing |
+| Features ship without tracking | **Work Orders** — spec → build → QA → ship pipeline |
+| Agent state scattered across files | **Workspace** — browse/edit souls, overlays, skills, playbooks |
+| Plugins change behavior silently | **Capability Probing** — UI shows what OpenClaw actually supports |
+
+---
+
+## Features
+
+- **Work Orders** — Kanban board + table view for feature tracking
+- **Governor** — Policy-enforced approval gates (ALLOW / CONFIRM / WO_CODE / DENY)
+- **Live View** — Streaming timeline, visualizer, receipt tail
+- **Agents** — Soul files, overlays, capabilities, WIP limits
+- **Templates** — Parameterized agent creation with validation
+- **Skills** — Filesystem-backed, global or agent-scoped
+- **Plugins** — OpenClaw-authoritative with capability probing
+- **Maintenance** — Health checks, doctor, recovery workflows
+- **Audit Trail** — Every action logged with receipts
 
 ---
 
 ## Quickstart
 
 ```bash
-# 1. Clone and install
+# Clone and install
 git clone https://github.com/your-org/savorg.git
 cd savorg
 npm install
 
-# 2. Configure environment
+# Configure (optional — defaults work for demo mode)
 cp apps/mission-control/.env.example apps/mission-control/.env
 
-# 3. Initialize database
+# Initialize database
 npm run db:migrate
 
-# 4. Start development server
+# Start
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [localhost:3000](http://localhost:3000).
+
+### Demo Mode vs Operational Mode
+
+| Mode | When | Behavior |
+|------|------|----------|
+| **Demo** | OpenClaw not on PATH | Mock data, simulated execution, full UI |
+| **Operational** | OpenClaw detected | Real commands, real workspace, real governance |
+
+Demo mode is automatic — no configuration needed to explore.
 
 ---
 
-## Demo Mode vs Operational Mode
+## Requirements
 
-Mission Control supports two modes:
+| Requirement | Version |
+|-------------|---------|
+| Node.js | 20+ |
+| npm | 10+ |
+| OpenClaw | 0.1.0+ (optional for demo) |
 
-### Demo Mode (Default)
-
-When OpenClaw is not installed or not on PATH, Mission Control runs with:
-
-- **Mock data** — Pre-populated work orders, agents, activities
-- **Simulated execution** — Commands return mock results
-- **Full UI exploration** — All features accessible for evaluation
-
-This is ideal for:
-- Evaluating the UI and workflow
-- Development without OpenClaw dependency
-- Learning the system before production use
-
-### Operational Mode
-
-When OpenClaw is detected on PATH, Mission Control:
-
-- **Executes real commands** — `openclaw run`, `openclaw speak`, etc.
-- **Reads real workspace** — Agent souls, overlays, skills from disk
-- **Persists state** — SQLite database with WAL mode
-- **Enforces governance** — Governor policies gate dangerous actions
-
-To enable operational mode:
-1. Install OpenClaw following their [setup guide](https://github.com/openclaw/openclaw)
-2. Ensure `openclaw` is on your PATH
-3. Restart Mission Control
+```bash
+node -v          # v20.x+
+openclaw --version  # 0.1.0+ (for operational mode)
+```
 
 ---
 
-## Key URLs
+## Key Pages
 
-| URL | Description |
-|-----|-------------|
-| [localhost:3000](http://localhost:3000) | Dashboard home |
-| [localhost:3000/now](http://localhost:3000/now) | Live activity stream |
-| [localhost:3000/live](http://localhost:3000/live) | Live view + visualizer |
-| [localhost:3000/work-orders](http://localhost:3000/work-orders) | Work order management + Kanban board |
-| [localhost:3000/agents](http://localhost:3000/agents) | Agent configuration |
-| [localhost:3000/agent-templates](http://localhost:3000/agent-templates) | Agent templates |
-| [localhost:3000/approvals](http://localhost:3000/approvals) | Pending approval gates |
-| [localhost:3000/workspace](http://localhost:3000/workspace) | File browser |
-| [localhost:3000/settings](http://localhost:3000/settings) | System configuration |
+| URL | Purpose |
+|-----|---------|
+| `/` | Dashboard overview |
+| `/now` | Live activity stream |
+| `/live` | Timeline + visualizer + receipts |
+| `/work-orders` | Work order table + Kanban |
+| `/agents` | Agent configuration |
+| `/agent-templates` | Template management |
+| `/skills` | Skill browser |
+| `/plugins` | Plugin management |
+| `/approvals` | Pending approval gates |
+| `/workspace` | File browser |
+| `/maintenance` | Health + recovery |
 
 ---
 
-## Security Model
+## Security
 
-Mission Control is designed for **local-first, single-user** operation. Key security properties:
+Mission Control is designed for **local-first, single-user** operation.
 
 ### Governor System
 
-All dangerous actions require **typed confirmation**:
+Dangerous actions require typed confirmation:
 
 ```
 Action: plugin.install
 Policy: CONFIRM
-Prompt: "Type 'CONFIRM' to install plugin"
+→ Type "CONFIRM" to proceed
 ```
 
-Actions are categorized by risk level:
-- **ALLOW** — Safe read operations (no confirmation)
-- **CONFIRM** — Type "CONFIRM" to proceed
-- **WO_CODE** — Type the work order code to proceed
-- **DENY** — Blocked entirely
+Risk levels: **ALLOW** (auto) → **CONFIRM** → **WO_CODE** → **DENY** (blocked)
 
 ### Path Safety
 
-Workspace file operations enforce:
 - No path traversal (`..` rejected)
-- No backslashes or null bytes
-- Allowlist: `agents`, `overlays`, `skills`, `playbooks`, `plugins`
+- Allowlist: `agents/`, `overlays/`, `skills/`, `playbooks/`, `plugins/`
 
 ### Command Allowlist
 
-OpenClaw execution is limited to 24 pre-defined commands:
-- No arbitrary shell execution
-- `spawn()` used with array arguments (no shell interpolation)
+OpenClaw execution limited to pre-defined commands. No arbitrary shell. Uses `spawn()` with array args.
 
 ### Audit Trail
 
-All significant actions are logged to the activity feed with:
-- Timestamp, actor, action type
-- Entity references
-- Payload details
+All actions logged with timestamp, actor, entity, payload, receipt ID.
 
-See [docs/SECURITY.md](docs/SECURITY.md) for the full threat model.
-
----
-
-## Update Strategy
-
-### Checking for Updates
-
-```bash
-git fetch origin
-git log HEAD..origin/main --oneline
-```
-
-### Applying Updates
-
-```bash
-# 1. Pull latest code
-git pull origin main
-
-# 2. Install any new dependencies
-npm install
-
-# 3. Run database migrations
-npm run db:migrate
-
-# 4. Restart the server
-npm run dev
-```
-
-### Breaking Changes
-
-Major version bumps may include:
-- Database schema changes (migrations provided)
-- Configuration format changes (documented in CHANGELOG)
-- API changes (rare in alpha)
-
-Always read the [CHANGELOG](CHANGELOG.md) before updating.
+See [docs/SECURITY.md](docs/SECURITY.md) for full threat model.
 
 ---
 
@@ -200,18 +138,16 @@ Always read the [CHANGELOG](CHANGELOG.md) before updating.
 
 ```
 savorg/
-├── apps/
-│   └── mission-control/     # Next.js dashboard
-│       ├── app/             # App router pages
-│       ├── components/      # React components
-│       ├── lib/             # Server utilities
-│       └── prisma/          # Database schema
+├── apps/mission-control/   # Next.js dashboard
+│   ├── app/                # Pages + API routes
+│   ├── lib/                # Repos, adapters, utilities
+│   └── prisma/             # Database schema
 ├── packages/
-│   ├── core/                # Shared types, Governor, mock data
-│   ├── ui/                  # Shared UI components
-│   └── adapters-openclaw/   # OpenClaw CLI adapter
-├── docs/                    # Documentation
-└── data/                    # SQLite database (gitignored)
+│   ├── core/               # Types, Governor, mocks
+│   ├── ui/                 # Shared components
+│   └── adapters-openclaw/  # CLI adapter
+├── docs/                   # Documentation
+└── data/                   # SQLite (gitignored)
 ```
 
 ---
@@ -220,30 +156,35 @@ savorg/
 
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Start development server |
+| `npm run dev` | Development server |
 | `npm run build` | Production build |
-| `npm run lint` | Run ESLint |
 | `npm run typecheck` | TypeScript check |
-| `npm run db:migrate` | Apply database migrations |
-| `npm run db:push` | Push schema without migration |
+| `npm run db:migrate` | Apply migrations |
 | `npm run db:studio` | Open Prisma Studio |
-| `npm run db:seed` | Seed demo data |
+
+---
+
+## Updating
+
+```bash
+git pull origin main
+npm install
+npm run db:migrate
+npm run dev
+```
 
 ---
 
 ## License
 
-See [LICENSE](LICENSE) for details.
-
----
+See [LICENSE](LICENSE).
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
----
+## Links
 
-## Support
-
-- **Issues:** [GitHub Issues](https://github.com/your-org/savorg/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/your-org/savorg/discussions)
+- [OpenClaw Integration](docs/OPENCLAW_INTEGRATION.md)
+- [Security Model](docs/SECURITY.md)
+- [Path Policy](docs/PATH_POLICY.md)

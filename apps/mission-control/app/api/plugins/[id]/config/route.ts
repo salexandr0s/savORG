@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { mockPlugins, mockPluginConfigs } from '@savorg/core'
 import { enforceTypedConfirm } from '@/lib/with-governor'
 import { getRepos } from '@/lib/repo'
+import { PluginUnsupportedError } from '@/lib/repo/plugins'
 import Ajv from 'ajv'
 
 const ajv = new Ajv({ allErrors: true, strict: false })
-
-function findPluginIndex(id: string) {
-  return mockPlugins.findIndex((p) => p.id === id)
-}
 
 /**
  * Validate config against schema if available
@@ -49,10 +45,11 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const pluginIndex = findPluginIndex(id)
+  const repos = getRepos()
 
-  if (pluginIndex === -1) {
-    return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
+  const { data: plugin, meta: getMeta } = await repos.plugins.getById(id)
+  if (!plugin) {
+    return NextResponse.json({ error: 'Plugin not found', meta: getMeta }, { status: 404 })
   }
 
   const body = await request.json()
@@ -64,8 +61,6 @@ export async function PUT(
       { status: 400 }
     )
   }
-
-  const plugin = mockPlugins[pluginIndex]
 
   // Validate against schema if available
   if (plugin.configSchema) {
@@ -98,8 +93,6 @@ export async function PUT(
     )
   }
 
-  const repos = getRepos()
-
   // Create a receipt for the config update
   const receipt = await repos.receipts.create({
     workOrderId: 'system',
@@ -111,51 +104,80 @@ export async function PUT(
     },
   })
 
-  // Update config
-  mockPluginConfigs[id] = config
+  try {
+    // Update plugin config via repo
+    const { data: updatedPlugin, meta } = await repos.plugins.update(id, { config })
 
-  // Update plugin record
-  mockPlugins[pluginIndex] = {
-    ...plugin,
-    hasConfig: true,
-    configJson: config,
-    restartRequired: true, // Config changes require restart
-    updatedAt: new Date(),
-  }
+    if (!updatedPlugin) {
+      await repos.receipts.finalize(receipt.id, {
+        exitCode: 1,
+        durationMs: 100,
+        parsedJson: {
+          status: 'failed',
+          error: 'Failed to update config',
+        },
+      })
 
-  // Finalize receipt
-  await repos.receipts.finalize(receipt.id, {
-    exitCode: 0,
-    durationMs: 100 + Math.random() * 100,
-    parsedJson: {
-      pluginId: id,
-      pluginName: plugin.name,
-      status: 'config_updated',
-      hasSchema: !!plugin.configSchema,
-    },
-  })
+      return NextResponse.json({ error: 'Failed to update plugin config', meta }, { status: 500 })
+    }
 
-  // Log activity
-  await repos.activities.create({
-    type: 'plugin.config_updated',
-    actor: 'user',
-    entityType: 'plugin',
-    entityId: id,
-    summary: `Updated config for plugin: ${plugin.name}`,
-    payloadJson: {
-      pluginName: plugin.name,
-      version: plugin.version,
+    // Finalize receipt
+    await repos.receipts.finalize(receipt.id, {
+      exitCode: 0,
+      durationMs: 100 + Math.random() * 100,
+      parsedJson: {
+        pluginId: id,
+        pluginName: plugin.name,
+        status: 'config_updated',
+        hasSchema: !!plugin.configSchema,
+      },
+    })
+
+    // Log activity
+    await repos.activities.create({
+      type: 'plugin.config_updated',
+      actor: 'user',
+      entityType: 'plugin',
+      entityId: id,
+      summary: `Updated config for plugin: ${plugin.name}`,
+      payloadJson: {
+        pluginName: plugin.name,
+        version: plugin.version,
+        receiptId: receipt.id,
+      },
+    })
+
+    // Get full plugin with updated config
+    const { data: fullPlugin, meta: fullMeta } = await repos.plugins.getById(id)
+
+    return NextResponse.json({
+      data: fullPlugin,
+      meta: fullMeta,
       receiptId: receipt.id,
-    },
-  })
+    })
+  } catch (err) {
+    // Handle unsupported operation
+    if (err instanceof PluginUnsupportedError) {
+      await repos.receipts.finalize(receipt.id, {
+        exitCode: 1,
+        durationMs: 100,
+        parsedJson: {
+          status: 'unsupported',
+          error: err.message,
+          operation: err.operation,
+        },
+      })
 
-  const updatedPlugin = mockPlugins[pluginIndex]
-
-  return NextResponse.json({
-    data: {
-      ...updatedPlugin,
-      configJson: mockPluginConfigs[id] ?? {},
-    },
-    receiptId: receipt.id,
-  })
+      return NextResponse.json(
+        {
+          error: err.code,
+          message: err.message,
+          operation: err.operation,
+          capabilities: err.capabilities,
+        },
+        { status: err.httpStatus }
+      )
+    }
+    throw err
+  }
 }

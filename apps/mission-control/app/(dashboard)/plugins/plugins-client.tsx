@@ -6,7 +6,7 @@ import { CanonicalTable, type Column } from '@/components/ui/canonical-table'
 import { StatusPill } from '@/components/ui/status-pill'
 import { RightDrawer } from '@/components/shell/right-drawer'
 import { useProtectedAction } from '@/lib/hooks/useProtectedAction'
-import { pluginsApi, type PluginWithConfig, type PluginDoctorResult } from '@/lib/http'
+import { pluginsApi, type PluginWithConfig, type PluginDoctorResult, type PluginCapabilities, type PluginResponseMeta } from '@/lib/http'
 import type { PluginDTO } from '@/lib/data'
 import { cn } from '@/lib/utils'
 import {
@@ -27,12 +27,15 @@ import {
   Save,
   RotateCcw,
   X,
+  ServerOff,
+  CloudOff,
 } from 'lucide-react'
 
 type PluginSourceType = 'local' | 'npm' | 'tgz' | 'git'
 
 interface Props {
   plugins: PluginDTO[]
+  meta?: PluginResponseMeta
 }
 
 type TabId = 'overview' | 'config' | 'doctor'
@@ -134,8 +137,9 @@ const pluginColumns: Column<PluginDTO>[] = [
   },
 ]
 
-export function PluginsClient({ plugins: initialPlugins }: Props) {
+export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Props) {
   const [plugins, setPlugins] = useState(initialPlugins)
+  const [meta, setMeta] = useState<PluginResponseMeta | undefined>(initialMeta)
   const [selectedPlugin, setSelectedPlugin] = useState<PluginWithConfig | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isToggling, setIsToggling] = useState(false)
@@ -152,12 +156,35 @@ export function PluginsClient({ plugins: initialPlugins }: Props) {
   const [installSpec, setInstallSpec] = useState('')
   const [isInstalling, setIsInstalling] = useState(false)
   const [installError, setInstallError] = useState<string | null>(null)
+  const [isProbing, setIsProbing] = useState(false)
 
   const protectedAction = useProtectedAction()
 
   const enabledCount = plugins.filter((p) => p.enabled).length
   const errorCount = plugins.filter((p) => p.status === 'error').length
   const restartRequiredCount = plugins.filter((p) => p.restartRequired).length
+
+  // Capability flags for disabling actions
+  const capabilities = meta?.capabilities
+  const isUnsupported = meta?.source === 'unsupported' || !capabilities?.supported
+  const isDegraded = meta?.degraded && !isUnsupported
+
+  // Re-probe capabilities
+  const handleReprobe = useCallback(async () => {
+    setIsProbing(true)
+    try {
+      const result = await pluginsApi.getCapabilities({ refresh: true })
+      // Refresh plugin list with new capabilities
+      const listResult = await pluginsApi.list()
+      setPlugins(listResult.data)
+      setMeta(listResult.meta)
+    } catch (err) {
+      console.error('Failed to re-probe capabilities:', err)
+      setError('Failed to refresh capabilities')
+    } finally {
+      setIsProbing(false)
+    }
+  }, [])
 
   // Load full plugin details when selecting
   const handleSelectPlugin = useCallback(async (plugin: PluginDTO) => {
@@ -426,6 +453,8 @@ export function PluginsClient({ plugins: initialPlugins }: Props) {
               <button
                 className="btn-secondary flex items-center gap-1.5"
                 onClick={() => setShowInstallModal(true)}
+                disabled={isUnsupported || !capabilities?.install}
+                title={!capabilities?.install ? 'Install not supported by OpenClaw' : undefined}
               >
                 <Plus className="w-3.5 h-3.5" />
                 Install
@@ -433,6 +462,62 @@ export function PluginsClient({ plugins: initialPlugins }: Props) {
             </div>
           }
         />
+
+        {/* Unsupported Banner */}
+        {isUnsupported && (
+          <div className="p-3 bg-status-error/10 border border-status-error/30 rounded-md flex items-center gap-3">
+            <ServerOff className="w-5 h-5 text-status-error shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-status-error">
+                Plugin Management Not Available
+              </p>
+              <p className="text-xs text-fg-2 mt-0.5">
+                {meta?.message || 'OpenClaw does not support plugin commands. Plugin functionality is read-only.'}
+              </p>
+            </div>
+            <button
+              onClick={handleReprobe}
+              disabled={isProbing}
+              className="btn-secondary flex items-center gap-1.5 text-xs shrink-0"
+              title="Re-probe OpenClaw capabilities"
+            >
+              {isProbing ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <RotateCcw className="w-3.5 h-3.5" />
+              )}
+              Re-probe
+            </button>
+          </div>
+        )}
+
+        {/* Degraded Mode Banner */}
+        {isDegraded && (
+          <div className="p-3 bg-status-warning/10 border border-status-warning/30 rounded-md flex items-center gap-3">
+            <CloudOff className="w-5 h-5 text-status-warning shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-status-warning">
+                Limited Plugin Management
+              </p>
+              <p className="text-xs text-fg-2 mt-0.5">
+                {meta?.message || 'Some plugin features are not available in this OpenClaw version.'}
+              </p>
+            </div>
+            <button
+              onClick={handleReprobe}
+              disabled={isProbing}
+              className="btn-secondary flex items-center gap-1.5 text-xs shrink-0"
+              title="Re-probe OpenClaw capabilities"
+            >
+              {isProbing ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <RotateCcw className="w-3.5 h-3.5" />
+              )}
+              Re-probe
+            </button>
+          </div>
+        )}
 
         {/* Global Restart Required Banner */}
         {restartRequiredCount > 0 && (
@@ -495,6 +580,7 @@ export function PluginsClient({ plugins: initialPlugins }: Props) {
             isSavingConfig={isSavingConfig}
             isUninstalling={isUninstalling}
             error={error}
+            capabilities={capabilities}
             onToggleEnabled={handleToggleEnabled}
             onRunDoctor={handleRunDoctor}
             onSaveConfig={handleSaveConfig}
@@ -625,6 +711,7 @@ interface PluginDetailProps {
   isSavingConfig: boolean
   isUninstalling: boolean
   error: string | null
+  capabilities?: PluginCapabilities
   onToggleEnabled: () => void
   onRunDoctor: () => void
   onSaveConfig: (config: Record<string, unknown>) => void
@@ -641,6 +728,7 @@ function PluginDetail({
   isSavingConfig,
   isUninstalling,
   error,
+  capabilities,
   onToggleEnabled,
   onRunDoctor,
   onSaveConfig,
@@ -697,6 +785,7 @@ function PluginDetail({
             plugin={plugin}
             isToggling={isToggling}
             isUninstalling={isUninstalling}
+            capabilities={capabilities}
             onToggleEnabled={onToggleEnabled}
             onUninstall={onUninstall}
           />
@@ -705,6 +794,7 @@ function PluginDetail({
           <ConfigTab
             plugin={plugin}
             isSaving={isSavingConfig}
+            capabilities={capabilities}
             onSaveConfig={onSaveConfig}
           />
         )}
@@ -712,6 +802,7 @@ function PluginDetail({
           <DoctorTab
             plugin={plugin}
             isRunningDoctor={isRunningDoctor}
+            capabilities={capabilities}
             onRunDoctor={onRunDoctor}
           />
         )}
@@ -724,15 +815,19 @@ function OverviewTab({
   plugin,
   isToggling,
   isUninstalling,
+  capabilities,
   onToggleEnabled,
   onUninstall,
 }: {
   plugin: PluginWithConfig
   isToggling: boolean
   isUninstalling: boolean
+  capabilities?: PluginCapabilities
   onToggleEnabled: () => void
   onUninstall: () => void
 }) {
+  const canToggle = plugin.enabled ? capabilities?.disable : capabilities?.enable
+  const canUninstall = capabilities?.uninstall
   return (
     <div className="space-y-6">
       {/* Status & Actions */}
@@ -745,7 +840,8 @@ function OverviewTab({
         <div className="flex items-center gap-2">
           <button
             onClick={onToggleEnabled}
-            disabled={isToggling}
+            disabled={isToggling || !canToggle}
+            title={!canToggle ? `${plugin.enabled ? 'Disable' : 'Enable'} not supported by OpenClaw` : undefined}
             className={cn(
               'btn-secondary flex items-center gap-1.5',
               plugin.enabled ? 'text-status-error' : 'text-status-success'
@@ -760,7 +856,8 @@ function OverviewTab({
           </button>
           <button
             onClick={onUninstall}
-            disabled={isUninstalling}
+            disabled={isUninstalling || !canUninstall}
+            title={!canUninstall ? 'Uninstall not supported by OpenClaw' : undefined}
             className="btn-secondary flex items-center gap-1.5 text-status-error"
           >
             {isUninstalling ? (
@@ -822,12 +919,15 @@ function OverviewTab({
 function ConfigTab({
   plugin,
   isSaving,
+  capabilities,
   onSaveConfig,
 }: {
   plugin: PluginWithConfig
   isSaving: boolean
+  capabilities?: PluginCapabilities
   onSaveConfig: (config: Record<string, unknown>) => void
 }) {
+  const canSaveConfig = capabilities?.setConfig
   const [configText, setConfigText] = useState(
     JSON.stringify(plugin.configJson || {}, null, 2)
   )
@@ -935,7 +1035,8 @@ function ConfigTab({
           </button>
           <button
             onClick={handleSave}
-            disabled={!hasChanges || !!parseError || isSaving}
+            disabled={!hasChanges || !!parseError || isSaving || !canSaveConfig}
+            title={!canSaveConfig ? 'Config editing not supported by OpenClaw' : undefined}
             className="btn-primary flex items-center gap-1.5"
           >
             {isSaving ? (
@@ -954,12 +1055,15 @@ function ConfigTab({
 function DoctorTab({
   plugin,
   isRunningDoctor,
+  capabilities,
   onRunDoctor,
 }: {
   plugin: PluginWithConfig
   isRunningDoctor: boolean
+  capabilities?: PluginCapabilities
   onRunDoctor: () => void
 }) {
+  const canRunDoctor = capabilities?.doctor
   const doctorResult = plugin.doctorResult
 
   return (
@@ -990,7 +1094,8 @@ function DoctorTab({
 
         <button
           onClick={onRunDoctor}
-          disabled={isRunningDoctor}
+          disabled={isRunningDoctor || !canRunDoctor}
+          title={!canRunDoctor ? 'Doctor not supported by OpenClaw' : undefined}
           className="btn-secondary flex items-center gap-1.5"
         >
           {isRunningDoctor ? (

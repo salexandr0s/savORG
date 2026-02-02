@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { mockPlugins } from '@savorg/core'
 import { enforceTypedConfirm } from '@/lib/with-governor'
 import { getRepos } from '@/lib/repo'
-import type { Plugin, PluginSourceType } from '@savorg/core'
+import { PluginUnsupportedError } from '@/lib/repo/plugins'
+import type { PluginSourceType } from '@savorg/core'
 
 // Validation helpers
 const ALLOWED_LOCAL_BASES = ['/usr/local/lib/savorg/plugins', '/opt/savorg/plugins']
@@ -80,43 +80,28 @@ function extractPluginName(sourceType: PluginSourceType, spec: string): string {
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
-  const status = searchParams.get('status')
+  const status = searchParams.get('status') as 'active' | 'inactive' | 'error' | null
   const enabled = searchParams.get('enabled')
 
-  let plugins = [...mockPlugins]
+  const repos = getRepos()
 
-  // Filter by status
+  // Build filters
+  const filters: {
+    status?: 'active' | 'inactive' | 'error'
+    enabled?: boolean
+  } = {}
+
   if (status) {
-    plugins = plugins.filter((p) => p.status === status)
+    filters.status = status
   }
 
-  // Filter by enabled
   if (enabled !== null) {
-    const isEnabled = enabled === 'true'
-    plugins = plugins.filter((p) => p.enabled === isEnabled)
+    filters.enabled = enabled === 'true'
   }
 
-  // Map to DTO (exclude sensitive config data in list)
-  const pluginDTOs = plugins.map((p) => ({
-    id: p.id,
-    name: p.name,
-    description: p.description,
-    version: p.version,
-    author: p.author,
-    enabled: p.enabled,
-    status: p.status,
-    sourceType: p.sourceType,
-    sourcePath: p.sourcePath,
-    npmSpec: p.npmSpec,
-    hasConfig: p.hasConfig,
-    doctorResult: p.doctorResult,
-    restartRequired: p.restartRequired,
-    lastError: p.lastError,
-    installedAt: p.installedAt,
-    updatedAt: p.updatedAt,
-  }))
+  const { data: plugins, meta } = await repos.plugins.list(filters)
 
-  return NextResponse.json({ data: pluginDTOs })
+  return NextResponse.json({ data: plugins, meta })
 }
 
 /**
@@ -144,9 +129,11 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  const repos = getRepos()
+
   // Check for duplicate
   const pluginName = extractPluginName(sourceType as PluginSourceType, spec)
-  const existingPlugin = mockPlugins.find((p) => p.name === pluginName)
+  const existingPlugin = await repos.plugins.getByName(pluginName)
   if (existingPlugin) {
     return NextResponse.json(
       { error: `Plugin "${pluginName}" is already installed` },
@@ -170,8 +157,6 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const repos = getRepos()
-
   // Create a receipt for the install attempt
   const receipt = await repos.receipts.create({
     workOrderId: 'system',
@@ -180,73 +165,88 @@ export async function POST(request: NextRequest) {
     commandArgs: { sourceType, spec, pluginName },
   })
 
-  // Simulate install process
-  const newPluginId = `plugin_${Date.now()}`
-  const newPlugin: Plugin = {
-    id: newPluginId,
-    name: pluginName,
-    description: `Plugin installed from ${sourceType}: ${spec}`,
-    version: '1.0.0',
-    author: 'user',
-    enabled: false, // Start disabled until verified
-    status: 'inactive',
-    sourceType: sourceType as PluginSourceType,
-    sourcePath: sourceType === 'local' || sourceType === 'tgz' || sourceType === 'git' ? spec : undefined,
-    npmSpec: sourceType === 'npm' ? spec : undefined,
-    hasConfig: false,
-    restartRequired: true, // New plugins need restart
-    installedAt: new Date(),
-    updatedAt: new Date(),
-  }
-
-  // Add to mock plugins
-  mockPlugins.push(newPlugin)
-
-  // Finalize receipt with success
-  await repos.receipts.finalize(receipt.id, {
-    exitCode: 0,
-    durationMs: 2000 + Math.random() * 1000, // Simulate 2-3s install
-    parsedJson: {
-      pluginId: newPluginId,
-      pluginName,
-      sourceType,
+  try {
+    // Install the plugin via repo
+    const { data: newPlugin, meta } = await repos.plugins.install({
+      sourceType: sourceType as PluginSourceType,
       spec,
-      status: 'installed',
-    },
-  })
+    })
 
-  // Log activity
-  await repos.activities.create({
-    type: 'plugin.installed',
-    actor: 'user',
-    entityType: 'plugin',
-    entityId: newPluginId,
-    summary: `Installed plugin: ${pluginName} from ${sourceType}`,
-    payloadJson: {
-      pluginName,
-      sourceType,
-      spec,
+    // Finalize receipt with success (include capability snapshot for auditability)
+    await repos.receipts.finalize(receipt.id, {
+      exitCode: 0,
+      durationMs: 2000 + Math.random() * 1000, // Simulate 2-3s install
+      parsedJson: {
+        pluginId: newPlugin.id,
+        pluginName: newPlugin.name,
+        sourceType,
+        spec,
+        status: 'installed',
+        capabilitySnapshot: {
+          source: meta.source,
+          capabilities: meta.capabilities,
+          degraded: meta.degraded,
+        },
+      },
+    })
+
+    // Log activity
+    await repos.activities.create({
+      type: 'plugin.installed',
+      actor: 'user',
+      entityType: 'plugin',
+      entityId: newPlugin.id,
+      summary: `Installed plugin: ${newPlugin.name} from ${sourceType}`,
+      payloadJson: {
+        pluginName: newPlugin.name,
+        sourceType,
+        spec,
+        receiptId: receipt.id,
+      },
+    })
+
+    return NextResponse.json({
+      data: newPlugin,
+      meta,
       receiptId: receipt.id,
-    },
-  })
+    })
+  } catch (err) {
+    // Handle unsupported operation
+    if (err instanceof PluginUnsupportedError) {
+      await repos.receipts.finalize(receipt.id, {
+        exitCode: 1,
+        durationMs: 100,
+        parsedJson: {
+          status: 'unsupported',
+          error: err.message,
+          operation: err.operation,
+        },
+      })
 
-  return NextResponse.json({
-    data: {
-      id: newPlugin.id,
-      name: newPlugin.name,
-      description: newPlugin.description,
-      version: newPlugin.version,
-      author: newPlugin.author,
-      enabled: newPlugin.enabled,
-      status: newPlugin.status,
-      sourceType: newPlugin.sourceType,
-      sourcePath: newPlugin.sourcePath,
-      npmSpec: newPlugin.npmSpec,
-      hasConfig: newPlugin.hasConfig,
-      restartRequired: newPlugin.restartRequired,
-      installedAt: newPlugin.installedAt,
-      updatedAt: newPlugin.updatedAt,
-    },
-    receiptId: receipt.id,
-  })
+      return NextResponse.json(
+        {
+          error: err.code,
+          message: err.message,
+          operation: err.operation,
+          capabilities: err.capabilities,
+        },
+        { status: err.httpStatus }
+      )
+    }
+
+    // Finalize receipt with failure
+    await repos.receipts.finalize(receipt.id, {
+      exitCode: 1,
+      durationMs: 1000,
+      parsedJson: {
+        status: 'failed',
+        error: err instanceof Error ? err.message : 'Unknown error',
+      },
+    })
+
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Failed to install plugin' },
+      { status: 500 }
+    )
+  }
 }

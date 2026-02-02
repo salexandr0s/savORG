@@ -1,16 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { mockPlugins, mockPluginConfigs } from '@savorg/core'
 import { enforceTypedConfirm } from '@/lib/with-governor'
 import { getRepos } from '@/lib/repo'
+import { PluginUnsupportedError } from '@/lib/repo/plugins'
 import type { ActionKind } from '@savorg/core'
-
-function findPlugin(id: string) {
-  return mockPlugins.find((p) => p.id === id)
-}
-
-function findPluginIndex(id: string) {
-  return mockPlugins.findIndex((p) => p.id === id)
-}
 
 /**
  * GET /api/plugins/:id
@@ -21,19 +13,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const plugin = findPlugin(id)
+  const repos = getRepos()
 
+  const { data: plugin, meta } = await repos.plugins.getById(id)
   if (!plugin) {
-    return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
+    return NextResponse.json({ error: 'Plugin not found', meta }, { status: 404 })
   }
 
-  // Return full plugin data including config
-  return NextResponse.json({
-    data: {
-      ...plugin,
-      configJson: mockPluginConfigs[id] ?? {},
-    },
-  })
+  return NextResponse.json({ data: plugin, meta })
 }
 
 /**
@@ -45,16 +32,15 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const pluginIndex = findPluginIndex(id)
+  const repos = getRepos()
 
-  if (pluginIndex === -1) {
-    return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
+  const { data: plugin, meta: getMeta } = await repos.plugins.getById(id)
+  if (!plugin) {
+    return NextResponse.json({ error: 'Plugin not found', meta: getMeta }, { status: 404 })
   }
 
   const body = await request.json()
   const { enabled, typedConfirmText } = body
-
-  const plugin = mockPlugins[pluginIndex]
 
   // Determine action kind
   let actionKind: ActionKind = 'action.safe'
@@ -78,39 +64,48 @@ export async function PATCH(
     )
   }
 
-  // Update enabled state
-  if (typeof enabled === 'boolean') {
-    mockPlugins[pluginIndex] = {
-      ...plugin,
-      enabled,
-      status: enabled ? 'active' : 'inactive',
-      updatedAt: new Date(),
+  try {
+    // Update plugin via repo
+    const { data: updatedPlugin, meta } = await repos.plugins.update(id, { enabled })
+    if (!updatedPlugin) {
+      return NextResponse.json({ error: 'Failed to update plugin', meta }, { status: 500 })
     }
 
     // Log activity
-    const repos = getRepos()
-    await repos.activities.create({
-      type: enabled ? 'plugin.enabled' : 'plugin.disabled',
-      actor: 'user',
-      entityType: 'plugin',
-      entityId: id,
-      summary: `${enabled ? 'Enabled' : 'Disabled'} plugin: ${plugin.name}`,
-      payloadJson: {
-        pluginName: plugin.name,
-        version: plugin.version,
-        enabled,
-      },
-    })
+    if (typeof enabled === 'boolean') {
+      await repos.activities.create({
+        type: enabled ? 'plugin.enabled' : 'plugin.disabled',
+        actor: 'user',
+        entityType: 'plugin',
+        entityId: id,
+        summary: `${enabled ? 'Enabled' : 'Disabled'} plugin: ${plugin.name}`,
+        payloadJson: {
+          pluginName: plugin.name,
+          version: plugin.version,
+          enabled,
+        },
+      })
+    }
+
+    // Get full plugin with config
+    const { data: fullPlugin, meta: fullMeta } = await repos.plugins.getById(id)
+
+    return NextResponse.json({ data: fullPlugin, meta: fullMeta })
+  } catch (err) {
+    // Handle unsupported operation
+    if (err instanceof PluginUnsupportedError) {
+      return NextResponse.json(
+        {
+          error: err.code,
+          message: err.message,
+          operation: err.operation,
+          capabilities: err.capabilities,
+        },
+        { status: err.httpStatus }
+      )
+    }
+    throw err
   }
-
-  const updatedPlugin = mockPlugins[pluginIndex]
-
-  return NextResponse.json({
-    data: {
-      ...updatedPlugin,
-      configJson: mockPluginConfigs[id] ?? {},
-    },
-  })
 }
 
 /**
@@ -122,13 +117,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const pluginIndex = findPluginIndex(id)
+  const repos = getRepos()
 
-  if (pluginIndex === -1) {
-    return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
+  const { data: plugin, meta: getMeta } = await repos.plugins.getById(id)
+  if (!plugin) {
+    return NextResponse.json({ error: 'Plugin not found', meta: getMeta }, { status: 404 })
   }
-
-  const plugin = mockPlugins[pluginIndex]
 
   // Get typed confirm from body
   let typedConfirmText: string | undefined
@@ -155,8 +149,6 @@ export async function DELETE(
     )
   }
 
-  const repos = getRepos()
-
   // Create a receipt for the uninstall attempt
   const receipt = await repos.receipts.create({
     workOrderId: 'system',
@@ -169,41 +161,87 @@ export async function DELETE(
     },
   })
 
-  // Remove plugin from mock array
-  mockPlugins.splice(pluginIndex, 1)
+  try {
+    // Uninstall plugin via repo
+    const { success, meta } = await repos.plugins.uninstall(id)
 
-  // Remove config if exists
-  if (mockPluginConfigs[id]) {
-    delete mockPluginConfigs[id]
-  }
+    if (!success) {
+      // Finalize receipt with failure
+      await repos.receipts.finalize(receipt.id, {
+        exitCode: 1,
+        durationMs: 500,
+        parsedJson: {
+          pluginId: id,
+          pluginName: plugin.name,
+          status: 'failed',
+          error: 'Uninstall not supported or failed',
+        },
+      })
 
-  // Finalize receipt with success
-  await repos.receipts.finalize(receipt.id, {
-    exitCode: 0,
-    durationMs: 1000 + Math.random() * 500, // Simulate 1-1.5s uninstall
-    parsedJson: {
-      pluginId: id,
-      pluginName: plugin.name,
-      status: 'removed',
-    },
-  })
+      return NextResponse.json(
+        { error: 'Failed to uninstall plugin', meta },
+        { status: 500 }
+      )
+    }
 
-  // Log activity
-  await repos.activities.create({
-    type: 'plugin.removed',
-    actor: 'user',
-    entityType: 'plugin',
-    entityId: id,
-    summary: `Uninstalled plugin: ${plugin.name}`,
-    payloadJson: {
-      pluginName: plugin.name,
-      version: plugin.version,
+    // Finalize receipt with success (include capability snapshot for auditability)
+    await repos.receipts.finalize(receipt.id, {
+      exitCode: 0,
+      durationMs: 1000 + Math.random() * 500, // Simulate 1-1.5s uninstall
+      parsedJson: {
+        pluginId: id,
+        pluginName: plugin.name,
+        status: 'removed',
+        capabilitySnapshot: {
+          source: meta.source,
+          capabilities: meta.capabilities,
+          degraded: meta.degraded,
+        },
+      },
+    })
+
+    // Log activity
+    await repos.activities.create({
+      type: 'plugin.removed',
+      actor: 'user',
+      entityType: 'plugin',
+      entityId: id,
+      summary: `Uninstalled plugin: ${plugin.name}`,
+      payloadJson: {
+        pluginName: plugin.name,
+        version: plugin.version,
+        receiptId: receipt.id,
+      },
+    })
+
+    return NextResponse.json({
+      success: true,
+      meta,
       receiptId: receipt.id,
-    },
-  })
+    })
+  } catch (err) {
+    // Handle unsupported operation
+    if (err instanceof PluginUnsupportedError) {
+      await repos.receipts.finalize(receipt.id, {
+        exitCode: 1,
+        durationMs: 100,
+        parsedJson: {
+          status: 'unsupported',
+          error: err.message,
+          operation: err.operation,
+        },
+      })
 
-  return NextResponse.json({
-    success: true,
-    receiptId: receipt.id,
-  })
+      return NextResponse.json(
+        {
+          error: err.code,
+          message: err.message,
+          operation: err.operation,
+          capabilities: err.capabilities,
+        },
+        { status: err.httpStatus }
+      )
+    }
+    throw err
+  }
 }

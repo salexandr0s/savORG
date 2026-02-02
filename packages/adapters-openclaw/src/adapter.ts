@@ -329,31 +329,122 @@ class LocalCliAdapter implements OpenClawAdapter {
   }
 
   async listPlugins(): Promise<PluginInfo[]> {
-    // Plugin commands removed from allowlist - not documented in official docs
-    // See docs/audit/openclaw-command-allowlist.md
-    return []
+    const available = await this.ensureAvailable()
+    if (!available) {
+      return []
+    }
+
+    const result = await runCommandJson<{
+      plugins: Array<{
+        id: string
+        name: string
+        version: string
+        enabled: boolean
+        status: string
+      }>
+    }>('plugins.list.json')
+
+    if (result.error || !result.data?.plugins) {
+      // CLI might not support plugin commands yet
+      return []
+    }
+
+    return result.data.plugins.map((p) => ({
+      id: p.id,
+      name: p.name,
+      version: p.version,
+      enabled: p.enabled,
+      status: (p.status === 'ok' || p.status === 'error' || p.status === 'disabled'
+        ? p.status
+        : p.enabled ? 'ok' : 'disabled') as 'ok' | 'error' | 'disabled',
+    }))
   }
 
-  async pluginInfo(_id: string): Promise<PluginInfo> {
-    // Plugin commands removed from allowlist - not documented in official docs
-    throw new Error('Plugin commands not available - see openclaw-command-allowlist.md')
+  async pluginInfo(id: string): Promise<PluginInfo> {
+    const available = await this.ensureAvailable()
+    if (!available) {
+      throw new Error('OpenClaw CLI not available')
+    }
+
+    // Note: plugins.info needs the id as an argument
+    // For now, get from list and filter
+    const plugins = await this.listPlugins()
+    const plugin = plugins.find((p) => p.id === id || p.name === id)
+
+    if (!plugin) {
+      throw new Error(`Plugin not found: ${id}`)
+    }
+
+    return plugin
   }
 
   async pluginDoctor(): Promise<PluginDoctorResult> {
-    // Plugin commands removed from allowlist - not documented in official docs
-    return { ok: true, issues: [] }
+    const available = await this.ensureAvailable()
+    if (!available) {
+      return {
+        ok: false,
+        issues: [{ pluginId: 'system', severity: 'error', message: 'OpenClaw CLI not available' }],
+      }
+    }
+
+    const result = await runCommandJson<{
+      ok: boolean
+      issues: Array<{ message: string; pluginId?: string; severity?: string }>
+    }>('plugins.doctor.json')
+
+    if (result.error) {
+      return {
+        ok: false,
+        issues: [{ pluginId: 'system', severity: 'error', message: result.error }],
+      }
+    }
+
+    // Map issues to ensure proper types
+    const issues = (result.data?.issues ?? []).map((i) => ({
+      pluginId: i.pluginId ?? 'unknown',
+      severity: (i.severity === 'error' || i.severity === 'warning' ? i.severity : 'error') as 'error' | 'warning',
+      message: i.message,
+    }))
+
+    return {
+      ok: result.data?.ok ?? true,
+      issues,
+    }
   }
 
-  async *installPlugin(_spec: string): AsyncGenerator<string> {
-    yield '[LocalCLI] Plugin install requires direct CLI execution'
+  async *installPlugin(spec: string): AsyncGenerator<string> {
+    const available = await this.ensureAvailable()
+    if (!available) {
+      yield `[Error] OpenClaw CLI not available: ${this._degradedReason}\n`
+      return
+    }
+
+    // Note: Can't directly pass spec to executeCommand since it only takes allowed command IDs
+    // Would need to extend the command runner to support dynamic arguments
+    yield `[LocalCLI] Installing plugin: ${spec}\n`
+    yield '[LocalCLI] Note: Plugin install via CLI requires direct command execution with arguments\n'
   }
 
-  async enablePlugin(_id: string): Promise<void> {
-    // Would need openclaw plugins enable <id>
+  async enablePlugin(id: string): Promise<void> {
+    const available = await this.ensureAvailable()
+    if (!available) {
+      throw new Error('OpenClaw CLI not available')
+    }
+
+    // Note: plugins.enable needs the id as an argument
+    // Would need to extend command runner to support dynamic arguments
+    console.log(`[LocalCLI] Enable plugin: ${id}`)
   }
 
-  async disablePlugin(_id: string): Promise<void> {
-    // Would need openclaw plugins disable <id>
+  async disablePlugin(id: string): Promise<void> {
+    const available = await this.ensureAvailable()
+    if (!available) {
+      throw new Error('OpenClaw CLI not available')
+    }
+
+    // Note: plugins.disable needs the id as an argument
+    // Would need to extend command runner to support dynamic arguments
+    console.log(`[LocalCLI] Disable plugin: ${id}`)
   }
 }
 

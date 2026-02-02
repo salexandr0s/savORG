@@ -1,26 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import {
-  mockGlobalSkills,
-  mockAgentSkills,
-  mockSkillContents,
-  mockAgents,
-} from '@savorg/core'
 import { enforceTypedConfirm } from '@/lib/with-governor'
-import { validateSkill, requiresEnableOverride } from '@/lib/skill-validator'
+import { requiresEnableOverride } from '@/lib/skill-validator'
 import { getRepos } from '@/lib/repo'
-import type { ActionKind, SkillScope, Skill } from '@savorg/core'
-
-function getSkillsArray(scope: SkillScope) {
-  return scope === 'global' ? mockGlobalSkills : mockAgentSkills
-}
-
-function findSkill(scope: SkillScope, id: string): Skill | undefined {
-  return getSkillsArray(scope).find((s) => s.id === id)
-}
-
-function findSkillIndex(scope: SkillScope, id: string): number {
-  return getSkillsArray(scope).findIndex((s) => s.id === id)
-}
+import type { ActionKind } from '@savorg/core'
+import type { SkillScope } from '@/lib/repo'
 
 /**
  * GET /api/skills/:scope/:id
@@ -36,28 +19,15 @@ export async function GET(
     return NextResponse.json({ error: 'Invalid scope' }, { status: 400 })
   }
 
-  const skill = findSkill(scope as SkillScope, id)
+  const repos = getRepos()
+  const skill = await repos.skills.getById(scope as SkillScope, id)
+
   if (!skill) {
     return NextResponse.json({ error: 'Skill not found' }, { status: 404 })
   }
 
-  // Get content if available
-  const content = mockSkillContents[id]
-
-  // Get agent name for agent-scoped skills
-  let agentName: string | undefined
-  if (skill.scope === 'agent' && skill.agentId) {
-    const agent = mockAgents.find((a) => a.id === skill.agentId)
-    agentName = agent?.name
-  }
-
   return NextResponse.json({
-    data: {
-      ...skill,
-      agentName,
-      skillMd: content?.skillMd ?? '',
-      config: content?.config,
-    },
+    data: skill,
   })
 }
 
@@ -75,17 +45,15 @@ export async function PUT(
     return NextResponse.json({ error: 'Invalid scope' }, { status: 400 })
   }
 
-  const skillsArray = getSkillsArray(scope as SkillScope)
-  const skillIndex = findSkillIndex(scope as SkillScope, id)
+  const repos = getRepos()
+  const skill = await repos.skills.getById(scope as SkillScope, id)
 
-  if (skillIndex === -1) {
+  if (!skill) {
     return NextResponse.json({ error: 'Skill not found' }, { status: 404 })
   }
 
   const body = await request.json()
   const { enabled, skillMd, config, typedConfirmText, forceEnableInvalid } = body
-
-  const skill = skillsArray[skillIndex]
 
   // Determine action kind based on what's being updated
   let actionKind: ActionKind = 'skill.edit'
@@ -125,85 +93,58 @@ export async function PUT(
     )
   }
 
-  // Update enabled state
-  if (typeof enabled === 'boolean') {
-    skillsArray[skillIndex] = {
-      ...skill,
-      enabled,
-      modifiedAt: new Date(),
+  try {
+    // Update skill via repo
+    const updatedSkill = await repos.skills.update(scope as SkillScope, id, {
+      enabled: typeof enabled === 'boolean' ? enabled : undefined,
+      skillMd: typeof skillMd === 'string' ? skillMd : undefined,
+      config: typeof config === 'string' ? config : undefined,
+    })
+
+    if (!updatedSkill) {
+      return NextResponse.json({ error: 'Failed to update skill' }, { status: 500 })
     }
 
-    // Log activity
-    const repos = getRepos()
-    await repos.activities.create({
-      type: enabled ? 'skill.enabled' : 'skill.disabled',
-      actor: 'user',
-      entityType: 'skill',
-      entityId: id,
-      summary: `${enabled ? 'Enabled' : 'Disabled'} skill: ${skill.name}`,
-      payloadJson: {
-        scope,
-        enabled,
-        forceEnableInvalid: forceEnableInvalid ?? false,
-      },
-    })
+    // Log activity based on what was changed
+    if (typeof enabled === 'boolean') {
+      await repos.activities.create({
+        type: enabled ? 'skill.enabled' : 'skill.disabled',
+        actor: 'user',
+        entityType: 'skill',
+        entityId: id,
+        summary: `${enabled ? 'Enabled' : 'Disabled'} skill: ${skill.name}`,
+        payloadJson: {
+          scope,
+          enabled,
+          forceEnableInvalid: forceEnableInvalid ?? false,
+        },
+      })
+    }
+
+    if (typeof skillMd === 'string' || typeof config === 'string') {
+      await repos.activities.create({
+        type: 'skill.updated',
+        actor: 'user',
+        entityType: 'skill',
+        entityId: id,
+        summary: `Updated skill: ${skill.name}`,
+        payloadJson: {
+          scope,
+          updatedFields: [
+            ...(typeof skillMd === 'string' ? ['skillMd'] : []),
+            ...(typeof config === 'string' ? ['config'] : []),
+          ],
+        },
+      })
+    }
+
+    // Re-fetch to get updated content
+    const finalSkill = await repos.skills.getById(scope as SkillScope, id)
+    return NextResponse.json({ data: finalSkill })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to update skill'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
-
-  // Update content and re-validate
-  if (typeof skillMd === 'string' || typeof config === 'string') {
-    const existingContent = mockSkillContents[id] ?? { skillMd: '' }
-    mockSkillContents[id] = {
-      skillMd: typeof skillMd === 'string' ? skillMd : existingContent.skillMd,
-      config: typeof config === 'string' ? config : existingContent.config,
-    }
-
-    // Re-validate the skill after content update
-    const validationResult = validateSkill({
-      name: skill.name,
-      files: {
-        skillMd: mockSkillContents[id].skillMd,
-        config: mockSkillContents[id].config,
-      },
-      hasEntrypoint: skill.hasEntrypoint,
-    })
-
-    skillsArray[skillIndex] = {
-      ...skillsArray[skillIndex],
-      hasConfig: !!mockSkillContents[id].config,
-      modifiedAt: new Date(),
-      validation: validationResult,
-    }
-
-    // Log activity
-    const repos = getRepos()
-    await repos.activities.create({
-      type: 'skill.updated',
-      actor: 'user',
-      entityType: 'skill',
-      entityId: id,
-      summary: `Updated skill: ${skill.name}`,
-      payloadJson: {
-        scope,
-        updatedFields: [
-          ...(typeof skillMd === 'string' ? ['skillMd'] : []),
-          ...(typeof config === 'string' ? ['config'] : []),
-        ],
-        validationStatus: validationResult.status,
-      },
-    })
-  }
-
-  // Return updated skill with content
-  const updatedSkill = skillsArray[skillIndex]
-  const content = mockSkillContents[id]
-
-  return NextResponse.json({
-    data: {
-      ...updatedSkill,
-      skillMd: content?.skillMd ?? '',
-      config: content?.config,
-    },
-  })
 }
 
 /**
@@ -220,14 +161,12 @@ export async function DELETE(
     return NextResponse.json({ error: 'Invalid scope' }, { status: 400 })
   }
 
-  const skillsArray = getSkillsArray(scope as SkillScope)
-  const skillIndex = findSkillIndex(scope as SkillScope, id)
+  const repos = getRepos()
+  const skill = await repos.skills.getById(scope as SkillScope, id)
 
-  if (skillIndex === -1) {
+  if (!skill) {
     return NextResponse.json({ error: 'Skill not found' }, { status: 404 })
   }
-
-  const skill = skillsArray[skillIndex]
 
   // Get typed confirm from body
   let typedConfirmText: string | undefined
@@ -255,28 +194,31 @@ export async function DELETE(
     )
   }
 
-  // Remove skill from array
-  skillsArray.splice(skillIndex, 1)
+  try {
+    // Delete skill via repo
+    const deleted = await repos.skills.delete(scope as SkillScope, id)
 
-  // Remove content if exists
-  if (mockSkillContents[id]) {
-    delete mockSkillContents[id]
+    if (!deleted) {
+      return NextResponse.json({ error: 'Failed to delete skill' }, { status: 500 })
+    }
+
+    // Log activity
+    await repos.activities.create({
+      type: 'skill.removed',
+      actor: 'user',
+      entityType: 'skill',
+      entityId: id,
+      summary: `Uninstalled skill: ${skill.name}`,
+      payloadJson: {
+        scope,
+        skillName: skill.name,
+        version: skill.version,
+      },
+    })
+
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to delete skill'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
-
-  // Log activity
-  const repos = getRepos()
-  await repos.activities.create({
-    type: 'skill.removed',
-    actor: 'user',
-    entityType: 'skill',
-    entityId: id,
-    summary: `Uninstalled skill: ${skill.name}`,
-    payloadJson: {
-      scope,
-      skillName: skill.name,
-      version: skill.version,
-    },
-  })
-
-  return NextResponse.json({ success: true })
 }
