@@ -89,6 +89,8 @@ export async function indexWorkOrder(
   title: string,
   goalMd: string
 ): Promise<void> {
+  await initializeFts()
+
   // Delete existing entry first, then insert (FTS5 doesn't support REPLACE)
   await prisma.$executeRawUnsafe(
     `DELETE FROM work_orders_fts WHERE id = ?`,
@@ -116,6 +118,8 @@ export async function indexOperation(
   title: string,
   notes: string | null
 ): Promise<void> {
+  await initializeFts()
+
   await prisma.$executeRawUnsafe(
     `DELETE FROM operations_fts WHERE id = ?`,
     id
@@ -138,6 +142,8 @@ export async function removeOperationFromIndex(id: string): Promise<void> {
 // ============================================================================
 
 export async function indexMessage(id: string, content: string): Promise<void> {
+  await initializeFts()
+
   await prisma.$executeRawUnsafe(
     `DELETE FROM messages_fts WHERE id = ?`,
     id
@@ -164,6 +170,8 @@ export async function indexDocument(
   title: string,
   content: string
 ): Promise<void> {
+  await initializeFts()
+
   await prisma.$executeRawUnsafe(
     `DELETE FROM documents_fts WHERE id = ?`,
     id
