@@ -17,6 +17,7 @@ export interface UpdateAgentInput {
   currentWorkOrderId?: string | null
 
   // Admin-editable fields
+  name?: string
   role?: string
   station?: string
   capabilities?: Record<string, boolean>
@@ -37,6 +38,7 @@ export interface AgentsRepo {
   list(filters?: AgentFilters): Promise<AgentDTO[]>
   getById(id: string): Promise<AgentDTO | null>
   getByName(name: string): Promise<AgentDTO | null>
+  getBySessionKey(sessionKey: string): Promise<AgentDTO | null>
   countByStatus(): Promise<Record<string, number>>
   create(input: CreateAgentInput): Promise<AgentDTO>
   update(id: string, input: UpdateAgentInput): Promise<AgentDTO | null>
@@ -64,6 +66,11 @@ export function createDbAgentsRepo(): AgentsRepo {
 
     async getByName(name: string): Promise<AgentDTO | null> {
       const row = await prisma.agent.findUnique({ where: { name } })
+      return row ? toDTO(row) : null
+    },
+
+    async getBySessionKey(sessionKey: string): Promise<AgentDTO | null> {
+      const row = await prisma.agent.findUnique({ where: { sessionKey } })
       return row ? toDTO(row) : null
     },
 
@@ -100,6 +107,7 @@ export function createDbAgentsRepo(): AgentsRepo {
         where: { id },
         data: {
           ...(input.status !== undefined && { status: input.status }),
+          ...(input.name !== undefined && { name: input.name }),
           ...(input.role !== undefined && { role: input.role }),
           ...(input.station !== undefined && { station: input.station }),
           ...(input.capabilities !== undefined && { capabilities: JSON.stringify(input.capabilities) }),
@@ -140,6 +148,11 @@ export function createMockAgentsRepo(): AgentsRepo {
 
     async getByName(name: string): Promise<AgentDTO | null> {
       const agent = mockAgents.find((a) => a.name === name)
+      return agent ? mockToDTO(agent) : null
+    },
+
+    async getBySessionKey(sessionKey: string): Promise<AgentDTO | null> {
+      const agent = mockAgents.find((a) => a.sessionKey === sessionKey)
       return agent ? mockToDTO(agent) : null
     },
 
