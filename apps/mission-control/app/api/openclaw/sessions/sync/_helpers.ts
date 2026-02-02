@@ -42,10 +42,12 @@ export function parseExplicitLinkage(input: {
   const flagOp = input.flags?.find((f) => f.startsWith('op:'))?.slice(3)
   const flagWo = input.flags?.find((f) => f.startsWith('wo:'))?.slice(3)
 
-  // Last: sessionKey tokens e.g. "... op:<id> ..." or "... wo:<id> ..."
+  // Last: sessionKey label tokens (most stable across OpenClaw versions)
+  // Convention: append a segment like :op:<operationId> (or :wo:<workOrderId>)
+  // Parser rule (locked): (?:^|:)op:([a-z0-9]{10,})
   const key = input.sessionKey ?? ''
-  const opMatch = key.match(/\bop:([a-z0-9_-]{10,})\b/i)
-  const woMatch = key.match(/\bwo:([a-z0-9_-]{10,})\b/i)
+  const opMatch = key.match(/(?:^|:)op:([a-z0-9]{10,})/i)
+  const woMatch = key.match(/(?:^|:)wo:([a-z0-9]{10,})/i)
 
   const operationId = opMeta || flagOp || opMatch?.[1]
   const workOrderId = woMeta || flagWo || woMatch?.[1]
