@@ -1,4 +1,4 @@
-# SAVORG Mission Control
+# savORG Mission Control
 
 Mission Control for [OpenClaw](https://github.com/openclaw/openclaw): a multi-agent operating system with governance, live monitoring, receipts, and approval gates.
 
