@@ -3,14 +3,16 @@ const nextConfig = {
   transpilePackages: ['@savorg/core', '@savorg/ui', '@savorg/adapters-openclaw'],
   typedRoutes: true,
 
+  // Avoid bundling native Node deps into the server build.
+  // In particular, `ws` can end up with a broken bufferutil shim when bundled.
+  serverExternalPackages: ['ws'],
+
   // Security: Mission Control is local-only.
   // Limit dev-origin allowances to loopback.
   allowedDevOrigins: ['127.0.0.1', 'localhost'],
 
-  // Enable instrumentation hook for WAL initialization at startup
-  experimental: {
-    instrumentationHook: true,
-  },
+  // Note: instrumentationHook is now enabled by default in Next.js 16.1+
+  // No need for experimental flag - instrumentation.ts is picked up automatically
 }
 
 module.exports = nextConfig

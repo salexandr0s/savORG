@@ -22,6 +22,7 @@ import {
   executeCommand,
   checkOpenClawAvailable,
 } from './command-runner'
+import { WsAdapter } from './ws-adapter'
 
 /**
  * Create an OpenClaw adapter based on configuration
@@ -38,12 +39,20 @@ export function createAdapter(config: AdapterConfig): OpenClawAdapter {
       }
       return new HttpAdapter(config)
     case 'remote_ws':
-      throw new Error('WebSocket adapter not yet implemented')
+      return new WsAdapter(config)
     case 'remote_cli_over_ssh':
       throw new Error('SSH CLI adapter not yet implemented')
     default:
       throw new Error(`Unknown adapter mode: ${config.mode}`)
   }
+}
+
+/**
+ * Create a WebSocket adapter specifically.
+ * Returns the extended interface with session-scoped chat methods.
+ */
+export function createWsAdapter(config: Omit<AdapterConfig, 'mode'>): WsAdapter {
+  return new WsAdapter({ ...config, mode: 'remote_ws' })
 }
 
 /**

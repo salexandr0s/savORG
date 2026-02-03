@@ -160,9 +160,396 @@ export interface AdapterConfig {
   // For remote_ws mode
   wsUrl?: string
   wsToken?: string
+  wsPassword?: string
+  wsClientId?: GatewayClientId
+  wsClientMode?: GatewayClientMode
+  wsReadonly?: boolean  // If true, skip write methods (chat.send, chat.inject, chat.abort)
+  wsProtocolVersion?: number
+  wsDeviceIdentity?: DeviceIdentity  // For device-based authentication
 
   // For remote_cli_over_ssh mode
   sshHost?: string
   sshUser?: string
   sshKeyPath?: string
+}
+
+// ============================================================================
+// Device Identity Types
+// ============================================================================
+
+/**
+ * Device identity for authenticated connections.
+ * Load from ~/.openclaw/identity/device.json
+ */
+export interface DeviceIdentity {
+  deviceId: string
+  publicKeyPem: string
+  privateKeyPem: string
+}
+
+/**
+ * Device auth token cached after pairing.
+ * Load from ~/.openclaw/identity/device-auth.json
+ */
+export interface DeviceAuthTokenCache {
+  version: 1
+  deviceId: string
+  tokens: Record<string, {
+    token: string
+    role: string
+    scopes: string[]
+    updatedAtMs: number
+  }>
+}
+
+// ============================================================================
+// WebSocket Protocol Types (schema-driven from OpenClaw gateway)
+// ============================================================================
+
+/**
+ * Protocol version - should match gateway's PROTOCOL_VERSION
+ * As of OpenClaw latest: PROTOCOL_VERSION = 3
+ */
+export const WS_PROTOCOL_VERSION = 3
+
+/**
+ * WebSocket request frame
+ */
+export interface WsRequestFrame {
+  type: 'req'
+  id: string
+  method: string
+  params?: unknown
+}
+
+/**
+ * WebSocket response frame
+ */
+export interface WsResponseFrame {
+  type: 'res'
+  id: string
+  ok: boolean
+  payload?: unknown
+  error?: WsErrorShape
+}
+
+/**
+ * WebSocket event frame
+ */
+export interface WsEventFrame {
+  type: 'event'
+  event: string
+  payload?: unknown
+  seq?: number
+  stateVersion?: unknown
+}
+
+/**
+ * WebSocket error shape
+ */
+export interface WsErrorShape {
+  code: string
+  message: string
+  details?: unknown
+  retryable?: boolean
+  retryAfterMs?: number
+}
+
+/**
+ * Gateway client IDs - must match gateway's GATEWAY_CLIENT_IDS
+ */
+export const GATEWAY_CLIENT_IDS = {
+  WEBCHAT_UI: 'webchat-ui',
+  CONTROL_UI: 'openclaw-control-ui',
+  WEBCHAT: 'webchat',
+  CLI: 'cli',
+  GATEWAY_CLIENT: 'gateway-client',
+  MACOS_APP: 'openclaw-macos',
+  IOS_APP: 'openclaw-ios',
+  ANDROID_APP: 'openclaw-android',
+  NODE_HOST: 'node-host',
+  TEST: 'test',
+  FINGERPRINT: 'fingerprint',
+  PROBE: 'openclaw-probe',
+} as const
+
+export type GatewayClientId = (typeof GATEWAY_CLIENT_IDS)[keyof typeof GATEWAY_CLIENT_IDS]
+
+/**
+ * Gateway client modes - must match gateway's GATEWAY_CLIENT_MODES
+ */
+export const GATEWAY_CLIENT_MODES = {
+  WEBCHAT: 'webchat',
+  CLI: 'cli',
+  UI: 'ui',
+  BACKEND: 'backend',
+  NODE: 'node',
+  PROBE: 'probe',
+  TEST: 'test',
+} as const
+
+export type GatewayClientMode = (typeof GATEWAY_CLIENT_MODES)[keyof typeof GATEWAY_CLIENT_MODES]
+
+/**
+ * Connect params (handshake)
+ */
+export interface WsConnectParams {
+  minProtocol: number
+  maxProtocol: number
+  client: {
+    id: GatewayClientId
+    displayName?: string
+    version: string
+    platform: string
+    deviceFamily?: string
+    modelIdentifier?: string
+    mode: GatewayClientMode
+    instanceId?: string
+  }
+  caps?: string[]
+  commands?: string[]
+  permissions?: Record<string, boolean>
+  pathEnv?: string
+  role?: string
+  scopes?: string[]
+  device?: {
+    id: string
+    publicKey: string
+    signature: string
+    signedAt: number
+    nonce?: string
+  }
+  auth?: {
+    token?: string
+    password?: string
+  }
+  locale?: string
+  userAgent?: string
+}
+
+/**
+ * Hello-ok response after successful connect
+ */
+export interface WsHelloOk {
+  type: 'hello-ok'
+  protocol: number
+  server: {
+    version: string
+    commit?: string
+    host?: string
+    connId: string
+  }
+  features: {
+    methods: string[]
+    events: string[]
+  }
+  snapshot: unknown
+  canvasHostUrl?: string
+  auth?: {
+    deviceToken: string
+    role: string
+    scopes: string[]
+    issuedAtMs?: number
+  }
+  policy: {
+    maxPayload: number
+    maxBufferedBytes: number
+    tickIntervalMs: number
+  }
+}
+
+// ============================================================================
+// Chat Types (session-scoped messaging)
+// ============================================================================
+
+/**
+ * chat.send params
+ */
+export interface ChatSendParams {
+  sessionKey: string
+  message: string
+  idempotencyKey: string
+  thinking?: string
+  deliver?: boolean
+  attachments?: unknown[]
+  timeoutMs?: number
+}
+
+/**
+ * chat.send response
+ */
+export interface ChatSendResult {
+  runId: string
+  status: 'started' | 'in_flight' | 'ok' | 'error'
+  summary?: string
+}
+
+/**
+ * chat.history params
+ */
+export interface ChatHistoryParams {
+  sessionKey: string
+  limit?: number
+}
+
+/**
+ * chat.history response
+ */
+export interface ChatHistoryResult {
+  sessionKey: string
+  sessionId?: string
+  messages: ChatMessage[]
+  thinkingLevel?: string
+}
+
+/**
+ * Chat message from history
+ */
+export interface ChatMessage {
+  role: 'user' | 'assistant' | 'system'
+  content: unknown
+  timestamp?: number
+  stopReason?: string
+  usage?: unknown
+}
+
+/**
+ * chat.inject params
+ */
+export interface ChatInjectParams {
+  sessionKey: string
+  message: string
+  label?: string
+}
+
+/**
+ * chat.inject response
+ */
+export interface ChatInjectResult {
+  ok: boolean
+  messageId: string
+}
+
+/**
+ * chat.abort params
+ */
+export interface ChatAbortParams {
+  sessionKey: string
+  runId?: string
+}
+
+/**
+ * chat.abort response
+ */
+export interface ChatAbortResult {
+  ok: boolean
+  aborted: boolean
+  runIds: string[]
+}
+
+/**
+ * Chat event (streaming)
+ */
+export interface ChatEvent {
+  runId: string
+  sessionKey: string
+  seq: number
+  state: 'delta' | 'final' | 'aborted' | 'error'
+  message?: unknown
+  errorMessage?: string
+  usage?: unknown
+  stopReason?: string
+}
+
+// ============================================================================
+// Sessions Types
+// ============================================================================
+
+/**
+ * sessions.list params
+ */
+export interface SessionsListParams {
+  agentId?: string
+  state?: string
+  kind?: string
+  limit?: number
+}
+
+/**
+ * Session entry from sessions.list
+ */
+export interface SessionEntry {
+  key: string
+  sessionId?: string
+  agentId?: string
+  channel?: string
+  chatType?: string
+  model?: string
+  thinkingLevel?: string
+  updatedAt?: number
+  inputTokens?: number
+  outputTokens?: number
+  totalTokens?: number
+  label?: string
+}
+
+/**
+ * sessions.list response
+ */
+export interface SessionsListResult {
+  sessions: SessionEntry[]
+  total?: number
+}
+
+// ============================================================================
+// Extended Adapter Interface for WebSocket
+// ============================================================================
+
+/**
+ * Extended adapter interface with session-scoped chat methods.
+ * Used by WsAdapter for true session messaging.
+ */
+export interface OpenClawWsAdapter extends OpenClawAdapter {
+  /**
+   * Session-scoped chat: send message to specific session
+   */
+  chatSend(params: ChatSendParams): Promise<ChatSendResult>
+
+  /**
+   * Session-scoped chat: get history for session
+   */
+  chatHistory(params: ChatHistoryParams): Promise<ChatHistoryResult>
+
+  /**
+   * Session-scoped chat: inject assistant message into transcript
+   */
+  chatInject(params: ChatInjectParams): Promise<ChatInjectResult>
+
+  /**
+   * Session-scoped chat: abort running chat
+   */
+  chatAbort(params: ChatAbortParams): Promise<ChatAbortResult>
+
+  /**
+   * List sessions with metadata
+   */
+  sessionsList(params?: SessionsListParams): Promise<SessionsListResult>
+
+  /**
+   * Stream chat events for a session/run
+   */
+  streamChatEvents(
+    sessionKey: string,
+    callback: (event: ChatEvent) => void
+  ): () => void
+
+  /**
+   * Check if connected
+   */
+  isConnected(): boolean
+
+  /**
+   * Disconnect from gateway
+   */
+  disconnect(): Promise<void>
 }

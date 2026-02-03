@@ -12,8 +12,12 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/"
   },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
   "devDependencies": {
     "@types/node": "^20.11.0",
+    "@types/ws": "^8.5.10",
     "typescript": "^5.4.0"
   }
 }

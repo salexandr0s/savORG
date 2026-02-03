@@ -87,6 +87,10 @@ export type ActionKind =
   | 'data.export'
   | 'data.import'
   | 'data.reset'
+  // Console actions (operator → agent/session messaging)
+  | 'console.agent.chat'       // Agent-scoped (routes by agentId)
+  | 'console.agent.turn'
+  | 'console.session.chat'     // Session-scoped (routes by sessionKey, TRUE injection)
   // Generic actions (fallbacks)
   | 'action.safe'
   | 'action.caution'
@@ -488,6 +492,26 @@ export const ACTION_POLICIES: Record<ActionKind, ActionPolicy> = {
     requiresApproval: true,
     approvalType: 'risky_action',
     description: 'Reset all data',
+  },
+
+  // Console actions (operator → agent/session messaging)
+  'console.agent.chat': {
+    riskLevel: 'caution',
+    confirmMode: 'CONFIRM',
+    requiresApproval: false,
+    description: 'Message agent (routes by agentId, not session-scoped)',
+  },
+  'console.agent.turn': {
+    riskLevel: 'caution',
+    confirmMode: 'CONFIRM',
+    requiresApproval: false,
+    description: 'Spawn agent turn with task',
+  },
+  'console.session.chat': {
+    riskLevel: 'caution',
+    confirmMode: 'CONFIRM',
+    requiresApproval: false,
+    description: 'Message session (routes by sessionKey, TRUE session injection)',
   },
 
   // Generic fallbacks

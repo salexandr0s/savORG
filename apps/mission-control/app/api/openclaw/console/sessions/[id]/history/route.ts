@@ -1,0 +1,128 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/db'
+
+// ============================================================================
+// TYPES
+// ============================================================================
+
+interface HistoryMessage {
+  id: string
+  ts: Date
+  type: string
+  actor: string
+  summary: string
+  role: 'operator' | 'agent' | 'system'
+  payload?: Record<string, unknown>
+}
+
+interface HistoryResponse {
+  ok: boolean
+  source: 'activities' | 'gateway'
+  messages: HistoryMessage[]
+  sessionId: string
+  agentId: string
+}
+
+// ============================================================================
+// GET /api/openclaw/console/sessions/[id]/history
+// ============================================================================
+
+/**
+ * Get session history/transcript.
+ *
+ * Currently builds history from activities table since no CLI command exists.
+ * Future: May add gateway HTTP endpoint for true transcript.
+ *
+ * Query params:
+ * - limit: Max messages (default 200)
+ *
+ * Read-only - no governor required.
+ */
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id: sessionId } = await params
+  const { searchParams } = new URL(request.url)
+  const limit = Math.min(Number(searchParams.get('limit') ?? 200), 500)
+
+  try {
+    // Verify session exists
+    const session = await prisma.agentSession.findUnique({
+      where: { sessionId },
+    })
+
+    if (!session) {
+      return NextResponse.json(
+        { ok: false, error: 'Session not found' },
+        { status: 404 }
+      )
+    }
+
+    // Build history from activities related to this session
+    // Filter by entityId matching sessionId or entityType 'session'
+    const activities = await prisma.activity.findMany({
+      where: {
+        OR: [
+          // Activities directly about this session
+          { entityType: 'session', entityId: sessionId },
+          // Chat activities for this session
+          {
+            type: 'openclaw.chat.send',
+            payloadJson: { contains: sessionId },
+          },
+          // Agent activities for this agent (fallback)
+          { entityType: 'agent', entityId: session.agentId },
+        ],
+      },
+      orderBy: { ts: 'asc' },
+      take: limit,
+    })
+
+    // Map activities to history messages
+    const messages: HistoryMessage[] = activities.map((a) => {
+      // Determine role based on actor and type
+      let role: 'operator' | 'agent' | 'system' = 'system'
+      if (a.actor.startsWith('operator:') || a.actor === 'user') {
+        role = 'operator'
+      } else if (a.actor.startsWith('agent:') || a.type.includes('.response')) {
+        role = 'agent'
+      }
+
+      let payload: Record<string, unknown> | undefined
+      try {
+        payload = a.payloadJson ? JSON.parse(a.payloadJson) : undefined
+      } catch {
+        // Ignore parse errors
+      }
+
+      return {
+        id: a.id,
+        ts: a.ts,
+        type: a.type,
+        actor: a.actor,
+        summary: a.summary,
+        role,
+        payload,
+      }
+    })
+
+    const response: HistoryResponse = {
+      ok: true,
+      source: 'activities',
+      messages,
+      sessionId,
+      agentId: session.agentId,
+    }
+
+    return NextResponse.json(response)
+  } catch (err) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: err instanceof Error ? err.message : 'Failed to fetch history',
+      },
+      { status: 500 }
+    )
+  }
+}
