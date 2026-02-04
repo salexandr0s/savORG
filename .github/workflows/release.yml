@@ -29,7 +29,7 @@ jobs:
 
       - name: Package App
         run: |
-          cd apps/clawhub-mac/build/Release
+          cd apps/clawhub-mac/build/Build/Products/Release
           # Create zip with the app
           zip -r -y ClawHub-${{ github.ref_name }}-macos.zip ClawHub.app
           # Show what we built
@@ -39,7 +39,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mac-app
-          path: apps/clawhub-mac/build/Release/ClawHub-*.zip
+          path: apps/clawhub-mac/build/Build/Products/Release/ClawHub-*.zip
           retention-days: 5
 
   create-release:
