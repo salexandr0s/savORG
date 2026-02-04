@@ -30,9 +30,9 @@ export const ALLOWED_COMMANDS = {
   'status.json': { args: ['gateway', 'status', '--json'], danger: false, description: 'Get gateway status (JSON output)' },
   'probe': { args: ['gateway', 'probe'], danger: false, description: 'Probe gateway connectivity' },
 
-  // Doctor
+  // Doctor (note: openclaw doctor doesn't support --json flag)
   'doctor': { args: ['doctor'], danger: false, description: 'Run diagnostics' },
-  'doctor.json': { args: ['doctor', '--json'], danger: false, description: 'Run diagnostics (JSON output)' },
+  'doctor.json': { args: ['doctor'], danger: false, description: 'Run diagnostics (text output, JSON not supported)' },
   'doctor.fix': { args: ['doctor', '--fix'], danger: true, description: 'Run diagnostics with auto-fix' },
 
   // Gateway Control
@@ -44,10 +44,17 @@ export const ALLOWED_COMMANDS = {
   'logs': { args: ['logs'], danger: false, description: 'View logs' },
   'logs.tail': { args: ['logs', '--follow'], danger: false, description: 'Tail logs' },
 
+  // Cache & Sessions
+  'cache.clear': { args: ['reset', '--scope', 'config', '--yes', '--non-interactive', '--dry-run'], danger: true, description: 'Clear cached config (dry-run preview)' },
+  'sessions.reset': { args: ['reset', '--scope', 'config+creds+sessions', '--yes', '--non-interactive', '--dry-run'], danger: true, description: 'Reset sessions (dry-run preview)' },
+
   // Security Audit (documented at docs.openclaw.ai/gateway/security)
   'security.audit': { args: ['security', 'audit'], danger: false, description: 'Run security audit' },
+  'security.audit.json': { args: ['security', 'audit', '--json'], danger: false, description: 'Run security audit (JSON output)' },
   'security.audit.deep': { args: ['security', 'audit', '--deep'], danger: false, description: 'Run deep security audit with live probe' },
+  'security.audit.deep.json': { args: ['security', 'audit', '--deep', '--json'], danger: false, description: 'Run deep security audit (JSON output)' },
   'security.audit.fix': { args: ['security', 'audit', '--fix'], danger: true, description: 'Run security audit and apply safe guardrails' },
+  'security.audit.fix.json': { args: ['security', 'audit', '--fix', '--json'], danger: true, description: 'Run security audit and apply fixes (JSON output)' },
 
   // Extended Status (documented at docs.openclaw.ai/gateway/troubleshooting)
   'status.all': { args: ['status', '--all'], danger: false, description: 'Comprehensive status report (redacts secrets)' },
@@ -77,6 +84,12 @@ export const ALLOWED_COMMANDS = {
   'plugins.enable': { args: ['plugins', 'enable'], danger: true, description: 'Enable a plugin' },
   'plugins.disable': { args: ['plugins', 'disable'], danger: true, description: 'Disable a plugin' },
   'plugins.config': { args: ['plugins', 'config'], danger: true, description: 'Configure a plugin' },
+
+  // Models Management
+  'models.list.json': { args: ['models', 'list', '--json'], danger: false, description: 'List configured models (JSON output)' },
+  'models.list.all.json': { args: ['models', 'list', '--all', '--json'], danger: false, description: 'List all available models (JSON output)' },
+  'models.status.json': { args: ['models', 'status', '--json'], danger: false, description: 'Get model configuration status (JSON output)' },
+  'models.status.probe.json': { args: ['models', 'status', '--probe', '--json'], danger: false, description: 'Get model status with live auth probe (JSON output)' },
 } as const
 
 export type AllowedCommandId = keyof typeof ALLOWED_COMMANDS
