@@ -1,5 +1,5 @@
 {
-  "name": "@clawhub/adapters-openclaw",
+  "name": "@clawcontrol/adapters-openclaw",
   "version": "0.1.0",
   "private": true,
   "main": "./src/index.ts",

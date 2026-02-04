@@ -1,5 +1,5 @@
 {
-  "name": "savorg",
+  "name": "clawcontrol",
   "private": true,
   "packageManager": "npm@10.1.0",
   "workspaces": [
@@ -11,14 +11,14 @@
   },
   "scripts": {
     "dev": "turbo dev",
-    "build": "turbo build",
+    "build": "turbo build --concurrency=1",
     "lint": "turbo lint",
     "test": "turbo test",
-    "typecheck": "turbo typecheck",
-    "db:migrate": "npm run db:migrate --workspace=mission-control",
-    "db:push": "npm run db:push --workspace=mission-control",
-    "db:seed": "npm run db:seed --workspace=mission-control",
-    "db:studio": "npm run db:studio --workspace=mission-control",
+    "typecheck": "turbo typecheck --concurrency=1",
+    "db:migrate": "npm run db:migrate --workspace=clawcontrol",
+    "db:push": "npm run db:push --workspace=clawcontrol",
+    "db:seed": "npm run db:seed --workspace=clawcontrol",
+    "db:studio": "npm run db:studio --workspace=clawcontrol",
     "clean": "turbo clean && rm -rf node_modules"
   },
   "devDependencies": {

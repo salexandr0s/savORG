@@ -1,4 +1,4 @@
-# Contributing to SAVORG Mission Control
+# Contributing to clawcontrol
 
 Thank you for your interest in contributing! This document provides guidelines for contributing to the project.
 
@@ -7,7 +7,7 @@ Thank you for your interest in contributing! This document provides guidelines f
 ## Getting Started
 
 1. Fork the repository
-2. Clone your fork: `git clone https://github.com/YOUR-USERNAME/savorg.git`
+2. Clone your fork: `git clone https://github.com/YOUR-USERNAME/clawcontrol.git`
 3. Install dependencies: `npm install`
 4. Create a branch: `git checkout -b feature/your-feature`
 
@@ -68,7 +68,7 @@ refactor: simplify Governor policy lookup
 ### File Organization
 
 ```
-apps/mission-control/
+apps/clawcontrol/
 ├── app/                 # Next.js app router pages
 │   ├── (dashboard)/     # Dashboard layout group
 │   └── api/             # API routes
@@ -183,14 +183,14 @@ Include:
 
 ### API Routes
 
-1. Create route in `apps/mission-control/app/api/`
+1. Create route in `apps/clawcontrol/app/api/`
 2. Add Governor enforcement for mutations
 3. Log activities for significant actions
 4. Add to README if user-facing
 
 ### UI Pages
 
-1. Create page in `apps/mission-control/app/(dashboard)/`
+1. Create page in `apps/clawcontrol/app/(dashboard)/`
 2. Add server component for data fetching
 3. Add client component for interactivity
 4. Add navigation item in `rail-nav.tsx`
@@ -204,7 +204,7 @@ Include:
 
 ### Workspace Directories
 
-1. Add to `ALLOWED_SUBDIRS` in `lib/workspace.ts`
+1. Add to `ALLOWED_SUBDIRS` in `apps/clawcontrol/lib/workspace.ts`
 2. Add mock data in `packages/core/src/mocks/`
 3. Update `docs/PATH_POLICY.md`
 

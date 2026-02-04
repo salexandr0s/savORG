@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# ClawHub / Mission Control - Initial Setup
+# clawcontrol - Initial Setup
 # =============================================================================
 # Run this once after cloning to initialize the database and dependencies.
 #
@@ -15,10 +15,10 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # App directories
-CLAWHUB_DIR="$SCRIPT_DIR/apps/clawhub"
-BACKEND_DIR="$SCRIPT_DIR/apps/mission-control"
-DATA_DIR="$CLAWHUB_DIR/data"
-DB_FILE="$DATA_DIR/mission-control.db"
+CLAWCONTROL_DIR="$SCRIPT_DIR/apps/clawcontrol"
+BACKEND_DIR="$SCRIPT_DIR/apps/clawcontrol"
+DATA_DIR="$CLAWCONTROL_DIR/data"
+DB_FILE="$DATA_DIR/clawcontrol.db"
 
 # Colors
 RED='\033[0;31m'
@@ -29,7 +29,7 @@ NC='\033[0m'
 
 echo ""
 echo "╔═══════════════════════════════════════╗"
-echo "║         ClawHub Setup Script          ║"
+echo "║        clawcontrol Setup Script        ║"
 echo "╚═══════════════════════════════════════╝"
 echo ""
 
@@ -63,7 +63,7 @@ done
 # ─────────────────────────────────────────────────────────────────────────────
 if [[ "$SEED_ONLY" == "true" ]]; then
   echo -e "${YELLOW}Running seed only...${NC}"
-  cd "$CLAWHUB_DIR"
+  cd "$CLAWCONTROL_DIR"
   npm run db:seed
   echo -e "${GREEN}✓ Seed complete!${NC}"
   exit 0
@@ -117,7 +117,7 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BLUE}Running database migrations...${NC}"
-cd "$CLAWHUB_DIR"
+cd "$CLAWCONTROL_DIR"
 
 # Generate Prisma client
 npx prisma generate

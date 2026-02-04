@@ -2,7 +2,7 @@
  * Governor - Central Policy Engine for Protected Actions
  *
  * Defines risk levels, confirmation requirements, and approval policies
- * for all actions in the SAVORG system. This is the single source of truth
+ * for all actions in the CLAWCONTROL system. This is the single source of truth
  * for "what is dangerous".
  */
 

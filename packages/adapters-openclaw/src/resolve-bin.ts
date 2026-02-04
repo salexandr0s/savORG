@@ -4,7 +4,7 @@
  * Verifies that the `openclaw` CLI is available on PATH.
  * This project requires OpenClaw only (no legacy binary support).
  *
- * If openclaw is not found, Mission Control runs in demo mode.
+ * If openclaw is not found, clawcontrol runs in demo mode.
  */
 
 import { spawn } from 'child_process'

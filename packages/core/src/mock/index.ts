@@ -1,5 +1,5 @@
 /**
- * Mock data fixtures for Mission Control
+ * Mock data fixtures for clawcontrol
  *
  * Single source of truth for all mock data used during development.
  * These fixtures match the exact shape of the database models.
@@ -48,7 +48,7 @@ export const mockWorkOrders: WorkOrder[] = [
     goalMd: 'Implement theme switching with system preference detection.',
     state: 'review',
     priority: 'P2',
-    owner: 'savorgceo',
+    owner: 'clawcontrolceo',
     routingTemplate: 'default_routing',
     blockedReason: null,
     createdAt: daysAgo(5),
@@ -76,7 +76,7 @@ export const mockWorkOrders: WorkOrder[] = [
     goalMd: 'Migrate users table to support multi-tenant architecture.',
     state: 'blocked',
     priority: 'P1',
-    owner: 'savorgceo',
+    owner: 'clawcontrolceo',
     routingTemplate: 'migration_routing',
     blockedReason: 'Waiting for DBA approval on schema changes',
     createdAt: daysAgo(7),
@@ -104,7 +104,7 @@ export const mockWorkOrders: WorkOrder[] = [
     goalMd: 'Set up transactional email service with templates for common events.',
     state: 'shipped',
     priority: 'P2',
-    owner: 'savorgceo',
+    owner: 'clawcontrolceo',
     routingTemplate: 'default_routing',
     blockedReason: null,
     createdAt: daysAgo(14),
@@ -787,7 +787,7 @@ const slackConfigSchema: PluginConfigSchema = {
   properties: {
     webhookUrl: { type: 'string', description: 'Slack Webhook URL', required: true },
     channel: { type: 'string', description: 'Default channel', required: true },
-    username: { type: 'string', description: 'Bot username', default: 'SAVORG' },
+    username: { type: 'string', description: 'Bot username', default: 'CLAWCONTROL' },
     iconEmoji: { type: 'string', description: 'Bot icon emoji', default: ':robot_face:' },
   },
   required: ['webhookUrl', 'channel'],
@@ -798,13 +798,13 @@ export const mockPluginConfigs: Record<string, Record<string, unknown>> = {
   plugin_01: {},
   plugin_02: {
     token: 'ghp_****************************',
-    org: 'savorg',
+    org: 'clawcontrol',
     autoAssign: true,
   },
   plugin_03: {
     webhookUrl: 'https://hooks.slack.com/services/T00/B00/XXXX',
     channel: '#alerts',
-    username: 'SAVORG Bot',
+    username: 'CLAWCONTROL Bot',
     iconEmoji: ':robot_face:',
   },
 }
@@ -831,11 +831,11 @@ export const mockPlugins: Plugin[] = [
     name: 'github-integration',
     description: 'GitHub API integration for PRs, issues, and actions',
     version: '2.1.0',
-    author: 'savorg',
+    author: 'clawcontrol',
     enabled: true,
     status: 'active',
     sourceType: 'npm',
-    npmSpec: '@savorg/github-mcp@^2.1.0',
+    npmSpec: '@clawcontrol/github-mcp@^2.1.0',
     hasConfig: true,
     configSchema: githubConfigSchema,
     configJson: mockPluginConfigs.plugin_02,
@@ -867,11 +867,11 @@ export const mockPlugins: Plugin[] = [
     name: 'local-fs',
     description: 'Local filesystem access for agents',
     version: '0.5.0',
-    author: 'savorg',
+    author: 'clawcontrol',
     enabled: true,
     status: 'active',
     sourceType: 'local',
-    sourcePath: '/usr/local/lib/savorg/plugins/local-fs',
+    sourcePath: '/usr/local/lib/clawcontrol/plugins/local-fs',
     hasConfig: false,
     doctorResult: healthyDoctor(0),
     restartRequired: false,
@@ -889,7 +889,7 @@ export const mockPlugins: Plugin[] = [
     sourceType: 'git',
     sourcePath: 'https://github.com/compound-eng/db-mcp.git#v1.1.0',
     hasConfig: true,
-    configJson: { connectionString: 'postgres://localhost:5432/savorg' },
+    configJson: { connectionString: 'postgres://localhost:5432/clawcontrol' },
     doctorResult: undefined, // Never checked
     restartRequired: true,
     lastError: 'Connection refused: database not running',
@@ -1019,7 +1019,7 @@ export const mockFileContents: Record<string, string> = {
   ws_01: `# AGENTS.md - Global Agent Configuration
 
 ## Overview
-This document defines the global behavior and constraints for all SAVORG agents.
+This document defines the global behavior and constraints for all CLAWCONTROL agents.
 
 ## Core Principles
 1. **Safety First** - Never take destructive actions without approval
@@ -1202,7 +1202,7 @@ steps:
   - name: create-snapshot
     command: pg_dump
     args:
-      database: savorg_prod
+      database: clawcontrol_prod
       format: custom
       output: /backups/snapshot.dump
     timeout: 300000
@@ -1211,7 +1211,7 @@ steps:
     command: aws_s3_sync
     args:
       source: /backups/
-      bucket: savorg-backups
+      bucket: clawcontrol-backups
       prefix: "{{date}}"
     timeout: 600000
     requires_approval: false

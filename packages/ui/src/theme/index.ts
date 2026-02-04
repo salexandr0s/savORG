@@ -1,7 +1,7 @@
 /**
  * Theme tokens and utilities
  *
- * Canonical color, spacing, and typography definitions for Mission Control
+ * Canonical color, spacing, and typography definitions for clawcontrol
  */
 
 import { clsx, type ClassValue } from 'clsx'

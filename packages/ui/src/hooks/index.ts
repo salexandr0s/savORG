@@ -1,7 +1,7 @@
 /**
  * UI Hooks
  *
- * Shared hooks for Mission Control components
+ * Shared hooks for clawcontrol components
  */
 
 // Placeholder exports - hooks will be added as needed

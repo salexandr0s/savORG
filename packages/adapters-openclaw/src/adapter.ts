@@ -95,9 +95,9 @@ class MockAdapter implements OpenClawAdapter {
   async *tailLogs(options?: { limit?: number }): AsyncGenerator<string> {
     const logs = [
       '[INFO] Gateway started',
-      '[INFO] Client connected: savorgBUILD',
-      '[INFO] Client connected: savorgQA',
-      '[INFO] Agent ready: savorgCEO',
+      '[INFO] Client connected: clawcontrolBUILD',
+      '[INFO] Client connected: clawcontrolQA',
+      '[INFO] Agent ready: clawcontrolCEO',
       '[DEBUG] Health check passed',
     ]
     for (const log of logs.slice(0, options?.limit ?? 10)) {

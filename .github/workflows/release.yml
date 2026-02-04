@@ -23,15 +23,15 @@ jobs:
 
       - name: Build Mac App
         run: |
-          cd apps/clawhub-mac
+          cd apps/clawcontrol-mac
           chmod +x build.sh
           ./build.sh Release
 
       - name: Package App
         run: |
-          cd apps/clawhub-mac/build/Build/Products/Release
+          cd apps/clawcontrol-mac/build/Build/Products/Release
           # Create zip with the app
-          zip -r -y ClawHub-${{ github.ref_name }}-macos.zip ClawHub.app
+          zip -r -y clawcontrol-${{ github.ref_name }}-macos.zip clawcontrol.app
           # Show what we built
           ls -la
 
@@ -39,7 +39,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mac-app
-          path: apps/clawhub-mac/build/Build/Products/Release/ClawHub-*.zip
+          path: apps/clawcontrol-mac/build/Build/Products/Release/clawcontrol-*.zip
           retention-days: 5
 
   create-release:
@@ -68,20 +68,20 @@ jobs:
             ## Installation
 
             ### Mac App (requires backend)
-            1. Download `ClawHub-${{ github.ref_name }}-macos.zip`
-            2. Extract and move `ClawHub.app` to your Applications folder
+            1. Download `clawcontrol-${{ github.ref_name }}-macos.zip`
+            2. Extract and move `clawcontrol.app` to your Applications folder
             3. **Important**: The Mac app requires the backend to be running:
                ```bash
                git clone https://github.com/${{ github.repository }}.git
-               cd ClawHub
+               cd clawcontrol
                npm install && npm run db:migrate && npm run start
                ```
-            4. Open ClawHub.app (first time: right-click → Open to bypass Gatekeeper)
+            4. Open clawcontrol.app (first time: right-click → Open to bypass Gatekeeper)
 
             ### Web Only (no Xcode required)
             ```bash
             git clone https://github.com/${{ github.repository }}.git
-            cd ClawHub
+            cd clawcontrol
             npm install && npm run db:migrate && npm run dev
             # Open http://localhost:3000
             ```
@@ -89,7 +89,7 @@ jobs:
             ### Full Setup with Launcher
             ```bash
             git clone https://github.com/${{ github.repository }}.git
-            cd ClawHub
+            cd clawcontrol
             npm install && npm run db:migrate
             ./start.sh --build
             ```

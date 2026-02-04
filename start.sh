@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# Mission Control Launcher
+# clawcontrol Launcher
 # =============================================================================
 # Starts the backend server and launches the Mac app together.
 #
@@ -13,11 +13,11 @@
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-APP_PATH="$SCRIPT_DIR/apps/mission-control-mac/build/Release/MissionControl.app"
-CLAWHUB_DIR="$SCRIPT_DIR/apps/clawhub"
-BACKEND_DIR="$SCRIPT_DIR/apps/mission-control"
-DATA_DIR="$CLAWHUB_DIR/data"
-DB_FILE="$DATA_DIR/mission-control.db"
+APP_PATH="$SCRIPT_DIR/apps/clawcontrol-mac/build/Build/Products/Release/clawcontrol.app"
+CLAWCONTROL_DIR="$SCRIPT_DIR/apps/clawcontrol"
+BACKEND_DIR="$SCRIPT_DIR/apps/clawcontrol"
+DATA_DIR="$CLAWCONTROL_DIR/data"
+DB_FILE="$DATA_DIR/clawcontrol.db"
 
 # Colors for output
 RED='\033[0;31m'
@@ -27,7 +27,7 @@ NC='\033[0m' # No Color
 
 echo ""
 echo "╔═══════════════════════════════════════╗"
-echo "║       Mission Control Launcher        ║"
+echo "║          clawcontrol Launcher         ║"
 echo "╚═══════════════════════════════════════╝"
 echo ""
 
@@ -59,7 +59,7 @@ done
 # Build if requested
 if [[ "$BUILD_FIRST" == "true" ]]; then
   echo -e "${YELLOW}Building Mac app...${NC}"
-  cd "$SCRIPT_DIR/apps/mission-control-mac"
+  cd "$SCRIPT_DIR/apps/clawcontrol-mac"
   ./build.sh Release
   cd "$SCRIPT_DIR"
   echo -e "${GREEN}Build complete!${NC}"
@@ -103,7 +103,7 @@ cleanup() {
   echo ""
   echo -e "${YELLOW}Shutting down...${NC}"
   kill $BACKEND_PID 2>/dev/null || true
-  echo -e "${GREEN}Mission Control stopped.${NC}"
+  echo -e "${GREEN}clawcontrol stopped.${NC}"
   exit 0
 }
 trap cleanup SIGINT SIGTERM EXIT
@@ -132,7 +132,7 @@ echo -e "${GREEN}Backend ready at http://127.0.0.1:3000${NC}"
 # Launch app or show browser instructions
 if [[ "$WEB_ONLY" == "true" ]]; then
   echo ""
-  echo -e "${GREEN}Mission Control is running!${NC}"
+  echo -e "${GREEN}clawcontrol is running!${NC}"
   echo "Open http://localhost:3000 in your browser."
   echo ""
   echo "Press Ctrl+C to stop."
@@ -140,7 +140,7 @@ else
   echo ""
   echo -e "${YELLOW}Launching Mac app...${NC}"
   open "$APP_PATH"
-  echo -e "${GREEN}Mission Control is running!${NC}"
+  echo -e "${GREEN}clawcontrol is running!${NC}"
   echo ""
   echo "Press Ctrl+C to stop."
 fi

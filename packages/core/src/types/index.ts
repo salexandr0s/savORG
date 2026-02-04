@@ -1,5 +1,5 @@
 /**
- * Core domain types for Mission Control
+ * Core domain types for clawcontrol
  */
 
 // Work Order types
@@ -13,7 +13,7 @@ export type WorkOrderState =
 
 export type Priority = 'P0' | 'P1' | 'P2' | 'P3'
 
-export type Owner = 'user' | 'savorgceo'
+export type Owner = 'user' | 'clawcontrolceo'
 
 export interface WorkOrder {
   id: string

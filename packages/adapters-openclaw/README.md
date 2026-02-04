@@ -1,6 +1,6 @@
-# @savorg/adapters-openclaw
+# @clawcontrol/adapters-openclaw
 
-OpenClaw adapter implementations for savORG.
+OpenClaw adapter implementations for clawcontrol.
 
 ## Agent Messaging
 

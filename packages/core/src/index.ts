@@ -1,8 +1,8 @@
 /**
- * @savorg/core
+ * @clawcontrol/core
  *
  * Shared domain types, state machines, validation, and invariants
- * for the SAVORG Mission Control system.
+ * for the clawcontrol system.
  */
 
 export * from './types'

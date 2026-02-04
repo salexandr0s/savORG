@@ -41,7 +41,7 @@ export const AGENT_TEMPLATE_SCHEMA = {
     },
     namingPattern: {
       type: 'string',
-      default: 'savorg{{ROLE}}',
+      default: 'clawcontrol{{ROLE}}',
       description: 'Pattern for generating agent name (supports {{ROLE}}, {{CUSTOM_NAME}})',
     },
     sessionKeyPattern: {

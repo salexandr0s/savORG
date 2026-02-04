@@ -1,4 +1,4 @@
-# ClawHub
+# clawcontrol
 
 **Local-first ops console for AI agent orchestration.**
 
@@ -10,35 +10,35 @@ Built on [OpenClaw](https://github.com/openclaw/openclaw). Track work orders, go
 
 ### Option A: Web Only (Simplest)
 ```bash
-git clone https://github.com/salexandr0s/savORG.git
-cd savorg
+git clone https://github.com/salexandr0s/clawcontrol.git
+cd clawcontrol
 npm install && npm run db:migrate && npm run dev
 # → http://localhost:3000
 ```
 
 ### Option B: Mac App + Backend
 ```bash
-git clone https://github.com/salexandr0s/savORG.git
-cd savorg
+git clone https://github.com/salexandr0s/clawcontrol.git
+cd clawcontrol
 npm install && npm run db:migrate
 ./start.sh --build    # Builds Mac app and starts everything
 ```
 
 ### Option C: Download Release
-1. Download `MissionControl-vX.X.X-macos.zip` from [Releases](../../releases)
-2. Extract and move `MissionControl.app` to Applications
+1. Download `clawcontrol-vX.X.X-macos.zip` from [Releases](../../releases)
+2. Extract and move `clawcontrol.app` to Applications
 3. Start the backend:
    ```bash
-   git clone https://github.com/salexandr0s/savORG.git
-   cd savorg && npm install && npm run db:migrate && npm run start
+   git clone https://github.com/salexandr0s/clawcontrol.git
+   cd clawcontrol && npm install && npm run db:migrate && npm run start --workspace=clawcontrol
    ```
-4. Open MissionControl.app (first time: right-click → Open)
+4. Open clawcontrol.app (first time: right-click → Open)
 
 > **Note**: The Mac app is a native wrapper that connects to the backend at `localhost:3000`. The backend must be running for the app to work.
 
 ---
 
-## Why Mission Control
+## Why clawcontrol
 
 | Problem | Solution |
 |---------|----------|
@@ -110,7 +110,7 @@ openclaw --version  # 0.1.0+ (for operational mode)
 
 ## Security
 
-Mission Control is designed for **local-first, single-user** operation.
+clawcontrol is designed for **local-first, single-user** operation.
 
 ### Governor System
 
@@ -144,21 +144,21 @@ See [docs/SECURITY.md](docs/SECURITY.md) for full threat model.
 ## Project Structure
 
 ```
-savorg/
+clawcontrol/
 ├── start.sh                    # Launcher script (backend + Mac app)
 ├── stop.sh                     # Stop all processes
 ├── apps/
-│   ├── mission-control/        # Next.js dashboard
+│   ├── clawcontrol/            # Next.js app (UI + API)
 │   │   ├── app/                # Pages + API routes
 │   │   ├── lib/                # Repos, adapters, utilities
-│   │   └── prisma/             # Database schema
-│   └── mission-control-mac/    # Native macOS app wrapper
+│   │   ├── prisma/             # Database schema + migrations
+│   │   └── data/               # SQLite (gitignored)
+│   └── clawcontrol-mac/        # Native macOS app wrapper
 ├── packages/
 │   ├── core/                   # Types, Governor, mocks
 │   ├── ui/                     # Shared components
 │   └── adapters-openclaw/      # CLI adapter
 ├── docs/                       # Documentation
-└── data/                       # SQLite (gitignored)
 ```
 
 ---
@@ -170,10 +170,10 @@ savorg/
 | `./start.sh` | Start backend + Mac app (app must be built) |
 | `./start.sh --build` | Build Mac app, then start everything |
 | `./start.sh --web` | Start backend only (use browser) |
-| `./stop.sh` | Stop all Mission Control processes |
+| `./stop.sh` | Stop all clawcontrol processes |
 | `npm run dev` | Development server (hot reload) |
 | `npm run build` | Production build |
-| `npm run start` | Production server |
+| `npm run start --workspace=clawcontrol` | Production server |
 | `npm run typecheck` | TypeScript check |
 | `npm run db:migrate` | Apply database migrations |
 | `npm run db:studio` | Open Prisma Studio |

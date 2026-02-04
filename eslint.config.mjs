@@ -43,7 +43,7 @@ export default tseslint.config(
 
   // Next.js app - additional config
   {
-    files: ['apps/mission-control/**/*.{js,jsx,ts,tsx}'],
+    files: ['apps/clawcontrol/**/*.{js,jsx,ts,tsx}'],
     languageOptions: {
       globals: {
         React: 'readonly',

@@ -1,7 +1,7 @@
 /**
- * @savorg/ui
+ * @clawcontrol/ui
  *
- * Canonical UI components for Mission Control
+ * Canonical UI components for clawcontrol
  * Design system based on ops-dark theme
  */
 

@@ -1,7 +1,7 @@
 /**
  * UI Components
  *
- * All canonical components for Mission Control
+ * All canonical components for clawcontrol
  */
 
 export {

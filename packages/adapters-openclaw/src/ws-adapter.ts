@@ -284,7 +284,7 @@ export class WsAdapter implements OpenClawWsAdapter {
       maxProtocol: this.protocolVersion,
       client: {
         id: this.clientId,
-        displayName: 'Mission Control',
+        displayName: 'clawcontrol',
         version: CLIENT_VERSION,
         platform: CLIENT_PLATFORM,
         mode: this.clientMode,

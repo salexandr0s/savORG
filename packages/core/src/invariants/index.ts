@@ -3,11 +3,11 @@
  */
 
 /**
- * Validate agent name format: savorg + ROLE (uppercase letters/digits)
- * Examples: savorgBUILD, savorgQA, savorgOPS
+ * Validate agent name format: clawcontrol + ROLE (uppercase letters/digits)
+ * Examples: clawcontrolBUILD, clawcontrolQA, clawcontrolOPS
  */
 export function isValidAgentName(name: string): boolean {
-  return /^savorg[A-Z0-9]{2,16}$/.test(name)
+  return /^clawcontrol[A-Z0-9]{2,16}$/.test(name)
 }
 
 /**

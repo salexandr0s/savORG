@@ -1,5 +1,5 @@
 /**
- * JSON Schemas for SAVORG configuration files
+ * JSON Schemas for CLAWCONTROL configuration files
  */
 
 export * from './agent-template.schema'
