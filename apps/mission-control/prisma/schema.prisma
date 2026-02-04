@@ -28,6 +28,11 @@ model WorkOrder {
   priority        String   @default("P2") // P0|P1|P2|P3
   owner           String   @default("user") // user|savorgceo
   routingTemplate String   @default("default_routing") @map("routing_template")
+
+  // Workflow chain tracking (NEW)
+  workflowId    String? @map("workflow_id") // e.g., "feature_request"
+  currentStage  Int     @default(0) @map("current_stage")
+
   blockedReason   String?  @map("blocked_reason")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
@@ -43,6 +48,7 @@ model WorkOrder {
   @@index([state])
   @@index([priority])
   @@index([owner])
+  @@index([workflowId])
   @@index([createdAt])
   @@map("work_orders")
 }
@@ -62,6 +68,17 @@ model Operation {
   dependsOnOperationIds   String   @default("[]") @map("depends_on_operation_ids") // JSON array
   wipClass                String   @default("implementation") @map("wip_class")
   blockedReason           String?  @map("blocked_reason")
+
+  // Workflow chain tracking (NEW)
+  workflowId          String?   @map("workflow_id") // e.g., "feature_request"
+  workflowStageIndex  Int       @default(0) @map("workflow_stage_index")
+  iterationCount      Int       @default(0) @map("iteration_count")
+  loopTargetOpId      String?   @map("loop_target_op_id") // for review → build loops
+
+  // Escalation tracking (NEW)
+  escalatedAt         DateTime? @map("escalated_at")
+  escalationReason    String?   @map("escalation_reason")
+
   createdAt               DateTime @default(now()) @map("created_at")
   updatedAt               DateTime @updatedAt @map("updated_at")
 
@@ -74,6 +91,7 @@ model Operation {
   @@index([workOrderId])
   @@index([status])
   @@index([station])
+  @@index([workflowId])
   @@map("operations")
 }
 

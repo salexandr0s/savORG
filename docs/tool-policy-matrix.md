@@ -12,7 +12,7 @@ This matrix maps each agent to its allowed tools. Use this as the source of trut
 | PlanReview | read | Read-only for context. |
 | Build | coding (allowlist) | Write access + local commands. |
 | UI | coding (allowlist) | Write access + local commands. |
-| BuildReview | minimal; exec = deny | Read-only review; request test results if needed. |
+| BuildReview | read, exec (allowlist) | May run `npm test`, `npm run typecheck`, `npm run lint`; never modifies files. |
 | UIReview | minimal; exec = deny | Read-only review; request audit results if needed. |
 | Ops | full (allowlist) | Cron + automation. |
 | Security | minimal; exec = deny | Audit-only; no execution. |
@@ -21,4 +21,4 @@ Recommended denylists:
 - Deny `gateway` and `message` for all non-CEO agents.
 - Deny `group:automation` for all except Ops.
 - Deny `group:web` for all except Research.
-- Deny `group:exec` for Security, Plan, PlanReview, and Reviewers.
+- Deny `group:exec` for Security, Plan, PlanReview, and UIReview.

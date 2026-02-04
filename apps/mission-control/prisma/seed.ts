@@ -10,6 +10,10 @@ import {
   initializeFts,
   rebuildAllIndexes,
 } from '../lib/db/fts'
+import yaml from 'js-yaml'
+import { fileURLToPath } from 'url'
+import path from 'path'
+import fs from 'fs/promises'
 
 const prisma = new PrismaClient()
 
@@ -21,6 +25,151 @@ const now = new Date()
 const hoursAgo = (h: number) => new Date(now.getTime() - h * 60 * 60 * 1000)
 const minsAgo = (m: number) => new Date(now.getTime() - m * 60 * 1000)
 const daysAgo = (d: number) => new Date(now.getTime() - d * 24 * 60 * 60 * 1000)
+
+// ============================================================================
+// SAVORG AGENT SEEDING (from savorg.config.yaml)
+// ============================================================================
+
+type SavorgConfig = {
+  models?: Record<string, { primary?: { model?: string } }>
+  agents?: Record<
+    string,
+    {
+      role?: string
+      model_tier?: string
+      permissions?: Record<string, unknown>
+      actions?: string[]
+      exec_allowlist?: string[]
+    }
+  >
+}
+
+const STATION_BY_AGENT: Record<string, string> = {
+  savorgguard: 'screen',
+  savorgceo: 'strategic',
+  savorgmanager: 'orchestration',
+  savorgplan: 'spec',
+  savorgplanreview: 'spec',
+  savorgresearch: 'spec',
+  savorgbuild: 'build',
+  savorgbuildreview: 'qa',
+  savorgui: 'build',
+  savorguireview: 'qa',
+  savorgops: 'ops',
+  savorgsecurity: 'qa',
+}
+
+const WIP_LIMIT_BY_AGENT: Record<string, number> = {
+  savorgguard: 5,
+  savorgceo: 3,
+  savorgmanager: 5,
+  savorgplan: 3,
+  savorgplanreview: 3,
+  savorgresearch: 3,
+  savorgbuild: 2,
+  savorgbuildreview: 3,
+  savorgui: 2,
+  savorguireview: 3,
+  savorgops: 2,
+  savorgsecurity: 3,
+}
+
+function resolveSavorgConfigPath(): string {
+  const __filename = fileURLToPath(import.meta.url)
+  const __dirname = path.dirname(__filename)
+  return path.resolve(__dirname, '../../../savorg.config.yaml')
+}
+
+function resolvePrimaryModel(config: SavorgConfig, modelTier: string | undefined): string | null {
+  if (!modelTier) return null
+  const model = config.models?.[modelTier]?.primary?.model
+  return typeof model === 'string' && model.trim() ? model : null
+}
+
+function buildCapabilitiesJson(input: {
+  permissions?: Record<string, unknown>
+  actions?: string[]
+  execAllowlist?: string[]
+  agentName: string
+}): string {
+  const caps: Record<string, unknown> = {
+    ...(input.permissions ?? {}),
+    ...(Array.isArray(input.actions) ? { actions: input.actions } : {}),
+  }
+
+  if (Array.isArray(input.execAllowlist)) {
+    caps.exec_allowlist = input.execAllowlist.filter((x): x is string => typeof x === 'string')
+  } else if (input.agentName === 'savorgbuildreview') {
+    // Default (can be overridden in savorg.config.yaml)
+    caps.exec_allowlist = ['npm test', 'npm run typecheck', 'npm run lint']
+  }
+
+  return JSON.stringify(caps)
+}
+
+async function seedSavorgAgentsFromConfig(): Promise<number> {
+  const configPath = resolveSavorgConfigPath()
+  let raw: string
+
+  try {
+    raw = await fs.readFile(configPath, 'utf8')
+  } catch (err) {
+    console.warn(`[seed] savorg.config.yaml not found at ${configPath}; skipping Savorg agent seed`)
+    return 0
+  }
+
+  const parsed = yaml.load(raw) as SavorgConfig | undefined
+  const agents = parsed?.agents
+  if (!agents || typeof agents !== 'object') {
+    console.warn('[seed] savorg.config.yaml missing agents section; skipping Savorg agent seed')
+    return 0
+  }
+
+  let upserted = 0
+
+  for (const [agentName, cfg] of Object.entries(agents)) {
+    const role = typeof cfg?.role === 'string' ? cfg.role : 'unknown'
+    const station = STATION_BY_AGENT[agentName] ?? 'build'
+    const sessionKey = `agent:${agentName}:main`
+    const wipLimit = WIP_LIMIT_BY_AGENT[agentName] ?? 2
+    const model = resolvePrimaryModel(parsed ?? {}, cfg?.model_tier) ?? null
+
+    await prisma.agent.upsert({
+      where: { name: agentName },
+      update: {
+        role,
+        station,
+        sessionKey,
+        wipLimit,
+        model,
+        capabilities: buildCapabilitiesJson({
+          permissions: cfg?.permissions,
+          actions: cfg?.actions,
+          execAllowlist: cfg?.exec_allowlist,
+          agentName,
+        }),
+      },
+      create: {
+        name: agentName,
+        role,
+        station,
+        sessionKey,
+        wipLimit,
+        model,
+        capabilities: buildCapabilitiesJson({
+          permissions: cfg?.permissions,
+          actions: cfg?.actions,
+          execAllowlist: cfg?.exec_allowlist,
+          agentName,
+        }),
+      },
+    })
+
+    upserted++
+  }
+
+  return upserted
+}
 
 async function main() {
   console.log('Seeding database...')
@@ -337,74 +486,8 @@ async function main() {
   // AGENTS
   // ============================================================================
 
-  const agents = await Promise.all([
-    prisma.agent.create({
-      data: {
-        id: 'agent_01',
-        name: 'claw-alpha',
-        role: 'Specification & QA Lead',
-        station: 'spec',
-        status: 'active',
-        sessionKey: 'sess_alpha_001',
-        capabilities: JSON.stringify({ spec: true, qa: true, review: true }),
-        wipLimit: 3,
-        lastSeenAt: minsAgo(2),
-        lastHeartbeatAt: minsAgo(0.5),
-        createdAt: daysAgo(30),
-        updatedAt: minsAgo(2),
-      },
-    }),
-    prisma.agent.create({
-      data: {
-        id: 'agent_02',
-        name: 'claw-beta',
-        role: 'Build Specialist',
-        station: 'build',
-        status: 'active',
-        sessionKey: 'sess_beta_001',
-        capabilities: JSON.stringify({ build: true, deploy: true }),
-        wipLimit: 2,
-        lastSeenAt: minsAgo(1),
-        lastHeartbeatAt: minsAgo(0.3),
-        createdAt: daysAgo(30),
-        updatedAt: minsAgo(1),
-      },
-    }),
-    prisma.agent.create({
-      data: {
-        id: 'agent_03',
-        name: 'claw-gamma',
-        role: 'Frontend Specialist',
-        station: 'build',
-        status: 'active',
-        sessionKey: 'sess_gamma_001',
-        capabilities: JSON.stringify({ build: true, ui: true }),
-        wipLimit: 2,
-        lastSeenAt: minsAgo(5),
-        lastHeartbeatAt: minsAgo(1),
-        createdAt: daysAgo(14),
-        updatedAt: minsAgo(5),
-      },
-    }),
-    prisma.agent.create({
-      data: {
-        id: 'agent_04',
-        name: 'claw-delta',
-        role: 'Ops & Deploy',
-        station: 'ops',
-        status: 'idle',
-        sessionKey: 'sess_delta_001',
-        capabilities: JSON.stringify({ ops: true, deploy: true, monitoring: true }),
-        wipLimit: 2,
-        lastSeenAt: hoursAgo(2),
-        lastHeartbeatAt: hoursAgo(2),
-        createdAt: daysAgo(7),
-        updatedAt: hoursAgo(2),
-      },
-    }),
-  ])
-
-  console.log(`Created ${agents.length} agents`)
+  const seededAgents = await seedSavorgAgentsFromConfig()
+  console.log(`Seeded ${seededAgents} Savorg agents from savorg.config.yaml`)
 
   // ============================================================================
   // APPROVALS

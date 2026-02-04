@@ -14,7 +14,10 @@
 set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_PATH="$SCRIPT_DIR/apps/mission-control-mac/build/Release/MissionControl.app"
+CLAWHUB_DIR="$SCRIPT_DIR/apps/clawhub"
 BACKEND_DIR="$SCRIPT_DIR/apps/mission-control"
+DATA_DIR="$CLAWHUB_DIR/data"
+DB_FILE="$DATA_DIR/mission-control.db"
 
 # Colors for output
 RED='\033[0;31m'
@@ -84,10 +87,9 @@ if [[ ! -d "$BACKEND_DIR/node_modules" ]]; then
 fi
 
 # Check if database exists
-if [[ ! -f "$SCRIPT_DIR/data/mission-control.db" ]]; then
-  echo -e "${YELLOW}Initializing database...${NC}"
-  cd "$BACKEND_DIR"
-  npm run db:migrate
+if [[ ! -f "$DB_FILE" ]]; then
+  echo -e "${YELLOW}Database not found. Running setup...${NC}"
+  "$SCRIPT_DIR/setup.sh"
 fi
 
 # Start backend

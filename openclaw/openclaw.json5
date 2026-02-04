@@ -1,19 +1,39 @@
 {
   // Savorg OpenClaw agent policy template
-  // Update workspace path if this repo lives elsewhere.
-  // Fields like allowlist/exec policies are placeholders; map to your OpenClaw schema.
+  // Copy (or merge) into `~/.openclaw/openclaw.json`, then restart the gateway.
+  //
+  // Notes:
+  // - Many installs use the `main` agent as the CEO. If so, apply the `savorgceo`
+  //   policy below to `main` instead.
+  // - Per-agent tool access is enforced via `agents.list[].tools.allow/deny`.
+  // - Guard MUST have zero tools. Research MUST have web tools.
+
+  // Global tool configuration (agent-level allow/deny still applies)
   tools: {
-    profile: "minimal",
-    elevated: { enabled: false }
+    web: {
+      // Configure provider/limits as needed; empty object enables defaults.
+      search: {},
+    },
+    agentToAgent: {
+      enabled: true,
+      // Keep tight — only agents that must message other agents.
+      allow: ["savorgceo", "savorgmanager"],
+    },
   },
   agents: {
     defaults: {
-      workspace: "/Users/nationalbank/Desktop/savorg",
+      // Workspace root (must contain agents/, skills/, memory/, etc.)
+      workspace: "/Users/savorgserver/clawd",
       tools: { profile: "minimal" },
       heartbeat: {
         // Disabled by default; CEO is enabled below.
         every: "0m",
         prompt: "Read agents/<agent>/HEARTBEAT.md if it exists. If nothing needs attention, reply HEARTBEAT_OK."
+      },
+      // Safety: cap recursion/fan-out
+      subagents: {
+        maxConcurrent: 8,
+        maxDepth: 2
       },
       sandbox: { mode: "off" }
     },
@@ -24,7 +44,12 @@
         heartbeat: { every: "0m", prompt: "Read agents/guard/HEARTBEAT.md and follow it strictly. If nothing needs attention, reply HEARTBEAT_OK." },
         tools: {
           profile: "minimal",
-          deny: ["group:openclaw"]
+          // CRITICAL: Guard must have NO tools.
+          // If your OpenClaw build doesn't support wildcard deny, replace `["*"]`
+          // with an explicit list of tool IDs/groups to block.
+          allow: [],
+          deny: ["*"],
+          exec: { security: "deny", ask: "always" }
         }
       },
       {
@@ -33,7 +58,9 @@
         heartbeat: { every: "1h", prompt: "Read agents/ceo/HEARTBEAT.md and follow it strictly. If nothing needs attention, reply HEARTBEAT_OK." },
         tools: {
           profile: "full",
-          allow: ["group:sessions"]
+          allow: ["group:sessions"],
+          // Recommended: keep automation gated to Ops unless explicitly needed.
+          deny: ["group:automation"]
         }
       },
       {
@@ -42,7 +69,9 @@
         heartbeat: { every: "0m", prompt: "Read agents/manager/HEARTBEAT.md and follow it strictly. If nothing needs attention, reply HEARTBEAT_OK." },
         tools: {
           profile: "minimal",
-          allow: ["group:sessions"]
+          allow: ["group:sessions"],
+          deny: ["gateway", "message", "group:automation", "group:fs", "group:runtime", "group:web", "exec", "browser", "write", "edit"],
+          exec: { security: "deny", ask: "always" }
         }
       },
       {
@@ -50,7 +79,11 @@
         identity: { name: "savorgResearch", emoji: "🔎", description: "Deep research" },
         heartbeat: { every: "0m", prompt: "Read agents/research/HEARTBEAT.md and follow it strictly. If nothing needs attention, reply HEARTBEAT_OK." },
         tools: {
-          allow: ["read", "web_search", "web_fetch"]
+          profile: "minimal",
+          // HIGH: Research needs web access.
+          allow: ["read", "web_search", "web_fetch"],
+          deny: ["exec", "write", "edit", "message", "gateway", "group:automation"],
+          exec: { security: "deny", ask: "always" }
         }
       },
       {
@@ -60,7 +93,8 @@
         tools: {
           profile: "minimal",
           allow: ["read"],
-          deny: ["exec"]
+          deny: ["exec", "write", "edit", "browser", "message", "gateway", "group:automation", "group:web", "group:sessions"],
+          exec: { security: "deny", ask: "always" }
         }
       },
       {
@@ -70,7 +104,8 @@
         tools: {
           profile: "minimal",
           allow: ["read"],
-          deny: ["exec"]
+          deny: ["exec", "write", "edit", "browser", "message", "gateway", "group:automation", "group:web", "group:sessions"],
+          exec: { security: "deny", ask: "always" }
         }
       },
       {
@@ -79,7 +114,9 @@
         heartbeat: { every: "0m", prompt: "Read agents/build/HEARTBEAT.md and follow it strictly. If nothing needs attention, reply HEARTBEAT_OK." },
         tools: {
           profile: "coding",
-          allow: ["group:fs", "group:runtime"]
+          allow: ["group:fs", "group:runtime"],
+          deny: ["message", "gateway", "group:automation", "group:web"],
+          exec: { security: "allowlist", ask: "always" }
         }
       },
       {
@@ -88,8 +125,10 @@
         heartbeat: { every: "0m", prompt: "Read agents/buildreview/HEARTBEAT.md and follow it strictly. If nothing needs attention, reply HEARTBEAT_OK." },
         tools: {
           profile: "minimal",
-          allow: ["read"],
-          deny: ["exec"]
+          allow: ["read", "exec"],
+          deny: ["write", "edit", "browser", "message", "gateway", "group:automation", "group:web"],
+          // Exec is allowlisted at the OpenClaw exec layer (e.g. ~/.openclaw/exec-approvals.json).
+          exec: { security: "allowlist", ask: "always" }
         }
       },
       {
@@ -98,7 +137,9 @@
         heartbeat: { every: "0m", prompt: "Read agents/ui/HEARTBEAT.md and follow it strictly. If nothing needs attention, reply HEARTBEAT_OK." },
         tools: {
           profile: "coding",
-          allow: ["group:fs", "group:runtime"]
+          allow: ["group:fs", "group:runtime"],
+          deny: ["message", "gateway", "group:automation", "group:web"],
+          exec: { security: "allowlist", ask: "always" }
         }
       },
       {
@@ -108,7 +149,8 @@
         tools: {
           profile: "minimal",
           allow: ["read"],
-          deny: ["exec"]
+          deny: ["exec", "write", "edit", "browser", "message", "gateway", "group:automation", "group:web"],
+          exec: { security: "deny", ask: "always" }
         }
       },
       {
@@ -117,7 +159,9 @@
         heartbeat: { every: "0m", prompt: "Read agents/ops/HEARTBEAT.md and follow it strictly. If nothing needs attention, reply HEARTBEAT_OK." },
         tools: {
           profile: "full",
-          allow: ["group:fs", "group:runtime", "cron"]
+          allow: ["group:fs", "group:runtime", "cron"],
+          deny: ["message", "gateway", "group:web"],
+          exec: { security: "allowlist", ask: "always" }
         }
       },
       {
@@ -127,7 +171,8 @@
         tools: {
           profile: "minimal",
           allow: ["read"],
-          deny: ["exec"]
+          deny: ["exec", "write", "edit", "browser", "message", "gateway", "group:automation", "group:web"],
+          exec: { security: "deny", ask: "always" }
         }
       }
     ]
