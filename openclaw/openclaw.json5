@@ -1,0 +1,135 @@
+{
+  // Savorg OpenClaw agent policy template
+  // Update workspace path if this repo lives elsewhere.
+  // Fields like allowlist/exec policies are placeholders; map to your OpenClaw schema.
+  tools: {
+    profile: "minimal",
+    elevated: { enabled: false }
+  },
+  agents: {
+    defaults: {
+      workspace: "/Users/nationalbank/Desktop/savorg",
+      tools: { profile: "minimal" },
+      heartbeat: {
+        // Disabled by default; CEO is enabled below.
+        every: "0m",
+        prompt: "Read agents/<agent>/HEARTBEAT.md if it exists. If nothing needs attention, reply HEARTBEAT_OK."
+      },
+      sandbox: { mode: "off" }
+    },
+    list: [
+      {
+        id: "savorgguard",
+        identity: { name: "savorgGuard", emoji: "🛡️", description: "Input security screener" },
+        heartbeat: { every: "0m", prompt: "Read agents/guard/HEARTBEAT.md and follow it strictly. If nothing needs attention, reply HEARTBEAT_OK." },
+        tools: {
+          profile: "minimal",
+          deny: ["group:openclaw"]
+        }
+      },
+      {
+        id: "savorgceo",
+        identity: { name: "savorgCEO", emoji: "👑", description: "Strategic interface" },
+        heartbeat: { every: "1h", prompt: "Read agents/ceo/HEARTBEAT.md and follow it strictly. If nothing needs attention, reply HEARTBEAT_OK." },
+        tools: {
+          profile: "full",
+          allow: ["group:sessions"]
+        }
+      },
+      {
+        id: "savorgmanager",
+        identity: { name: "savorgManager", emoji: "🧭", description: "Workflow orchestrator" },
+        heartbeat: { every: "0m", prompt: "Read agents/manager/HEARTBEAT.md and follow it strictly. If nothing needs attention, reply HEARTBEAT_OK." },
+        tools: {
+          profile: "minimal",
+          allow: ["group:sessions"]
+        }
+      },
+      {
+        id: "savorgresearch",
+        identity: { name: "savorgResearch", emoji: "🔎", description: "Deep research" },
+        heartbeat: { every: "0m", prompt: "Read agents/research/HEARTBEAT.md and follow it strictly. If nothing needs attention, reply HEARTBEAT_OK." },
+        tools: {
+          allow: ["read", "web_search", "web_fetch"]
+        }
+      },
+      {
+        id: "savorgplan",
+        identity: { name: "savorgPlan", emoji: "🗺️", description: "Implementation planning" },
+        heartbeat: { every: "0m", prompt: "Read agents/plan/HEARTBEAT.md and follow it strictly. If nothing needs attention, reply HEARTBEAT_OK." },
+        tools: {
+          profile: "minimal",
+          allow: ["read"],
+          deny: ["exec"]
+        }
+      },
+      {
+        id: "savorgplanreview",
+        identity: { name: "savorgPlanReview", emoji: "🧪", description: "Plan review" },
+        heartbeat: { every: "0m", prompt: "Read agents/planreview/HEARTBEAT.md and follow it strictly. If nothing needs attention, reply HEARTBEAT_OK." },
+        tools: {
+          profile: "minimal",
+          allow: ["read"],
+          deny: ["exec"]
+        }
+      },
+      {
+        id: "savorgbuild",
+        identity: { name: "savorgBuild", emoji: "🛠️", description: "Code implementation" },
+        heartbeat: { every: "0m", prompt: "Read agents/build/HEARTBEAT.md and follow it strictly. If nothing needs attention, reply HEARTBEAT_OK." },
+        tools: {
+          profile: "coding",
+          allow: ["group:fs", "group:runtime"]
+        }
+      },
+      {
+        id: "savorgbuildreview",
+        identity: { name: "savorgBuildReview", emoji: "🔍", description: "Code QA" },
+        heartbeat: { every: "0m", prompt: "Read agents/buildreview/HEARTBEAT.md and follow it strictly. If nothing needs attention, reply HEARTBEAT_OK." },
+        tools: {
+          profile: "minimal",
+          allow: ["read"],
+          deny: ["exec"]
+        }
+      },
+      {
+        id: "savorgui",
+        identity: { name: "savorgUI", emoji: "🎨", description: "Frontend implementation" },
+        heartbeat: { every: "0m", prompt: "Read agents/ui/HEARTBEAT.md and follow it strictly. If nothing needs attention, reply HEARTBEAT_OK." },
+        tools: {
+          profile: "coding",
+          allow: ["group:fs", "group:runtime"]
+        }
+      },
+      {
+        id: "savorguireview",
+        identity: { name: "savorgUIReview", emoji: "✅", description: "UI QA" },
+        heartbeat: { every: "0m", prompt: "Read agents/uireview/HEARTBEAT.md and follow it strictly. If nothing needs attention, reply HEARTBEAT_OK." },
+        tools: {
+          profile: "minimal",
+          allow: ["read"],
+          deny: ["exec"]
+        }
+      },
+      {
+        id: "savorgops",
+        identity: { name: "savorgOps", emoji: "⚙️", description: "Operations" },
+        heartbeat: { every: "0m", prompt: "Read agents/ops/HEARTBEAT.md and follow it strictly. If nothing needs attention, reply HEARTBEAT_OK." },
+        tools: {
+          profile: "full",
+          allow: ["group:fs", "group:runtime", "cron"]
+        }
+      },
+      {
+        id: "savorgsecurity",
+        identity: { name: "savorgSecurity", emoji: "🔒", description: "Security auditor" },
+        heartbeat: { every: "0m", prompt: "Read agents/security/HEARTBEAT.md and follow it strictly. If nothing needs attention, reply HEARTBEAT_OK." },
+        tools: {
+          profile: "minimal",
+          allow: ["read"],
+          deny: ["exec"]
+        }
+      }
+    ]
+  }
+}
