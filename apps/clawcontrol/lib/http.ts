@@ -1072,6 +1072,7 @@ export interface MaintenanceStatus {
     ok: boolean
     latencyMs: number
   }
+  pollIntervalMs?: number
   timestamp: string
 }
 

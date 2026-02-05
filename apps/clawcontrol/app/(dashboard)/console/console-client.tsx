@@ -5,6 +5,8 @@ import { PageHeader, EmptyState } from '@clawcontrol/ui'
 import { Terminal, Wifi, WifiOff, AlertCircle, RefreshCw } from 'lucide-react'
 import { useProtectedActionTrigger } from '@/components/protected-action-modal'
 import { agentsApi } from '@/lib/http'
+import { useGatewayChat } from '@/lib/hooks/useGatewayChat'
+import { useChatStore, type ChatMessage } from '@/lib/stores/chat-store'
 import { SessionList } from './components/session-list'
 import { ChatPanel } from './components/chat-panel'
 import { cn } from '@/lib/utils'
@@ -15,16 +17,6 @@ import type { AgentDTO } from '@/lib/repo'
 // ============================================================================
 // TYPES
 // ============================================================================
-
-export interface ChatMessage {
-  id: string
-  role: 'operator' | 'agent' | 'system'
-  content: string
-  timestamp: Date
-  pending?: boolean
-  streaming?: boolean
-  error?: string
-}
 
 interface SessionsApiResponse {
   status: AvailabilityStatus
@@ -50,19 +42,26 @@ export function ConsoleClient() {
   // State
   const [sessions, setSessions] = useState<ConsoleSessionDTO[]>([])
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [streaming, setStreaming] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [gatewayStatus, setGatewayStatus] = useState<AvailabilityStatus>('ok')
   const [gatewayAvailable, setGatewayAvailable] = useState(true)
   const [agentsBySessionKey, setAgentsBySessionKey] = useState<Record<string, AgentDTO>>({})
+  const [syncingSessions, setSyncingSessions] = useState(false)
 
   // Refs for retry logic
   const retryCountRef = useRef(0)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   const triggerProtectedAction = useProtectedActionTrigger()
+  const { sendMessage, abort } = useGatewayChat()
+  const messages = useChatStore((s) => s.messages)
+  const isStreaming = useChatStore((s) => s.isStreaming)
+  const currentRunId = useChatStore((s) => s.currentRunId)
+  const chatError = useChatStore((s) => s.error)
+  const setChatError = useChatStore((s) => s.setError)
+  const resetChat = useChatStore((s) => s.resetChat)
+  const setChatMessages = useChatStore((s) => s.setMessages)
 
   // ============================================================================
   // DATA FETCHING
@@ -128,12 +127,12 @@ export function ConsoleClient() {
           content: m.payload?.content || m.summary,
           timestamp: new Date(m.ts),
         }))
-        setMessages(historyMessages)
+        setChatMessages(historyMessages)
       }
     } catch {
       // Silently fail - history is optional
     }
-  }, [])
+  }, [setChatMessages])
 
   // ============================================================================
   // EFFECTS
@@ -155,11 +154,10 @@ export function ConsoleClient() {
 
   // Fetch history when session selected
   useEffect(() => {
-    if (selectedSessionId) {
-      setMessages([]) // Clear existing messages
-      fetchHistory(selectedSessionId)
-    }
-  }, [selectedSessionId, fetchHistory])
+    resetChat()
+    if (!selectedSessionId) return
+    fetchHistory(selectedSessionId)
+  }, [selectedSessionId, fetchHistory, resetChat])
 
   // ============================================================================
   // HANDLERS
@@ -170,128 +168,54 @@ export function ConsoleClient() {
   }, [])
 
   const handleSendMessage = useCallback(async (content: string) => {
-    if (!selectedSessionId || streaming) return
+    if (!selectedSessionId || isStreaming) return
 
     triggerProtectedAction({
       actionKind: 'console.session.chat',
       actionTitle: 'Send to Session',
       actionDescription: `Send message to session (true session injection)`,
       onConfirm: async (typedConfirmText) => {
-        // Add operator message optimistically
-        const operatorMessageId = `msg_${Date.now()}_operator`
-        setMessages(prev => [...prev, {
-          id: operatorMessageId,
-          role: 'operator',
-          content,
-          timestamp: new Date(),
-          pending: true,
-        }])
-
-        setStreaming(true)
-
-        try {
-          // Use the new session chat endpoint (WS-based, true session injection)
-          const res = await fetch(`/api/openclaw/console/sessions/${selectedSessionId}/chat`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: content, typedConfirmText }),
-          })
-
-          if (!res.ok) {
-            const errorData = await res.json()
-            throw new Error(errorData.error || 'Failed to send message')
-          }
-
-          // Add agent message placeholder
-          const agentMessageId = `msg_${Date.now()}_agent`
-          setMessages(prev => [...prev, {
-            id: agentMessageId,
-            role: 'agent',
-            content: '',
-            timestamp: new Date(),
-            streaming: true,
-          }])
-
-          // Process SSE stream
-          const reader = res.body?.getReader()
-          if (!reader) throw new Error('No response stream')
-
-          const decoder = new TextDecoder()
-          let agentResponse = ''
-
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-
-            const text = decoder.decode(value, { stream: true })
-            const lines = text.split('\n')
-
-            for (const line of lines) {
-              const trimmed = line.trim()
-              if (!trimmed || !trimmed.startsWith('data: ')) continue
-
-              const data = trimmed.slice(6)
-              if (data === '[DONE]') continue
-
-              try {
-                const parsed = JSON.parse(data)
-                if (parsed.chunk) {
-                  agentResponse += parsed.chunk
-                  // Update streaming message
-                  setMessages(prev => {
-                    const updated = [...prev]
-                    const lastIdx = updated.length - 1
-                    if (lastIdx >= 0 && updated[lastIdx].streaming) {
-                      updated[lastIdx] = { ...updated[lastIdx], content: agentResponse }
-                    }
-                    return updated
-                  })
-                }
-                if (parsed.error) {
-                  throw new Error(parsed.error)
-                }
-              } catch (parseErr) {
-                if (parseErr instanceof SyntaxError) continue
-                throw parseErr
-              }
-            }
-          }
-
-          // Mark messages as complete
-          setMessages(prev => prev.map(m => ({
-            ...m,
-            pending: false,
-            streaming: false,
-          })))
-        } catch (err) {
-          const errorMsg = err instanceof Error ? err.message : 'Send failed'
-          // Mark operator message as error
-          setMessages(prev => prev.map(m =>
-            m.id === operatorMessageId
-              ? { ...m, pending: false, error: errorMsg }
-              : m
-          ))
-          setError(errorMsg)
-        } finally {
-          setStreaming(false)
-        }
+        await sendMessage(selectedSessionId, content, typedConfirmText)
       },
       onError: (err) => {
         setError(err.message)
       },
     })
-  }, [selectedSessionId, streaming, triggerProtectedAction])
+  }, [selectedSessionId, isStreaming, triggerProtectedAction, sendMessage])
 
   const handleRefresh = useCallback(() => {
     setLoading(true)
     fetchSessions()
   }, [fetchSessions])
 
+  const handleSync = useCallback(async () => {
+    if (syncingSessions) return
+    setSyncingSessions(true)
+    try {
+      const res = await fetch('/api/openclaw/sessions/sync', { method: 'POST' })
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.message || data?.error || 'Sync failed')
+      }
+      await fetchSessions()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Sync failed')
+    } finally {
+      setSyncingSessions(false)
+    }
+  }, [fetchSessions, syncingSessions])
+
+  const handleAbort = useCallback(async () => {
+    if (!selectedSessionId || !isStreaming) return
+    await abort(selectedSessionId, currentRunId)
+  }, [abort, currentRunId, isStreaming, selectedSessionId])
+
   // ============================================================================
   // RENDER
   // ============================================================================
 
   const selectedSession = sessions.find(s => s.sessionId === selectedSessionId)
+  const combinedError = error || chatError
 
   return (
     <div className="flex flex-col h-full">
@@ -335,12 +259,15 @@ export function ConsoleClient() {
       />
 
       {/* Error banner */}
-      {error && (
+      {combinedError && (
         <div className="mx-4 mt-4 p-3 bg-status-danger/10 border border-status-danger/20 rounded flex items-center gap-2">
           <AlertCircle className="w-4 h-4 text-status-danger flex-shrink-0" />
-          <span className="text-sm text-status-danger">{error}</span>
+          <span className="text-sm text-status-danger">{combinedError}</span>
           <button
-            onClick={() => setError(null)}
+            onClick={() => {
+              setError(null)
+              setChatError(null)
+            }}
             className="ml-auto text-xs text-fg-3 hover:text-fg-1"
           >
             Dismiss
@@ -374,6 +301,8 @@ export function ConsoleClient() {
               onSelect={handleSelectSession}
               gatewayStatus={gatewayStatus}
               agentsBySessionKey={agentsBySessionKey}
+              onSync={handleSync}
+              syncing={syncingSessions}
             />
 
             {/* Chat panel (main area) */}
@@ -381,7 +310,9 @@ export function ConsoleClient() {
               session={selectedSession ?? null}
               messages={messages}
               onSend={handleSendMessage}
-              streaming={streaming}
+              streaming={isStreaming}
+              runId={currentRunId}
+              onAbort={handleAbort}
               sendDisabled={!gatewayAvailable}
               agentsBySessionKey={agentsBySessionKey}
             />

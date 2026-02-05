@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { checkGatewayAvailability, getSessionHistory } from '@/lib/openclaw/console-client'
 
 // ============================================================================
 // TYPES
@@ -57,6 +58,45 @@ export async function GET(
         { ok: false, error: 'Session not found' },
         { status: 404 }
       )
+    }
+
+    // Prefer gateway transcript when available
+    try {
+      const availability = await checkGatewayAvailability()
+      if (availability.available) {
+        const history = await getSessionHistory(session.sessionKey, limit)
+
+        const messages: HistoryMessage[] = history.messages.map((m, idx) => {
+          const text = extractTextFromContent(m.content)
+          const tsMs = normalizeTimestampMs(m.timestamp)
+          const ts = tsMs ? new Date(tsMs) : new Date()
+
+          const role: HistoryMessage['role'] =
+            m.role === 'user' ? 'operator' : m.role === 'assistant' ? 'agent' : 'system'
+
+          return {
+            id: `gw_${sessionId}_${ts.getTime()}_${idx}`,
+            ts,
+            type: 'openclaw.gateway.chat.history',
+            actor: m.role === 'assistant' ? `agent:${session.agentId}` : 'operator:history',
+            summary: text.length > 140 ? text.slice(0, 140) + '…' : text,
+            role,
+            payload: { content: text },
+          }
+        })
+
+        const response: HistoryResponse = {
+          ok: true,
+          source: 'gateway',
+          messages,
+          sessionId,
+          agentId: session.agentId,
+        }
+
+        return NextResponse.json(response)
+      }
+    } catch {
+      // Fall back to activities transcript
     }
 
     // Build history from activities related to this session
@@ -125,4 +165,37 @@ export async function GET(
       { status: 500 }
     )
   }
+}
+
+function normalizeTimestampMs(ts: unknown): number | null {
+  if (typeof ts !== 'number' || Number.isNaN(ts)) return null
+  // Heuristic: seconds vs ms
+  if (ts < 1_000_000_000_000) {
+    return Math.floor(ts * 1000)
+  }
+  return Math.floor(ts)
+}
+
+function extractTextFromContent(content: unknown): string {
+  if (typeof content === 'string') return content
+
+  if (Array.isArray(content)) {
+    const parts: string[] = []
+    for (const item of content) {
+      if (!item || typeof item !== 'object') continue
+      const obj = item as Record<string, unknown>
+      if (obj.type === 'text' && typeof obj.text === 'string') {
+        parts.push(obj.text)
+      }
+    }
+    if (parts.length > 0) return parts.join('')
+  }
+
+  if (content && typeof content === 'object') {
+    const obj = content as Record<string, unknown>
+    if (typeof obj.text === 'string') return obj.text
+    if ('content' in obj) return extractTextFromContent(obj.content)
+  }
+
+  return ''
 }

@@ -1,12 +1,12 @@
 'use client'
 
-import { useRef, useEffect } from 'react'
-import { Terminal, Bot, User, AlertCircle, Loader2 } from 'lucide-react'
+import { Terminal, Bot, XCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { SendForm } from './send-form'
 import { StationIcon } from '@/components/station-icon'
+import { ChatContainer, Message, PromptInput } from '@/components/prompt-kit'
+import { SessionActivity } from './session-activity'
 import type { ConsoleSessionDTO } from '@/app/api/openclaw/console/sessions/route'
-import type { ChatMessage } from '../console-client'
+import type { ChatMessage } from '@/lib/stores/chat-store'
 import type { AgentDTO } from '@/lib/repo'
 
 // ============================================================================
@@ -18,111 +18,10 @@ interface ChatPanelProps {
   messages: ChatMessage[]
   onSend: (content: string) => void
   streaming: boolean
+  runId: string | null
+  onAbort: () => void
   sendDisabled: boolean
   agentsBySessionKey: Record<string, AgentDTO>
-}
-
-// ============================================================================
-// HELPERS
-// ============================================================================
-
-function formatTime(date: Date): string {
-  return new Date(date).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-// ============================================================================
-// MESSAGE BUBBLE
-// ============================================================================
-
-function MessageBubble({ message }: { message: ChatMessage }) {
-  const isOperator = message.role === 'operator'
-  const isSystem = message.role === 'system'
-
-  return (
-    <div className={cn(
-      'flex gap-3',
-      isOperator ? 'flex-row-reverse' : 'flex-row'
-    )}>
-      {/* Avatar */}
-      <div className={cn(
-        'w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0',
-        isOperator ? 'bg-status-info/20' : isSystem ? 'bg-bg-3' : 'bg-status-progress/20'
-      )}>
-        {isOperator ? (
-          <User className="w-4 h-4 text-status-info" />
-        ) : isSystem ? (
-          <Terminal className="w-4 h-4 text-fg-3" />
-        ) : (
-          <Bot className="w-4 h-4 text-status-progress" />
-        )}
-      </div>
-
-      {/* Content */}
-      <div className={cn(
-        'max-w-[70%] flex flex-col',
-        isOperator ? 'items-end' : 'items-start'
-      )}>
-        {/* Bubble */}
-        <div className={cn(
-          'px-4 py-2.5 rounded-2xl',
-          isOperator
-            ? 'bg-status-info text-white rounded-br-sm'
-            : isSystem
-              ? 'bg-bg-2 text-fg-1 rounded-bl-sm'
-              : 'bg-bg-3 text-fg-0 rounded-bl-sm',
-          message.pending && 'opacity-70',
-          message.error && 'border-2 border-status-danger'
-        )}>
-          {/* Content */}
-          <div className="text-sm whitespace-pre-wrap break-words">
-            {message.content || (message.streaming && (
-              <span className="flex items-center gap-2 text-fg-2">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                <span>Thinking...</span>
-              </span>
-            ))}
-          </div>
-
-          {/* Streaming indicator */}
-          {message.streaming && message.content && (
-            <div className="mt-1 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 bg-status-progress rounded-full animate-pulse" />
-              <span className="text-xs text-fg-3">Streaming...</span>
-            </div>
-          )}
-        </div>
-
-        {/* Meta info */}
-        <div className={cn(
-          'flex items-center gap-2 mt-1 text-xs text-fg-3',
-          isOperator ? 'flex-row-reverse' : 'flex-row'
-        )}>
-          <span>{formatTime(message.timestamp)}</span>
-          {message.pending && (
-            <>
-              <span className="text-fg-3/50">·</span>
-              <span className="flex items-center gap-1">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                Sending...
-              </span>
-            </>
-          )}
-          {message.error && (
-            <>
-              <span className="text-fg-3/50">·</span>
-              <span className="flex items-center gap-1 text-status-danger">
-                <AlertCircle className="w-3 h-3" />
-                {message.error}
-              </span>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  )
 }
 
 // ============================================================================
@@ -134,19 +33,13 @@ export function ChatPanel({
   messages,
   onSend,
   streaming,
+  runId,
+  onAbort,
   sendDisabled,
   agentsBySessionKey,
 }: ChatPanelProps) {
-  const scrollRef = useRef<HTMLDivElement>(null)
   const headerAgent = session ? agentsBySessionKey[session.sessionKey] : undefined
   const headerName = session ? (headerAgent?.name || session.agentId) : ''
-
-  // Auto-scroll to bottom on new messages
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-    }
-  }, [messages])
 
   // Determine if input should be disabled
   const noSession = !session
@@ -161,7 +54,7 @@ export function ChatPanel({
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-bg-0">
+    <div className="flex-1 flex flex-col bg-bg-0 min-w-0">
       {/* Session header - only show when session selected */}
       {session && (
         <div className="px-4 py-3 border-b border-bd-0 flex items-center gap-3">
@@ -197,11 +90,35 @@ export function ChatPanel({
               <span className="text-xs text-fg-3">{session.percentUsed}%</span>
             </div>
           )}
+
+          {/* Cancel */}
+          {streaming && (
+            <button
+              type="button"
+              onClick={onAbort}
+              className={cn(
+                'ml-3 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium',
+                'rounded-[var(--radius-md)] border',
+                'border-status-danger/40 text-status-danger hover:bg-status-danger/10'
+              )}
+              title={runId ? `Abort run ${runId}` : 'Abort'}
+            >
+              <XCircle className="w-4 h-4" />
+              Cancel
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Tools panel (redacted) */}
+      {session && (
+        <div className="border-b border-bd-0">
+          <SessionActivity sessionKey={session.sessionKey} />
         </div>
       )}
 
       {/* Messages area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+      <ChatContainer className="flex-1 min-h-0">
         {noSession ? (
           <div className="h-full flex items-center justify-center">
             <div className="text-center">
@@ -226,15 +143,25 @@ export function ChatPanel({
             </div>
           </div>
         ) : (
-          messages.map((message) => (
-            <MessageBubble key={message.id} message={message} />
-          ))
+          messages.map((message) => {
+            return (
+              <Message
+                key={message.id}
+                role={message.role}
+                content={message.content}
+                timestamp={message.timestamp}
+                pending={message.pending}
+                streaming={message.streaming}
+                error={message.error}
+              />
+            )
+          })
         )}
-      </div>
+      </ChatContainer>
 
       {/* Send form - always visible */}
-      <SendForm
-        onSend={onSend}
+      <PromptInput
+        onSubmit={onSend}
         disabled={inputDisabled}
         placeholder={getPlaceholder()}
       />

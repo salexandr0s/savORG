@@ -2,20 +2,20 @@
 # =============================================================================
 # clawcontrol Launcher
 # =============================================================================
-# Starts the backend server and launches the Mac app together.
+# Starts the backend server and optionally launches the desktop app.
 #
 # Usage:
-#   ./start.sh           # Start backend + open app (app must be pre-built)
-#   ./start.sh --build   # Build app first, then start
-#   ./start.sh --web     # Start backend only (use browser at localhost:3000)
+#   ./start.sh             # Start backend + desktop (Electron)
+#   ./start.sh --desktop   # Start backend + desktop (Electron)
+#   ./start.sh --web       # Start backend only (use browser at localhost:3000)
 #
 # =============================================================================
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-APP_PATH="$SCRIPT_DIR/apps/clawcontrol-mac/build/Build/Products/Release/clawcontrol.app"
 CLAWCONTROL_DIR="$SCRIPT_DIR/apps/clawcontrol"
 BACKEND_DIR="$SCRIPT_DIR/apps/clawcontrol"
+DESKTOP_DIR="$SCRIPT_DIR/apps/clawcontrol-desktop"
 DATA_DIR="$CLAWCONTROL_DIR/data"
 DB_FILE="$DATA_DIR/clawcontrol.db"
 
@@ -32,56 +32,50 @@ echo "╚═══════════════════════�
 echo ""
 
 # Parse arguments
-BUILD_FIRST=false
-WEB_ONLY=false
+MODE="desktop"
 
 for arg in "$@"; do
   case $arg in
-    --build)
-      BUILD_FIRST=true
+    --desktop)
+      MODE="desktop"
       ;;
     --web)
-      WEB_ONLY=true
+      MODE="web"
       ;;
     --help|-h)
       echo "Usage: ./start.sh [OPTIONS]"
       echo ""
       echo "Options:"
-      echo "  --build    Build the Mac app before starting"
-      echo "  --web      Start backend only (no Mac app, use browser)"
+      echo "  --desktop  Start backend + desktop app (Electron)"
+      echo "  --web      Start backend only (use browser)"
       echo "  --help     Show this help message"
       echo ""
       exit 0
       ;;
+    *)
+      echo -e "${RED}Unknown option:${NC} $arg"
+      echo "Run ./start.sh --help for usage."
+      exit 1
+      ;;
   esac
 done
 
-# Build if requested
-if [[ "$BUILD_FIRST" == "true" ]]; then
-  echo -e "${YELLOW}Building Mac app...${NC}"
-  cd "$SCRIPT_DIR/apps/clawcontrol-mac"
-  ./build.sh Release
-  cd "$SCRIPT_DIR"
-  echo -e "${GREEN}Build complete!${NC}"
+# Check desktop app exists (if desktop mode)
+if [[ "$MODE" == "desktop" ]] && [[ ! -d "$DESKTOP_DIR" ]]; then
+  echo -e "${RED}Desktop app not found at:${NC}"
+  echo "  $DESKTOP_DIR"
   echo ""
-fi
-
-# Check if app exists (unless web-only mode)
-if [[ "$WEB_ONLY" == "false" ]] && [[ ! -d "$APP_PATH" ]]; then
-  echo -e "${RED}Mac app not found at:${NC}"
-  echo "  $APP_PATH"
-  echo ""
-  echo "Options:"
-  echo "  1. Build the app:  ./start.sh --build"
-  echo "  2. Use web mode:   ./start.sh --web"
-  echo "  3. Use browser:    npm run dev"
-  echo ""
+  echo "Expected workspace: apps/clawcontrol-desktop/"
   exit 1
 fi
 
-# Check if backend dependencies are installed
-if [[ ! -d "$BACKEND_DIR/node_modules" ]]; then
+# Check if dependencies are installed
+if [[ ! -d "$SCRIPT_DIR/node_modules" ]]; then
   echo -e "${YELLOW}Installing dependencies...${NC}"
+  cd "$SCRIPT_DIR"
+  npm install
+elif [[ "$MODE" == "desktop" ]] && [[ ! -d "$SCRIPT_DIR/node_modules/electron" ]]; then
+  echo -e "${YELLOW}Electron dependencies missing. Installing...${NC}"
   cd "$SCRIPT_DIR"
   npm install
 fi
@@ -97,12 +91,16 @@ echo -e "${YELLOW}Starting backend server...${NC}"
 cd "$BACKEND_DIR"
 npm run start &
 BACKEND_PID=$!
+DESKTOP_PID=""
 
 # Cleanup function
 cleanup() {
   echo ""
   echo -e "${YELLOW}Shutting down...${NC}"
   kill $BACKEND_PID 2>/dev/null || true
+  if [[ -n "$DESKTOP_PID" ]]; then
+    kill "$DESKTOP_PID" 2>/dev/null || true
+  fi
   echo -e "${GREEN}clawcontrol stopped.${NC}"
   exit 0
 }
@@ -129,8 +127,8 @@ fi
 
 echo -e "${GREEN}Backend ready at http://127.0.0.1:3000${NC}"
 
-# Launch app or show browser instructions
-if [[ "$WEB_ONLY" == "true" ]]; then
+# Launch desktop app or show browser instructions
+if [[ "$MODE" == "web" ]]; then
   echo ""
   echo -e "${GREEN}clawcontrol is running!${NC}"
   echo "Open http://localhost:3000 in your browser."
@@ -138,12 +136,18 @@ if [[ "$WEB_ONLY" == "true" ]]; then
   echo "Press Ctrl+C to stop."
 else
   echo ""
-  echo -e "${YELLOW}Launching Mac app...${NC}"
-  open "$APP_PATH"
+  echo -e "${YELLOW}Launching desktop app (Electron)...${NC}"
+  cd "$SCRIPT_DIR"
+  npm run dev --workspace=clawcontrol-desktop &
+  DESKTOP_PID=$!
   echo -e "${GREEN}clawcontrol is running!${NC}"
   echo ""
-  echo "Press Ctrl+C to stop."
+  echo "Press Ctrl+C (or close the window) to stop."
 fi
 
-# Keep script running (wait for backend process)
-wait $BACKEND_PID
+# Keep script running
+if [[ "$MODE" == "desktop" ]]; then
+  wait "$DESKTOP_PID"
+else
+  wait "$BACKEND_PID"
+fi

@@ -1,0 +1,45 @@
+{
+  "name": "clawcontrol-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/main.js",
+  "scripts": {
+    "predev": "tsc -p tsconfig.json",
+    "dev": "electron .",
+    "build": "tsc -p tsconfig.json && electron-builder",
+    "build:mac": "tsc -p tsconfig.json && electron-builder --mac",
+    "build:win": "tsc -p tsconfig.json && electron-builder --win",
+    "build:linux": "tsc -p tsconfig.json && electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.clawcontrol.desktop",
+    "productName": "ClawControl",
+    "directories": {
+      "output": "dist/release"
+    },
+    "files": [
+      "dist/**",
+      "assets/**",
+      "package.json"
+    ],
+    "mac": {
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "icon": "assets/icon.ico"
+    },
+    "linux": {
+      "icon": "assets/icon.png"
+    }
+  },
+  "devDependencies": {
+    "electron": "^29.0.0",
+    "electron-builder": "^24.0.0",
+    "typescript": "^5.0.0"
+  }
+}

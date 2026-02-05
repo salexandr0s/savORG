@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Bot, Clock, AlertCircle, CheckCircle, Pause } from 'lucide-react'
+import { Bot, Clock, AlertCircle, CheckCircle, Pause, RefreshCw, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { StationIcon } from '@/components/station-icon'
 import type { ConsoleSessionDTO } from '@/app/api/openclaw/console/sessions/route'
@@ -18,6 +18,8 @@ interface SessionListProps {
   onSelect: (sessionId: string) => void
   gatewayStatus: AvailabilityStatus
   agentsBySessionKey: Record<string, AgentDTO>
+  onSync: () => void
+  syncing: boolean
 }
 
 type FilterState = 'all' | 'active' | 'idle' | 'error'
@@ -54,14 +56,38 @@ function getStateIcon(state: string) {
 // COMPONENT
 // ============================================================================
 
-export function SessionList({ sessions, selectedId, onSelect, gatewayStatus, agentsBySessionKey }: SessionListProps) {
+export function SessionList({
+  sessions,
+  selectedId,
+  onSelect,
+  gatewayStatus,
+  agentsBySessionKey,
+  onSync,
+  syncing,
+}: SessionListProps) {
   const [filter, setFilter] = useState<FilterState>('all')
+  const [query, setQuery] = useState('')
 
   // Filter sessions
   const filteredSessions = useMemo(() => {
-    if (filter === 'all') return sessions
-    return sessions.filter(s => s.state === filter)
-  }, [sessions, filter])
+    const base = filter === 'all' ? sessions : sessions.filter(s => s.state === filter)
+    const q = query.trim().toLowerCase()
+    if (!q) return base
+
+    return base.filter((s) => {
+      const agent = agentsBySessionKey[s.sessionKey]
+      const displayName = (agent?.name || s.agentId || '').toLowerCase()
+      const sessionKey = (s.sessionKey || '').toLowerCase()
+      const kind = (s.kind || '').toLowerCase()
+      const model = (s.model || '').toLowerCase()
+      return (
+        displayName.includes(q) ||
+        sessionKey.includes(q) ||
+        kind.includes(q) ||
+        model.includes(q)
+      )
+    })
+  }, [sessions, filter, query, agentsBySessionKey])
 
   // Count by state
   const counts = useMemo(() => ({
@@ -74,13 +100,43 @@ export function SessionList({ sessions, selectedId, onSelect, gatewayStatus, age
   return (
     <div className="w-60 border-r border-bd-0 flex flex-col bg-bg-1">
       {/* Header */}
-      <div className="p-3 border-b border-bd-0">
-        <h2 className="text-sm font-medium text-fg-1">Sessions</h2>
-        <div className="text-xs text-fg-3 mt-0.5">
-          {sessions.length} session{sessions.length !== 1 ? 's' : ''}
-          {gatewayStatus !== 'ok' && (
-            <span className="ml-1 text-status-warning">(cached)</span>
+      <div className="p-3 border-b border-bd-0 flex items-start justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-medium text-fg-1">Sessions</h2>
+          <div className="text-xs text-fg-3 mt-0.5">
+            {sessions.length} session{sessions.length !== 1 ? 's' : ''}
+            {gatewayStatus !== 'ok' && (
+              <span className="ml-1 text-status-warning">(cached)</span>
+            )}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onSync}
+          disabled={syncing}
+          className={cn(
+            'p-1.5 rounded-[var(--radius-sm)] transition-colors',
+            syncing
+              ? 'opacity-60 cursor-not-allowed text-fg-3'
+              : 'hover:bg-bg-2 text-fg-2 hover:text-fg-0'
           )}
+          title="Sync sessions"
+        >
+          <RefreshCw className={cn('w-4 h-4', syncing && 'animate-spin')} />
+        </button>
+      </div>
+
+      {/* Search */}
+      <div className="px-3 py-2 border-b border-bd-0">
+        <div className="flex items-center gap-2 px-2 py-1.5 border border-bd-0 bg-bg-0 rounded-[var(--radius-md)]">
+          <Search className="w-3.5 h-3.5 text-fg-3" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search…"
+            className="w-full bg-transparent text-xs text-fg-0 placeholder:text-fg-3 focus:outline-none font-mono"
+          />
         </div>
       </div>
 

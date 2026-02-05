@@ -21,7 +21,7 @@ npm run dev
 # → http://localhost:3000
 ```
 
-### Option B: Mac App + Backend
+### Option B: Desktop App (Electron) + Backend
 ```bash
 git clone https://github.com/salexandr0s/clawcontrol.git
 cd clawcontrol
@@ -29,13 +29,13 @@ npm install
 cp apps/clawcontrol/.env.example apps/clawcontrol/.env
 npm run db:migrate
 npm run build --workspace=clawcontrol
-./start.sh --build    # Builds Mac app and starts everything
+./start.sh --desktop  # Starts backend + desktop app
 ```
 
 ### Option C: Download Release
-1. Download `clawcontrol-vX.X.X-macos.zip` from [Releases](../../releases)
-2. Extract and move `clawcontrol.app` to Applications
-3. Start the backend:
+1. Download the macOS desktop app artifact from [Releases](../../releases)
+2. Install it (DMG/ZIP instructions vary by artifact)
+3. Start the backend (required):
    ```bash
    git clone https://github.com/salexandr0s/clawcontrol.git
    cd clawcontrol
@@ -45,9 +45,9 @@ npm run build --workspace=clawcontrol
    npm run build --workspace=clawcontrol
    npm run start --workspace=clawcontrol
    ```
-4. Open clawcontrol.app (first time: right-click → Open)
+4. Launch ClawControl (first time: right-click → Open to bypass Gatekeeper)
 
-> **Note**: The Mac app is a native wrapper that connects to the backend at `localhost:3000`. The backend must be running for the app to work.
+> **Note**: The desktop app is a wrapper that connects to the backend at `localhost:3000`. The backend must be running for the app to work.
 
 ---
 
@@ -158,7 +158,7 @@ See [docs/SECURITY.md](docs/SECURITY.md) for full threat model.
 
 ```
 clawcontrol/
-├── start.sh                    # Launcher script (backend + Mac app)
+├── start.sh                    # Launcher script (backend + desktop)
 ├── stop.sh                     # Stop all processes
 ├── apps/
 │   ├── clawcontrol/            # Next.js app (UI + API)
@@ -166,7 +166,7 @@ clawcontrol/
 │   │   ├── lib/                # Repos, adapters, utilities
 │   │   ├── prisma/             # Database schema + migrations
 │   │   └── data/               # SQLite (gitignored)
-│   └── clawcontrol-mac/        # Native macOS app wrapper
+│   └── clawcontrol-desktop/    # Electron desktop wrapper
 ├── packages/
 │   ├── core/                   # Types, Governor, mocks
 │   ├── ui/                     # Shared components
@@ -180,8 +180,8 @@ clawcontrol/
 
 | Command | Description |
 |---------|-------------|
-| `./start.sh` | Start backend + Mac app (app must be built) |
-| `./start.sh --build` | Build Mac app, then start everything |
+| `./start.sh` | Start backend + desktop app (Electron) |
+| `./start.sh --desktop` | Start backend + desktop app (Electron) |
 | `./start.sh --web` | Start backend only (use browser) |
 | `./stop.sh` | Stop all clawcontrol processes |
 | `npm run dev` | Development server (hot reload) |

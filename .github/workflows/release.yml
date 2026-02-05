@@ -9,51 +9,46 @@ permissions:
   contents: write
 
 jobs:
-  build-mac-app:
-    name: Build macOS App
+  build-desktop-mac:
+    name: Build macOS Desktop App (Electron)
     runs-on: macos-14
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Xcode
-        uses: maxim-lobanov/setup-xcode@v1
+      - name: Set up Node
+        uses: actions/setup-node@v4
         with:
-          xcode-version: '15.0'
+          node-version: '20'
+          cache: 'npm'
 
-      - name: Build Mac App
-        run: |
-          cd apps/clawcontrol-mac
-          chmod +x build.sh
-          ./build.sh Release
+      - name: Install dependencies
+        run: npm install
 
-      - name: Package App
-        run: |
-          cd apps/clawcontrol-mac/build/Build/Products/Release
-          # Create zip with the app
-          zip -r -y clawcontrol-${{ github.ref_name }}-macos.zip clawcontrol.app
-          # Show what we built
-          ls -la
+      - name: Build Desktop App (macOS)
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm run build:mac --workspace=clawcontrol-desktop
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mac-app
-          path: apps/clawcontrol-mac/build/Build/Products/Release/clawcontrol-*.zip
+          name: desktop-mac
+          path: apps/clawcontrol-desktop/dist/release/*
           retention-days: 5
 
   create-release:
     name: Create Release
-    needs: build-mac-app
+    needs: build-desktop-mac
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download Mac App
+      - name: Download Desktop App
         uses: actions/download-artifact@v4
         with:
-          name: mac-app
+          name: desktop-mac
           path: ./artifacts
 
       - name: List artifacts
@@ -67,16 +62,17 @@ jobs:
           body: |
             ## Installation
 
-            ### Mac App (requires backend)
-            1. Download `clawcontrol-${{ github.ref_name }}-macos.zip`
-            2. Extract and move `clawcontrol.app` to your Applications folder
-            3. **Important**: The Mac app requires the backend to be running:
+            ### Desktop App (Electron, requires backend)
+            1. Download the macOS artifact from this release (DMG/ZIP)
+            2. Install it (drag to Applications if prompted)
+            3. **Important**: The desktop app requires the backend to be running:
                ```bash
                git clone https://github.com/${{ github.repository }}.git
                cd clawcontrol
-               npm install && npm run db:migrate && npm run start
+               npm install && npm run db:migrate && npm run build --workspace=clawcontrol
+               npm run start --workspace=clawcontrol
                ```
-            4. Open clawcontrol.app (first time: right-click → Open to bypass Gatekeeper)
+            4. Open ClawControl (first time: right-click → Open to bypass Gatekeeper)
 
             ### Web Only (no Xcode required)
             ```bash
@@ -91,9 +87,9 @@ jobs:
             git clone https://github.com/${{ github.repository }}.git
             cd clawcontrol
             npm install && npm run db:migrate
-            ./start.sh --build
+            ./start.sh --desktop
             ```
 
             ---
 
-            > **Note**: The Mac app is unsigned. On first launch, right-click the app and select "Open" to bypass macOS Gatekeeper.
+            > **Note**: The desktop app is unsigned. On first launch, right-click the app and select "Open" to bypass macOS Gatekeeper.
