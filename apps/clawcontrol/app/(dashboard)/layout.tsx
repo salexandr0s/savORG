@@ -3,6 +3,7 @@
 import { AppShell } from '@/components/shell/app-shell'
 import { SearchModal, useSearchModal } from '@/components/shell/search-modal'
 import { ProtectedActionProvider } from '@/components/protected-action-modal'
+import { SyncBanner } from '@/components/sync-banner'
 import { usePathname } from 'next/navigation'
 
 /**
@@ -27,6 +28,7 @@ export default function DashboardLayout({
         onSearchClick={search.onOpen}
         contentPadding={isConsoleRoute ? 'none' : 'default'}
       >
+        <SyncBanner />
         {children}
       </AppShell>
       <SearchModal open={search.open} onClose={search.onClose} />

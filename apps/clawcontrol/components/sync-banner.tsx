@@ -1,0 +1,59 @@
+'use client'
+
+import { AlertTriangle, RefreshCw } from 'lucide-react'
+import { useSyncStatus } from '@/lib/hooks/useSyncStatus'
+
+export function SyncBanner() {
+  const { status, loading, syncing, triggerSync } = useSyncStatus()
+
+  if (loading || !status) return null
+
+  const bootError = status.bootSync?.agents.error || status.bootSync?.sessions.error
+
+  if (bootError) {
+    return (
+      <div className="mb-3 flex items-center gap-2 rounded-[var(--radius-md)] border border-status-warning bg-status-warning/10 px-3 py-2 text-xs text-status-warning">
+        <AlertTriangle className="h-4 w-4 shrink-0" />
+        <span className="truncate">OpenClaw sync failed at boot: {bootError}</span>
+        <button
+          type="button"
+          onClick={() => void triggerSync()}
+          disabled={syncing}
+          className="ml-auto inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium hover:bg-status-warning/15 disabled:opacity-60"
+        >
+          <RefreshCw className={syncing ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />
+          {syncing ? 'Syncing...' : 'Retry'}
+        </button>
+      </div>
+    )
+  }
+
+  if (!status.gatewayConnected) {
+    return (
+      <div className="mb-3 flex items-center gap-2 rounded-[var(--radius-md)] border border-status-danger bg-status-danger/10 px-3 py-2 text-xs text-status-danger">
+        <AlertTriangle className="h-4 w-4 shrink-0" />
+        <span>OpenClaw gateway is offline. Data may be stale.</span>
+      </div>
+    )
+  }
+
+  if (status.stale) {
+    return (
+      <div className="mb-3 flex items-center gap-2 rounded-[var(--radius-md)] border border-status-warning bg-status-warning/10 px-3 py-2 text-xs text-status-warning">
+        <AlertTriangle className="h-4 w-4 shrink-0" />
+        <span>OpenClaw data is stale.</span>
+        <button
+          type="button"
+          onClick={() => void triggerSync()}
+          disabled={syncing}
+          className="ml-auto inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium hover:bg-status-warning/15 disabled:opacity-60"
+        >
+          <RefreshCw className={syncing ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />
+          {syncing ? 'Syncing...' : 'Sync now'}
+        </button>
+      </div>
+    )
+  }
+
+  return null
+}

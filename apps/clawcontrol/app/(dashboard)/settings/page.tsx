@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useLayout, type LayoutMode } from '@/lib/layout-context'
 import { useSettings, type Theme, type Density } from '@/lib/settings-context'
+import { useSyncStatus } from '@/lib/hooks/useSyncStatus'
 import { configApi, type EnvConfigResponse } from '@/lib/http'
 import { cn } from '@/lib/utils'
 import {
@@ -49,6 +50,9 @@ export default function SettingsPage() {
   const [discoverData, setDiscoverData] = useState<OpenClawDiscoverResponse | null>(null)
   const [discoverLoading, setDiscoverLoading] = useState(true)
   const [discoverError, setDiscoverError] = useState<string | null>(null)
+  const [syncError, setSyncError] = useState<string | null>(null)
+  const [syncSuccessAt, setSyncSuccessAt] = useState<string | null>(null)
+  const { status: syncStatus, syncing, triggerSync } = useSyncStatus({ polling: false })
 
   // Load environment config
   useEffect(() => {
@@ -109,9 +113,23 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleManualSync() {
+    setSyncError(null)
+    const ok = await triggerSync('manual')
+
+    if (!ok) {
+      setSyncError('Failed to sync with OpenClaw. Check gateway and config.')
+      return
+    }
+
+    setSyncSuccessAt(new Date().toISOString())
+    await loadDiscover()
+  }
+
   const hasWorkspaceChanges = envConfig && workspacePath !== (envConfig.config.OPENCLAW_WORKSPACE || '')
   const discovered = discoverData && discoverData.status !== 'not_found' ? discoverData : null
   const notFound = discoverData && discoverData.status === 'not_found' ? discoverData : null
+  const lastSyncAt = syncStatus?.lastSync?.timestamp ?? null
 
   return (
     <div className="max-w-2xl space-y-8">
@@ -258,13 +276,28 @@ export default function SettingsPage() {
                   </span>
                 </div>
 
-                <button
-                  onClick={loadDiscover}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-[var(--radius-md)] bg-bg-3 text-fg-1 hover:bg-bg-4 transition-colors"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  Refresh
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={loadDiscover}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-[var(--radius-md)] bg-bg-3 text-fg-1 hover:bg-bg-4 transition-colors"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Refresh
+                  </button>
+                  <button
+                    onClick={handleManualSync}
+                    disabled={syncing}
+                    className={cn(
+                      'flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-[var(--radius-md)] transition-colors',
+                      syncing
+                        ? 'bg-bg-3 text-fg-3 cursor-not-allowed'
+                        : 'bg-status-info text-white hover:bg-status-info/90'
+                    )}
+                  >
+                    <RefreshCw className={cn('w-3.5 h-3.5', syncing && 'animate-spin')} />
+                    {syncing ? 'Syncing...' : 'Sync Now'}
+                  </button>
+                </div>
               </div>
 
               {discoverData?.status === 'not_found' ? (
@@ -274,6 +307,12 @@ export default function SettingsPage() {
                 </div>
               ) : (
                 <div className="space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-fg-3">Last synced:</span>
+                    <span className="text-fg-2">
+                      {lastSyncAt ? formatRelativeTime(lastSyncAt) : 'Never'}
+                    </span>
+                  </div>
                   <div className="flex items-center justify-between">
                     <span className="text-fg-3">Gateway URL:</span>
                     <span className="font-mono text-fg-2">{discovered?.gatewayUrl || '—'}</span>
@@ -298,6 +337,20 @@ export default function SettingsPage() {
                           .join(', ')}
                         {discovered.agents.length > 8 ? '…' : ''}
                       </p>
+                    </div>
+                  )}
+
+                  {syncError && (
+                    <div className="flex items-center gap-2 p-2 rounded bg-status-danger/10 text-status-danger text-xs">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>{syncError}</span>
+                    </div>
+                  )}
+
+                  {syncSuccessAt && (
+                    <div className="flex items-center gap-2 p-2 rounded bg-status-success/10 text-status-success text-xs">
+                      <Check className="w-3 h-3 shrink-0" />
+                      <span>Sync completed {formatRelativeTime(syncSuccessAt)}</span>
                     </div>
                   )}
                 </div>
@@ -576,4 +629,15 @@ function DensityCard({
       {selected && <Check className="w-4 h-4 text-status-info shrink-0" />}
     </button>
   )
+}
+
+function formatRelativeTime(value: string | Date): string {
+  const date = typeof value === 'string' ? new Date(value) : value
+  const diffMs = Date.now() - date.getTime()
+  const diffSeconds = Math.max(0, Math.floor(diffMs / 1000))
+
+  if (diffSeconds < 60) return 'just now'
+  if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`
+  if (diffSeconds < 86400) return `${Math.floor(diffSeconds / 3600)}h ago`
+  return `${Math.floor(diffSeconds / 86400)}d ago`
 }

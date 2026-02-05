@@ -3,6 +3,10 @@ import 'server-only'
 import { getRepos } from '@/lib/repo'
 import { getOpenClawConfig } from '@/lib/openclaw-client'
 
+export interface SyncAgentsOptions {
+  forceRefresh?: boolean
+}
+
 function inferDisplayName(agent: { id: string; identity?: string }): string {
   return agent.identity || agent.id
 }
@@ -24,9 +28,13 @@ async function getDefaultStationId(): Promise<string> {
   return stations[0]?.id ?? 'ops'
 }
 
-export async function syncAgentsFromOpenClaw(): Promise<{ added: number; updated: number }> {
-  const config = await getOpenClawConfig()
-  if (!config) return { added: 0, updated: 0 }
+export async function syncAgentsFromOpenClaw(
+  options: SyncAgentsOptions = {}
+): Promise<{ added: number; updated: number }> {
+  const config = await getOpenClawConfig(Boolean(options.forceRefresh))
+  if (!config) {
+    throw new Error('OpenClaw config not found at ~/.openclaw/openclaw.json')
+  }
 
   const repos = getRepos()
   const defaultStationId = await getDefaultStationId()
@@ -62,4 +70,3 @@ export async function syncAgentsFromOpenClaw(): Promise<{ added: number; updated
 
   return { added, updated }
 }
-
