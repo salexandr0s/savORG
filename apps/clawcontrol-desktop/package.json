@@ -1,15 +1,17 @@
 {
   "name": "clawcontrol-desktop",
   "version": "0.1.0",
+  "description": "ClawControl Desktop - Local-first multi-agent orchestration platform",
+  "author": "ClawControl",
   "private": true,
   "main": "dist/main.js",
   "scripts": {
-    "predev": "tsc -p tsconfig.json",
-    "dev": "electron .",
-    "build": "tsc -p tsconfig.json && electron-builder",
-    "build:mac": "tsc -p tsconfig.json && electron-builder --mac",
-    "build:win": "tsc -p tsconfig.json && electron-builder --win",
-    "build:linux": "tsc -p tsconfig.json && electron-builder --linux"
+    "predev": "npx tsc -p tsconfig.json",
+    "dev": "npx electron .",
+    "build": "npx tsc -p tsconfig.json && npx electron-builder",
+    "build:mac": "npx tsc -p tsconfig.json && npx electron-builder --mac",
+    "build:win": "npx tsc -p tsconfig.json && npx electron-builder --win",
+    "build:linux": "npx tsc -p tsconfig.json && npx electron-builder --linux"
   },
   "build": {
     "appId": "com.clawcontrol.desktop",
@@ -38,8 +40,8 @@
     }
   },
   "devDependencies": {
-    "electron": "^29.0.0",
-    "electron-builder": "^24.0.0",
+    "electron": "29.4.6",
+    "electron-builder": "24.13.3",
     "typescript": "^5.0.0"
   }
 }
