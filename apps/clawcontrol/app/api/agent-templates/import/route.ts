@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { promises as fsp } from 'node:fs'
+import { dirname } from 'node:path'
 import { enforceTypedConfirm } from '@/lib/with-governor'
-import { getRepos } from '@/lib/repo'
+import { getRepos, useMockData } from '@/lib/repo'
+import { validateWorkspacePath } from '@/lib/fs/path-policy'
 import {
   getTemplateById,
   validateTemplateConfig,
@@ -123,7 +126,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const validation = validateTemplateConfig(templateConfig)
+  const validation = validateTemplateConfig(templateConfig, { expectedId: importData.templateId })
   if (!validation.valid) {
     return NextResponse.json(
       {
@@ -136,7 +139,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Check if template already exists
-  const existingTemplate = getTemplateById(importData.templateId)
+  const existingTemplate = await getTemplateById(importData.templateId)
   if (existingTemplate) {
     return NextResponse.json(
       { error: `Template "${importData.templateId}" already exists` },
@@ -164,44 +167,90 @@ export async function POST(request: NextRequest) {
       chunk: `Importing template ${importData.name}...\n`,
     })
 
-    // Create template folder in mock workspace
-    mockWorkspaceFiles.push({
-      id: `ws_tpl_${templateId}_folder`,
-      name: templateId,
-      type: 'folder',
-      path: '/agent-templates',
-      modifiedAt: now,
-    })
-
-    await repos.receipts.append(receipt.id, {
-      stream: 'stdout',
-      chunk: `  Created folder: ${templatePath}\n`,
-    })
-
-    // Create each file in the template
-    for (const fileName of fileNames) {
-      const fileId = `ws_tpl_${templateId}_${fileName.replace(/[^a-z0-9]/gi, '_')}`
-      const content = importData.files[fileName]
-
+    if (useMockData()) {
+      // Create template folder in mock workspace
       mockWorkspaceFiles.push({
-        id: fileId,
-        name: fileName,
-        type: 'file',
-        path: templatePath,
-        size: content.length,
+        id: `ws_tpl_${templateId}_folder`,
+        name: templateId,
+        type: 'folder',
+        path: '/agent-templates',
         modifiedAt: now,
       })
 
-      mockFileContents[fileId] = content
+      await repos.receipts.append(receipt.id, {
+        stream: 'stdout',
+        chunk: `  Created folder: ${templatePath}\n`,
+      })
+
+      // Create each file in the template
+      for (const fileName of fileNames) {
+        const fileId = `ws_tpl_${templateId}_${fileName.replace(/[^a-z0-9]/gi, '_')}`
+        const content = importData.files[fileName]
+
+        mockWorkspaceFiles.push({
+          id: fileId,
+          name: fileName,
+          type: 'file',
+          path: templatePath,
+          size: content.length,
+          modifiedAt: now,
+        })
+
+        mockFileContents[fileId] = content
+
+        await repos.receipts.append(receipt.id, {
+          stream: 'stdout',
+          chunk: `  Created file: ${fileName} (${content.length} bytes)\n`,
+        })
+      }
+    } else {
+      const dirRes = validateWorkspacePath(templatePath)
+      if (!dirRes.valid || !dirRes.resolvedPath) {
+        throw new Error(dirRes.error || `Invalid template path: ${templatePath}`)
+      }
+
+      try {
+        await fsp.access(dirRes.resolvedPath)
+        throw new Error(`Template "${templateId}" already exists`)
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err
+      }
+
+      await fsp.mkdir(dirRes.resolvedPath, { recursive: false })
 
       await repos.receipts.append(receipt.id, {
         stream: 'stdout',
-        chunk: `  Created file: ${fileName} (${content.length} bytes)\n`,
+        chunk: `  Created folder: ${templatePath}\n`,
       })
+
+      for (const fileName of fileNames) {
+        const parts = fileName.split('/')
+        if (parts.some((p) => p === '' || p === '.' || p === '..')) {
+          throw new Error(`Invalid file name: ${fileName}`)
+        }
+        if (parts.some((p) => p.startsWith('.'))) {
+          throw new Error(`Invalid file name (hidden path segment): ${fileName}`)
+        }
+
+        const content = importData.files[fileName]
+        const filePath = `${templatePath}/${fileName}`
+        const fileRes = validateWorkspacePath(filePath)
+        if (!fileRes.valid || !fileRes.resolvedPath) {
+          throw new Error(fileRes.error || `Invalid file path: ${filePath}`)
+        }
+
+        await fsp.mkdir(dirname(fileRes.resolvedPath), { recursive: true })
+        await fsp.writeFile(fileRes.resolvedPath, content, 'utf8')
+
+        await repos.receipts.append(receipt.id, {
+          stream: 'stdout',
+          chunk: `  Created file: ${fileName} (${content.length} bytes)\n`,
+        })
+      }
     }
 
     // Rescan templates to pick up the new one
-    const updatedTemplates = scanTemplates()
+    const updatedTemplates = await scanTemplates()
     const newTemplate = updatedTemplates.find((t) => t.id === templateId)
 
     // Log activity

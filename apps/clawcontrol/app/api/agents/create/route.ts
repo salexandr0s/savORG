@@ -7,7 +7,7 @@ import {
   createAgentFiles,
   AGENT_ROLE_MAP,
 } from '@/lib/workspace'
-import type { Station } from '@clawcontrol/core'
+import type { StationId } from '@clawcontrol/core'
 
 /**
  * POST /api/agents/create
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
 
   // Determine station from role
   const roleMapping = AGENT_ROLE_MAP[role.toLowerCase()]
-  const station: Station = roleMapping?.station || 'build'
+  const station: StationId = roleMapping?.station || 'build'
 
   // Generate session key
   const sessionKey = generateSessionKey(name)

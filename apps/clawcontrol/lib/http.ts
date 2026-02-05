@@ -155,6 +155,25 @@ export async function apiDelete<T = void>(path: string): Promise<T> {
   return handleResponse<T>(response)
 }
 
+/**
+ * DELETE request with JSON body
+ */
+export async function apiDeleteJson<T, B = unknown>(
+  path: string,
+  body: B
+): Promise<T> {
+  const response = await fetch(path, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+
+  return handleResponse<T>(response)
+}
+
 // ============================================================================
 // TYPED API ENDPOINTS
 // ============================================================================
@@ -164,6 +183,7 @@ import type {
   WorkOrderWithOpsDTO,
   OperationDTO,
   AgentDTO,
+  StationDTO,
   ApprovalDTO,
   ActivityDTO,
   ReceiptDTO,
@@ -342,6 +362,35 @@ export const agentsApi = {
         receiptId: string
       }
     }),
+}
+
+// Stations
+export const stationsApi = {
+  list: () => apiGet<{ data: StationDTO[] }>('/api/stations'),
+
+  create: (data: {
+    name: string
+    icon: string
+    description?: string | null
+    color?: string | null
+    sortOrder?: number
+    typedConfirmText: string
+  }) => apiPost<{ data: StationDTO; receiptId?: string }>('/api/stations', data),
+
+  update: (
+    id: string,
+    data: Partial<{
+      name: string
+      icon: string
+      description: string | null
+      color: string | null
+      sortOrder: number
+      typedConfirmText: string
+    }>
+  ) => apiPatch<{ data: StationDTO; receiptId?: string }>(`/api/stations/${id}`, data),
+
+  delete: (id: string, data: { typedConfirmText: string }) =>
+    apiDeleteJson<{ ok: true; receiptId?: string }>(`/api/stations/${id}`, data),
 }
 
 // Approvals

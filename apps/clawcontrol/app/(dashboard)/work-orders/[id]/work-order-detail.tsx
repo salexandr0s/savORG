@@ -5,10 +5,11 @@ import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import { PageHeader, PageSection, EmptyState } from '@clawcontrol/ui'
 import { OperationStatusPill, WorkOrderStatePill, PriorityPill } from '@/components/ui/status-pill'
-import { workOrdersApi, operationsApi, activitiesApi, approvalsApi, receiptsApi } from '@/lib/http'
+import { workOrdersApi, operationsApi, activitiesApi, approvalsApi, receiptsApi, agentsApi } from '@/lib/http'
 import type { WorkOrderWithOpsDTO, OperationDTO, ActivityDTO, ApprovalDTO, ReceiptDTO } from '@/lib/repo'
 import { cn } from '@/lib/utils'
 import { useProtectedActionTrigger } from '@/components/protected-action-modal'
+import { StationIcon } from '@/components/station-icon'
 import { getValidWorkOrderTransitions, type WorkOrderState } from '@clawcontrol/core'
 import {
   ArrowLeft,
@@ -60,6 +61,7 @@ export function WorkOrderDetail({ workOrderId }: WorkOrderDetailProps) {
   const [workOrder, setWorkOrder] = useState<WorkOrderWithOpsDTO | null>(null)
   const [operations, setOperations] = useState<OperationDTO[]>([])
   const [activities, setActivities] = useState<ActivityDTO[]>([])
+  const [agentStationsByName, setAgentStationsByName] = useState<Record<string, string>>({})
   const [approvals, setApprovals] = useState<ApprovalDTO[]>([])
   const [receipts, setReceipts] = useState<ReceiptDTO[]>([])
   const [loading, setLoading] = useState(true)
@@ -70,18 +72,20 @@ export function WorkOrderDetail({ workOrderId }: WorkOrderDetailProps) {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [woResult, opsResult, activitiesResult, approvalsResult, receiptsResult] = await Promise.all([
+        const [woResult, opsResult, activitiesResult, approvalsResult, receiptsResult, agentsResult] = await Promise.all([
           workOrdersApi.get(workOrderId),
           operationsApi.list({ workOrderId }),
           activitiesApi.list({ entityType: 'work_order', entityId: workOrderId, limit: 50 }),
           approvalsApi.list({ workOrderId, limit: 50 }),
           receiptsApi.list({ workOrderId }),
+          agentsApi.list(),
         ])
         setWorkOrder(woResult.data)
         setOperations(opsResult.data)
         setActivities(activitiesResult.data)
         setApprovals(approvalsResult.data)
         setReceipts(receiptsResult.data)
+        setAgentStationsByName(Object.fromEntries(agentsResult.data.map((a) => [a.name, a.station])))
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load work order')
       } finally {
@@ -94,16 +98,18 @@ export function WorkOrderDetail({ workOrderId }: WorkOrderDetailProps) {
   // Refresh operations, activities, approvals, and receipts after changes
   const refreshData = async () => {
     try {
-      const [opsResult, activitiesResult, approvalsResult, receiptsResult] = await Promise.all([
+      const [opsResult, activitiesResult, approvalsResult, receiptsResult, agentsResult] = await Promise.all([
         operationsApi.list({ workOrderId }),
         activitiesApi.list({ entityType: 'work_order', entityId: workOrderId, limit: 50 }),
         approvalsApi.list({ workOrderId, limit: 50 }),
         receiptsApi.list({ workOrderId }),
+        agentsApi.list(),
       ])
       setOperations(opsResult.data)
       setActivities(activitiesResult.data)
       setApprovals(approvalsResult.data)
       setReceipts(receiptsResult.data)
+      setAgentStationsByName(Object.fromEntries(agentsResult.data.map((a) => [a.name, a.station])))
     } catch (err) {
       console.error('Failed to refresh data:', err)
     }
@@ -306,7 +312,7 @@ export function WorkOrderDetail({ workOrderId }: WorkOrderDetailProps) {
           <ReceiptsTab receipts={receipts} workOrderId={workOrderId} />
         )}
         {activeTab === 'activity' && (
-          <ActivityTab activities={activities} workOrderId={workOrderId} />
+          <ActivityTab activities={activities} workOrderId={workOrderId} agentStationsByName={agentStationsByName} />
         )}
       </div>
     </div>
@@ -826,9 +832,11 @@ function OperationsTab({
 function ActivityTab({
   activities,
   workOrderId: _workOrderId,
+  agentStationsByName,
 }: {
   activities: ActivityDTO[]
   workOrderId: string
+  agentStationsByName: Record<string, string>
 }) {
   const typeIcons: Record<string, typeof Activity> = {
     work_order: ClipboardList,
@@ -848,6 +856,9 @@ function ActivityTab({
             {activities.map((activity) => {
               const typeKey = activity.type.split('.')[0]
               const Icon = typeIcons[typeKey] || Activity
+              const isAgentActor = activity.actor.startsWith('agent:')
+              const actorLabel = isAgentActor ? activity.actor.replace('agent:', '') : activity.actor
+              const stationId = isAgentActor ? agentStationsByName[actorLabel] : undefined
 
               return (
                 <div
@@ -873,8 +884,9 @@ function ActivityTab({
                       {activity.actor !== 'system' && (
                         <>
                           <span className="text-fg-3">•</span>
-                          <span className="text-xs text-status-progress font-mono">
-                            {activity.actor.replace('agent:', '')}
+                          <span className="text-xs text-status-progress font-mono inline-flex items-center gap-1.5">
+                            {isAgentActor && <StationIcon stationId={stationId} />}
+                            {actorLabel}
                           </span>
                         </>
                       )}

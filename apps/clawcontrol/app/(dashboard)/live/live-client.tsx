@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { PageHeader, EmptyState } from '@clawcontrol/ui'
-import { activitiesApi } from '@/lib/http'
+import { activitiesApi, agentsApi } from '@/lib/http'
 import { useSseStream, type SseConnectionState } from '@/lib/hooks/useSseStream'
 import type { ActivityDTO } from '@/lib/repo'
+import { StationIcon } from '@/components/station-icon'
 import { cn } from '@/lib/utils'
 import {
   Activity as ActivityIcon,
@@ -30,6 +31,7 @@ type ViewMode = 'timeline' | 'visualizer'
 export function LiveClient() {
   const [viewMode, setViewMode] = useState<ViewMode>('timeline')
   const [activities, setActivities] = useState<ActivityDTO[]>([])
+  const [agentStationsByName, setAgentStationsByName] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<ActivityType>('all')
@@ -40,8 +42,14 @@ export function LiveClient() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const result = await activitiesApi.list({ limit: 100 })
-        setActivities(result.data)
+        const [activitiesResult, agentsResult] = await Promise.all([
+          activitiesApi.list({ limit: 100 }),
+          agentsApi.list(),
+        ])
+        setActivities(activitiesResult.data)
+        setAgentStationsByName(
+          Object.fromEntries(agentsResult.data.map((a) => [a.name, a.station]))
+        )
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load activities')
       } finally {
@@ -200,6 +208,7 @@ export function LiveClient() {
                     key={activity.id}
                     activity={activity}
                     typeIcons={typeIcons}
+                    agentStationsByName={agentStationsByName}
                   />
                 ))}
               </div>
@@ -281,13 +290,18 @@ function ConnectionStatus({
 function ActivityRow({
   activity,
   typeIcons,
+  agentStationsByName,
 }: {
   activity: ActivityDTO
   typeIcons: Record<string, typeof ClipboardList>
+  agentStationsByName: Record<string, string>
 }) {
   const [expanded, setExpanded] = useState(false)
   const typeKey = activity.type.split('.')[0]
   const Icon = typeIcons[typeKey] || ActivityIcon
+  const isAgentActor = activity.actor.startsWith('agent:')
+  const actorLabel = isAgentActor ? activity.actor.replace('agent:', '') : activity.actor
+  const stationId = isAgentActor ? agentStationsByName[actorLabel] : undefined
 
   return (
     <div
@@ -322,8 +336,9 @@ function ActivityRow({
           {activity.actor !== 'system' && (
             <>
               <span className="text-fg-3">•</span>
-              <span className="text-xs text-status-progress font-mono">
-                {activity.actor.replace('agent:', '')}
+              <span className="text-xs text-status-progress font-mono inline-flex items-center gap-1.5">
+                {isAgentActor && <StationIcon stationId={stationId} />}
+                {actorLabel}
               </span>
             </>
           )}

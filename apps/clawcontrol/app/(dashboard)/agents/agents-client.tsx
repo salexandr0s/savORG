@@ -9,12 +9,15 @@ import { useProtectedActionTrigger } from '@/components/protected-action-modal'
 import { AgentAvatar } from '@/components/ui/agent-avatar'
 import { ModelBadge, ModelOption } from '@/components/ui/model-badge'
 import { AgentCard } from '@/components/agent-card'
+import { StationIcon } from '@/components/station-icon'
 import { FileEditorModal } from '@/components/file-editor-modal'
 import { SkillSelector } from '@/components/skill-selector'
 import { agentsApi, operationsApi, templatesApi, skillsApi, type TemplateSummary, type SkillSummary } from '@/lib/http'
 import { AVAILABLE_MODELS, DEFAULT_MODEL } from '@/lib/models'
 import type { AgentDTO, OperationDTO } from '@/lib/repo'
+import { useStations } from '@/lib/stations-context'
 import { cn } from '@/lib/utils'
+import { StationsTab, StationUpsertModal } from './stations-tab'
 import {
   Bot,
   Plus,
@@ -77,6 +80,7 @@ const agentColumns: Column<AgentDTO>[] = [
     render: (row) => (
       <div className="flex items-center gap-2">
         <AgentAvatar agentId={row.id} name={row.name} size="sm" />
+        <StationIcon stationId={row.station} />
         <span className="text-status-progress">{row.name}</span>
       </div>
     ),
@@ -99,7 +103,10 @@ const agentColumns: Column<AgentDTO>[] = [
     header: 'Station',
     width: '100px',
     render: (row) => (
-      <span className="px-2 py-0.5 text-xs bg-bg-3 rounded text-fg-1">{row.station}</span>
+      <span className="px-2 py-0.5 text-xs bg-bg-3 rounded text-fg-1 inline-flex items-center gap-1.5">
+        <StationIcon stationId={row.station} />
+        {row.station}
+      </span>
     ),
   },
   {
@@ -147,6 +154,11 @@ export function AgentsClient() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | undefined>()
+
+  const { stations } = useStations()
+
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'agents' | 'stations'>('agents')
 
   // View mode state
   const [viewMode, setViewMode] = useState<'list' | 'card'>('card')
@@ -429,57 +441,86 @@ export function AgentsClient() {
       <div className="w-full space-y-4">
         <PageHeader
           title="Agents"
-          subtitle={`${agents.length} agents configured`}
+          subtitle={activeTab === 'agents' ? `${agents.length} agents configured` : `${stations.length} stations configured`}
           actions={
-            <div className="flex gap-2">
-              {/* View Toggle */}
-              <div className="flex rounded-[var(--radius-md)] border border-bd-0 overflow-hidden">
+            <div className="flex items-center gap-2">
+              {/* Tab Switch */}
+              <div className="flex items-center gap-1 bg-bg-2 rounded-[var(--radius-md)] border border-bd-0 p-0.5">
                 <button
-                  onClick={() => setViewMode('card')}
+                  onClick={() => setActiveTab('agents')}
                   className={cn(
-                    'p-1.5 transition-colors',
-                    viewMode === 'card'
-                      ? 'bg-status-progress text-white'
-                      : 'bg-bg-2 text-fg-2 hover:text-fg-0'
+                    'px-2.5 py-1.5 text-xs font-medium rounded-[var(--radius-sm)] transition-colors',
+                    activeTab === 'agents'
+                      ? 'bg-bg-3 text-fg-0'
+                      : 'text-fg-2 hover:text-fg-1'
                   )}
-                  title="Card view"
                 >
-                  <LayoutGrid className="w-4 h-4" />
+                  Agents
                 </button>
                 <button
-                  onClick={() => setViewMode('list')}
+                  onClick={() => setActiveTab('stations')}
                   className={cn(
-                    'p-1.5 transition-colors',
-                    viewMode === 'list'
-                      ? 'bg-status-progress text-white'
-                      : 'bg-bg-2 text-fg-2 hover:text-fg-0'
+                    'px-2.5 py-1.5 text-xs font-medium rounded-[var(--radius-sm)] transition-colors',
+                    activeTab === 'stations'
+                      ? 'bg-bg-3 text-fg-0'
+                      : 'text-fg-2 hover:text-fg-1'
                   )}
-                  title="List view"
                 >
-                  <List className="w-4 h-4" />
+                  Stations
                 </button>
               </div>
 
-              <button
-                onClick={() => setShowTemplateWizard(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] border border-bd-0 text-fg-1 hover:bg-bg-3 transition-colors"
-              >
-                <LayoutTemplate className="w-3.5 h-3.5" />
-                From Template
-              </button>
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] bg-status-progress text-white hover:bg-status-progress/90 transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Create Agent
-              </button>
+              {activeTab === 'agents' && (
+                <>
+                  {/* View Toggle */}
+                  <div className="flex rounded-[var(--radius-md)] border border-bd-0 overflow-hidden">
+                    <button
+                      onClick={() => setViewMode('card')}
+                      className={cn(
+                        'p-1.5 transition-colors',
+                        viewMode === 'card'
+                          ? 'bg-status-progress text-white'
+                          : 'bg-bg-2 text-fg-2 hover:text-fg-0'
+                      )}
+                      title="Card view"
+                    >
+                      <LayoutGrid className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setViewMode('list')}
+                      className={cn(
+                        'p-1.5 transition-colors',
+                        viewMode === 'list'
+                          ? 'bg-status-progress text-white'
+                          : 'bg-bg-2 text-fg-2 hover:text-fg-0'
+                      )}
+                      title="List view"
+                    >
+                      <List className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => setShowTemplateWizard(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] border border-bd-0 text-fg-1 hover:bg-bg-3 transition-colors"
+                  >
+                    <LayoutTemplate className="w-3.5 h-3.5" />
+                    From Template
+                  </button>
+                  <button
+                    onClick={() => setShowCreateModal(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] bg-status-progress text-white hover:bg-status-progress/90 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Create Agent
+                  </button>
+                </>
+              )}
             </div>
           }
         />
 
-        {/* Result banner */}
-        {createResult && (
+        {activeTab === 'agents' && createResult && (
           <div
             className={cn(
               'flex items-center justify-between p-3 rounded-[var(--radius-md)] border',
@@ -505,97 +546,107 @@ export function AgentsClient() {
           </div>
         )}
 
-        {/* Content: Card View or Table View */}
-        {viewMode === 'card' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {agents.length === 0 ? (
-              <div className="col-span-full">
-                <EmptyState
-                  icon={<Bot className="w-8 h-8" />}
-                  title="No agents registered"
-                  description="Create an agent to get started"
-                />
+        {activeTab === 'stations' ? (
+          <StationsTab />
+        ) : (
+          <>
+            {/* Content: Card View or Table View */}
+            {viewMode === 'card' ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {agents.length === 0 ? (
+                  <div className="col-span-full">
+                    <EmptyState
+                      icon={<Bot className="w-8 h-8" />}
+                      title="No agents registered"
+                      description="Create an agent to get started"
+                    />
+                  </div>
+                ) : (
+                  agents.map((agent) => (
+                    <AgentCard
+                      key={agent.id}
+                      agent={agent}
+                      onProvision={() => handleProvisionAgent(agent)}
+                      onTest={() => handleTestAgent(agent)}
+                      onEditFile={(fileName) => handleFileEdit(agent.name, fileName)}
+                      onClick={() => setSelectedId(agent.id)}
+                    />
+                  ))
+                )}
               </div>
             ) : (
-              agents.map((agent) => (
-                <AgentCard
-                  key={agent.id}
-                  agent={agent}
-                  onProvision={() => handleProvisionAgent(agent)}
-                  onTest={() => handleTestAgent(agent)}
-                  onEditFile={(fileName) => handleFileEdit(agent.name, fileName)}
-                  onClick={() => setSelectedId(agent.id)}
+              <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-bd-0 overflow-hidden">
+                <CanonicalTable
+                  columns={agentColumns}
+                  rows={agents}
+                  rowKey={(row) => row.id}
+                  onRowClick={(row) => setSelectedId(row.id)}
+                  selectedKey={selectedId}
+                  density="compact"
+                  emptyState={
+                    <EmptyState
+                      icon={<Bot className="w-8 h-8" />}
+                      title="No agents registered"
+                      description="Create an agent to get started"
+                    />
+                  }
                 />
-              ))
+              </div>
             )}
-          </div>
-        ) : (
-          <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-bd-0 overflow-hidden">
-            <CanonicalTable
-              columns={agentColumns}
-              rows={agents}
-              rowKey={(row) => row.id}
-              onRowClick={(row) => setSelectedId(row.id)}
-              selectedKey={selectedId}
-              density="compact"
-              emptyState={
-                <EmptyState
-                  icon={<Bot className="w-8 h-8" />}
-                  title="No agents registered"
-                  description="Create an agent to get started"
-                />
-              }
-            />
-          </div>
+          </>
         )}
       </div>
 
-      {/* Create Agent Modal */}
-      <CreateAgentModal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onSubmit={handleCreateAgent}
-      />
-
-      {/* Create from Template Wizard */}
-      <CreateFromTemplateWizard
-        isOpen={showTemplateWizard}
-        onClose={() => setShowTemplateWizard(false)}
-        onSubmit={handleCreateFromTemplate}
-      />
-
-      {/* File Editor Modal */}
-      {editingFile && (
-        <FileEditorModal
-          isOpen={!!editingFile}
-          onClose={() => setEditingFile(null)}
-          filePath={`agents/${editingFile.agentName}/${editingFile.fileName}`}
-          fileName={editingFile.fileName}
-          onSaved={handleFileSaved}
-        />
-      )}
-
-      {/* Detail Drawer */}
-      <RightDrawer
-        open={!!selectedAgent}
-        onClose={() => setSelectedId(undefined)}
-        title={selectedAgent?.name}
-        description={selectedAgent?.role}
-      >
-        {selectedAgent && (
-          <AgentDetail
-            agent={selectedAgent}
-            assignedOps={assignedOps}
-            onProvision={() => handleProvisionAgent(selectedAgent)}
-            onTest={() => handleTestAgent(selectedAgent)}
-            onEdit={(patch) => handleEditAgent(selectedAgent, patch)}
-            onAvatarUpload={(file) => handleAvatarUpload(selectedAgent, file)}
-            onAvatarReset={() => handleAvatarReset(selectedAgent)}
-            onDuplicateSkills={(skillIds) => handleDuplicateSkills(selectedAgent, skillIds)}
-            onEditFile={(fileName) => handleFileEdit(selectedAgent.name, fileName)}
+      {activeTab === 'agents' && (
+        <>
+          {/* Create Agent Modal */}
+          <CreateAgentModal
+            isOpen={showCreateModal}
+            onClose={() => setShowCreateModal(false)}
+            onSubmit={handleCreateAgent}
           />
-        )}
-      </RightDrawer>
+
+          {/* Create from Template Wizard */}
+          <CreateFromTemplateWizard
+            isOpen={showTemplateWizard}
+            onClose={() => setShowTemplateWizard(false)}
+            onSubmit={handleCreateFromTemplate}
+          />
+
+          {/* File Editor Modal */}
+          {editingFile && (
+            <FileEditorModal
+              isOpen={!!editingFile}
+              onClose={() => setEditingFile(null)}
+              filePath={`agents/${editingFile.agentName}/${editingFile.fileName}`}
+              fileName={editingFile.fileName}
+              onSaved={handleFileSaved}
+            />
+          )}
+
+          {/* Detail Drawer */}
+          <RightDrawer
+            open={!!selectedAgent}
+            onClose={() => setSelectedId(undefined)}
+            title={selectedAgent?.name}
+            description={selectedAgent?.role}
+          >
+            {selectedAgent && (
+              <AgentDetail
+                agent={selectedAgent}
+                assignedOps={assignedOps}
+                onProvision={() => handleProvisionAgent(selectedAgent)}
+                onTest={() => handleTestAgent(selectedAgent)}
+                onEdit={(patch) => handleEditAgent(selectedAgent, patch)}
+                onAvatarUpload={(file) => handleAvatarUpload(selectedAgent, file)}
+                onAvatarReset={() => handleAvatarReset(selectedAgent)}
+                onDuplicateSkills={(skillIds) => handleDuplicateSkills(selectedAgent, skillIds)}
+                onEditFile={(fileName) => handleFileEdit(selectedAgent.name, fileName)}
+              />
+            )}
+          </RightDrawer>
+        </>
+      )}
     </>
   )
 }
@@ -1147,6 +1198,8 @@ function AgentDetail({
     error: 'danger',
   }
 
+  const { stations, stationsById } = useStations()
+
   const [editRole, setEditRole] = useState(agent.role)
   const [editStation, setEditStation] = useState(agent.station)
   const [editWipLimit, setEditWipLimit] = useState<number>(agent.wipLimit)
@@ -1154,6 +1207,8 @@ function AgentDetail({
   const [editCaps, setEditCaps] = useState<Record<string, boolean>>(agent.capabilities)
   const [editModel, setEditModel] = useState(agent.model || DEFAULT_MODEL)
   const [showModelSelector, setShowModelSelector] = useState(false)
+  const [showStationSelector, setShowStationSelector] = useState(false)
+  const [showCreateStation, setShowCreateStation] = useState(false)
 
   // Skills state
   const [agentSkills, setAgentSkills] = useState<SkillSummary[]>([])
@@ -1170,6 +1225,7 @@ function AgentDetail({
     setEditSessionKey(agent.sessionKey)
     setEditCaps(agent.capabilities)
     setEditModel(agent.model || DEFAULT_MODEL)
+    setShowStationSelector(false)
     loadAgentSkills()
   }, [agent.id])
 
@@ -1198,6 +1254,9 @@ function AgentDetail({
 
   // Agent file names
   const agentFiles = [`${agent.name}.soul.md`, `${agent.name}.md`]
+  const agentStationLabel = stationsById[agent.station]?.name ?? agent.station
+  const editStationLabel = stationsById[editStation]?.name ?? editStation
+  const sortedStations = [...stations].sort((a, b) => (a.sortOrder - b.sortOrder) || a.name.localeCompare(b.name))
 
   return (
     <div className="space-y-6">
@@ -1235,7 +1294,10 @@ function AgentDetail({
       {/* Status */}
       <div className="flex items-center gap-3">
         <StatusPill tone={toneMap[agent.status]} label={agent.status} />
-        <span className="px-2 py-0.5 text-xs bg-bg-3 rounded text-fg-1">{agent.station}</span>
+        <span className="px-2 py-0.5 text-xs bg-bg-3 rounded text-fg-1 inline-flex items-center gap-1.5">
+          <StationIcon stationId={agent.station} />
+          {agentStationLabel}
+        </span>
         <ModelBadge modelId={agent.model} size="sm" showIcon />
       </div>
 
@@ -1428,15 +1490,55 @@ function AgentDetail({
             </div>
             <div className="space-y-1">
               <label className="text-xs text-fg-2">Station</label>
-              <select
-                value={editStation}
-                onChange={(e) => setEditStation(e.target.value)}
-                className="w-full px-2 py-1.5 bg-bg-2 border border-bd-0 rounded-[var(--radius-md)] text-sm text-fg-0"
-              >
-                {['spec','build','qa','ops','update','ship','compound'].map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowStationSelector(!showStationSelector)}
+                  className="w-full flex items-center justify-between px-3 py-2 bg-bg-2 border border-bd-0 rounded-[var(--radius-md)] text-sm text-fg-0 hover:border-bd-1 transition-colors"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <StationIcon stationId={editStation} />
+                    <span className="truncate">{editStationLabel}</span>
+                  </div>
+                  <ChevronDown className={cn('w-4 h-4 text-fg-2 transition-transform', showStationSelector && 'rotate-180')} />
+                </button>
+                {showStationSelector && (
+                  <div className="absolute z-10 mt-1 w-full bg-bg-1 border border-bd-0 rounded-[var(--radius-md)] shadow-lg overflow-hidden">
+                    {sortedStations.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => {
+                          setEditStation(s.id)
+                          setShowStationSelector(false)
+                        }}
+                        className={cn(
+                          'w-full px-3 py-2 text-left text-xs hover:bg-bg-2 transition-colors flex items-center justify-between gap-2',
+                          s.id === editStation && 'bg-status-progress/10'
+                        )}
+                      >
+                        <span className="inline-flex items-center gap-2 min-w-0">
+                          <StationIcon stationId={s.id} />
+                          <span className="truncate">{s.name}</span>
+                        </span>
+                        <span className="text-[10px] text-fg-3 font-mono">{s.id}</span>
+                      </button>
+                    ))}
+                    <div className="border-t border-bd-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowStationSelector(false)
+                          setShowCreateStation(true)
+                        }}
+                        className="w-full px-3 py-2 text-left text-xs hover:bg-bg-2 transition-colors text-status-progress"
+                      >
+                        + Create new…
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1498,6 +1600,16 @@ function AgentDetail({
           </div>
         </div>
       </PageSection>
+
+      <StationUpsertModal
+        open={showCreateStation}
+        mode="create"
+        onClose={() => setShowCreateStation(false)}
+        onSuccess={(s) => {
+          setShowCreateStation(false)
+          setEditStation(s.id)
+        }}
+      />
     </div>
   )
 }

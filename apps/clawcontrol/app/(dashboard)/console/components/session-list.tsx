@@ -3,8 +3,10 @@
 import { useState, useMemo } from 'react'
 import { Bot, Clock, AlertCircle, CheckCircle, Pause } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { StationIcon } from '@/components/station-icon'
 import type { ConsoleSessionDTO } from '@/app/api/openclaw/console/sessions/route'
 import type { AvailabilityStatus } from '@/lib/openclaw/availability'
+import type { AgentDTO } from '@/lib/repo'
 
 // ============================================================================
 // TYPES
@@ -15,6 +17,7 @@ interface SessionListProps {
   selectedId: string | null
   onSelect: (sessionId: string) => void
   gatewayStatus: AvailabilityStatus
+  agentsBySessionKey: Record<string, AgentDTO>
 }
 
 type FilterState = 'all' | 'active' | 'idle' | 'error'
@@ -51,7 +54,7 @@ function getStateIcon(state: string) {
 // COMPONENT
 // ============================================================================
 
-export function SessionList({ sessions, selectedId, onSelect, gatewayStatus }: SessionListProps) {
+export function SessionList({ sessions, selectedId, onSelect, gatewayStatus, agentsBySessionKey }: SessionListProps) {
   const [filter, setFilter] = useState<FilterState>('all')
 
   // Filter sessions
@@ -107,68 +110,77 @@ export function SessionList({ sessions, selectedId, onSelect, gatewayStatus }: S
           </div>
         ) : (
           <div className="divide-y divide-bd-0">
-            {filteredSessions.map((session) => (
-              <button
-                key={session.sessionId}
-                onClick={() => onSelect(session.sessionId)}
-                className={cn(
-                  'w-full p-3 text-left transition-colors',
-                  selectedId === session.sessionId
-                    ? 'bg-bg-3'
-                    : 'hover:bg-bg-2'
-                )}
-              >
-                {/* Agent name + state */}
-                <div className="flex items-center gap-2">
-                  <Bot className="w-4 h-4 text-status-progress flex-shrink-0" />
-                  <span className="text-sm font-mono text-fg-0 truncate">
-                    {session.agentId}
-                  </span>
-                  <div className="ml-auto flex-shrink-0">
-                    {getStateIcon(session.state)}
-                  </div>
-                </div>
+            {filteredSessions.map((session) => {
+              const agent = agentsBySessionKey[session.sessionKey]
+              const displayName = agent?.name || session.agentId
 
-                {/* Session info */}
-                <div className="mt-1.5 flex items-center gap-2 text-xs text-fg-3">
-                  <span className="truncate">{session.kind}</span>
-                  <span className="text-fg-3/50">·</span>
-                  <span className="flex-shrink-0">
-                    {formatRelativeTime(session.lastSeenAt)}
-                  </span>
-                </div>
-
-                {/* Context usage */}
-                {session.percentUsed !== null && (
-                  <div className="mt-2">
-                    <div className="h-1 bg-bg-3 rounded-full overflow-hidden">
-                      <div
-                        className={cn(
-                          'h-full transition-all',
-                          session.percentUsed > 80
-                            ? 'bg-status-danger'
-                            : session.percentUsed > 50
-                              ? 'bg-status-warning'
-                              : 'bg-status-success'
-                        )}
-                        style={{ width: `${session.percentUsed}%` }}
-                      />
-                    </div>
-                    <div className="mt-0.5 text-[10px] text-fg-3">
-                      {session.percentUsed}% context used
+              return (
+                <button
+                  key={session.sessionId}
+                  onClick={() => onSelect(session.sessionId)}
+                  className={cn(
+                    'w-full p-3 text-left transition-colors',
+                    selectedId === session.sessionId
+                      ? 'bg-bg-3'
+                      : 'hover:bg-bg-2'
+                  )}
+                >
+                  {/* Agent name + state */}
+                  <div className="flex items-center gap-2">
+                    {agent ? (
+                      <StationIcon stationId={agent.station} size="md" className="flex-shrink-0" />
+                    ) : (
+                      <Bot className="w-4 h-4 text-status-progress flex-shrink-0" />
+                    )}
+                    <span className="text-sm font-mono text-fg-0 truncate">
+                      {displayName}
+                    </span>
+                    <div className="ml-auto flex-shrink-0">
+                      {getStateIcon(session.state)}
                     </div>
                   </div>
-                )}
 
-                {/* Error indicator */}
-                {session.abortedLastRun && (
-                  <div className="mt-1.5 text-xs text-status-danger flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3" />
-                    <span>Last run aborted</span>
+                  {/* Session info */}
+                  <div className="mt-1.5 flex items-center gap-2 text-xs text-fg-3">
+                    <span className="truncate">{session.kind}</span>
+                    <span className="text-fg-3/50">·</span>
+                    <span className="flex-shrink-0">
+                      {formatRelativeTime(session.lastSeenAt)}
+                    </span>
                   </div>
-                )}
-              </button>
-            ))}
+
+                  {/* Context usage */}
+                  {session.percentUsed !== null && (
+                    <div className="mt-2">
+                      <div className="h-1 bg-bg-3 rounded-full overflow-hidden">
+                        <div
+                          className={cn(
+                            'h-full transition-all',
+                            session.percentUsed > 80
+                              ? 'bg-status-danger'
+                              : session.percentUsed > 50
+                                ? 'bg-status-warning'
+                                : 'bg-status-success'
+                          )}
+                          style={{ width: `${session.percentUsed}%` }}
+                        />
+                      </div>
+                      <div className="mt-0.5 text-[10px] text-fg-3">
+                        {session.percentUsed}% context used
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Error indicator */}
+                  {session.abortedLastRun && (
+                    <div className="mt-1.5 text-xs text-status-danger flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      <span>Last run aborted</span>
+                    </div>
+                  )}
+                </button>
+              )
+            })}
           </div>
         )}
       </div>

@@ -19,6 +19,8 @@ CLAWCONTROL_DIR="$SCRIPT_DIR/apps/clawcontrol"
 BACKEND_DIR="$SCRIPT_DIR/apps/clawcontrol"
 DATA_DIR="$CLAWCONTROL_DIR/data"
 DB_FILE="$DATA_DIR/clawcontrol.db"
+ENV_EXAMPLE_FILE="$CLAWCONTROL_DIR/.env.example"
+ENV_FILE="$CLAWCONTROL_DIR/.env"
 
 # Colors
 RED='\033[0;31m'
@@ -93,6 +95,23 @@ echo ""
 echo -e "${BLUE}Installing dependencies...${NC}"
 cd "$SCRIPT_DIR"
 npm install
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Ensure environment file exists
+# ─────────────────────────────────────────────────────────────────────────────
+echo ""
+echo -e "${BLUE}Configuring environment...${NC}"
+if [[ ! -f "$ENV_FILE" ]]; then
+  if [[ -f "$ENV_EXAMPLE_FILE" ]]; then
+    cp "$ENV_EXAMPLE_FILE" "$ENV_FILE"
+    echo "  ✓ Created $ENV_FILE from .env.example"
+  else
+    echo -e "${RED}✗ Missing $ENV_EXAMPLE_FILE (cannot create $ENV_FILE)${NC}"
+    exit 1
+  fi
+else
+  echo "  - $ENV_FILE already exists"
+fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Create data directory

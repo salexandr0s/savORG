@@ -8,6 +8,7 @@
 import { createDbWorkOrdersRepo, createMockWorkOrdersRepo, type WorkOrdersRepo } from './workOrders'
 import { createDbOperationsRepo, createMockOperationsRepo, type OperationsRepo } from './operations'
 import { createDbAgentsRepo, createMockAgentsRepo, type AgentsRepo } from './agents'
+import { createDbStationsRepo, createMockStationsRepo, type StationsRepo } from './stations'
 import { createDbApprovalsRepo, createMockApprovalsRepo, type ApprovalsRepo } from './approvals'
 import { createDbActivitiesRepo, createMockActivitiesRepo, type ActivitiesRepo } from './activities'
 import { createDbReceiptsRepo, createMockReceiptsRepo, type ReceiptsRepo } from './receipts'
@@ -26,6 +27,7 @@ export interface Repos {
   workOrders: WorkOrdersRepo
   operations: OperationsRepo
   agents: AgentsRepo
+  stations: StationsRepo
   approvals: ApprovalsRepo
   activities: ActivitiesRepo
   receipts: ReceiptsRepo
@@ -78,6 +80,7 @@ export function createRepos(): Repos {
       workOrders: createMockWorkOrdersRepo(),
       operations: createMockOperationsRepo(),
       agents: createMockAgentsRepo(),
+      stations: createMockStationsRepo(),
       approvals: createMockApprovalsRepo(),
       activities: createMockActivitiesRepo(),
       receipts: createMockReceiptsRepo(),
@@ -93,6 +96,7 @@ export function createRepos(): Repos {
     workOrders: createDbWorkOrdersRepo(),
     operations: createDbOperationsRepo(),
     agents: createDbAgentsRepo(),
+    stations: createDbStationsRepo(),
     approvals: createDbApprovalsRepo(),
     activities: createDbActivitiesRepo(),
     receipts: createDbReceiptsRepo(),

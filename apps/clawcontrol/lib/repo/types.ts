@@ -91,6 +91,21 @@ export interface AgentFilters {
 }
 
 // ============================================================================
+// STATIONS
+// ============================================================================
+
+export interface StationDTO {
+  id: string
+  name: string
+  icon: string
+  description: string | null
+  color: string | null
+  sortOrder: number
+  createdAt: Date
+  updatedAt: Date
+}
+
+// ============================================================================
 // APPROVALS
 // ============================================================================
 

@@ -5,6 +5,7 @@ import { PageHeader, PageSection, EmptyState } from '@clawcontrol/ui'
 import { CanonicalTable, type Column } from '@/components/ui/canonical-table'
 import { OperationStatusPill } from '@/components/ui/status-pill'
 import { RightDrawer } from '@/components/shell/right-drawer'
+import { StationIcon } from '@/components/station-icon'
 import { operationsApi, workOrdersApi, agentsApi } from '@/lib/http'
 import type { OperationDTO, WorkOrderDTO, AgentDTO } from '@/lib/repo'
 import type { OperationStatus } from '@clawcontrol/core'
@@ -153,7 +154,13 @@ export function RunsClient() {
           return <span className="text-fg-3">Unassigned</span>
         }
         const agent = agentsMap[row.assigneeAgentIds[0]]
-        return <span className="text-status-progress font-mono text-xs">{agent?.name || '—'}</span>
+        if (!agent) return <span className="text-fg-3">—</span>
+        return (
+          <span className="text-status-progress font-mono text-xs inline-flex items-center gap-1.5">
+            <StationIcon stationId={agent.station} />
+            {agent.name}
+          </span>
+        )
       },
     },
     {
@@ -385,7 +392,10 @@ function OperationDetail({
                 key={agent.id}
                 className="flex items-center justify-between p-2 bg-bg-3 rounded-[var(--radius-md)]"
               >
-                <span className="font-mono text-xs text-status-progress">{agent.name}</span>
+                <span className="font-mono text-xs text-status-progress inline-flex items-center gap-1.5">
+                  <StationIcon stationId={agent.station} />
+                  {agent.name}
+                </span>
                 <span className="text-xs text-fg-2">{agent.role}</span>
               </div>
             ))}

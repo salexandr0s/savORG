@@ -31,7 +31,7 @@ export interface WorkOrder {
 }
 
 // Operation types
-export type Station =
+export type OperationStation =
   | 'spec'
   | 'build'
   | 'qa'
@@ -39,6 +39,12 @@ export type Station =
   | 'update'
   | 'ship'
   | 'compound'
+
+// Backward-compat alias used throughout routing/workflow code.
+export type Station = OperationStation
+
+// Station identifiers for agent categorization are user-defined.
+export type StationId = string
 
 export type OperationStatus =
   | 'todo'
@@ -51,7 +57,7 @@ export type OperationStatus =
 export interface Operation {
   id: string
   workOrderId: string
-  station: Station
+  station: OperationStation
   title: string
   notes: string | null
   status: OperationStatus
@@ -72,7 +78,7 @@ export interface Agent {
   id: string
   name: string
   role: string
-  station: Station
+  station: StationId
   status: AgentStatus
   sessionKey: string
   capabilities: Record<string, boolean>

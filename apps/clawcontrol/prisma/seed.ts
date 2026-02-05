@@ -33,6 +33,7 @@ async function main() {
   await prisma.operation.deleteMany()
   await prisma.workOrder.deleteMany()
   await prisma.agent.deleteMany()
+  await prisma.station.deleteMany()
   await prisma.activity.deleteMany()
   await prisma.document.deleteMany()
   await prisma.cronJob.deleteMany()
@@ -347,6 +348,59 @@ async function main() {
   ])
 
   console.log(`Created ${operations.length} operations`)
+
+  // ============================================================================
+  // STATIONS
+  // ============================================================================
+
+  const stations = await Promise.all([
+    prisma.station.create({
+      data: {
+        id: 'spec',
+        name: 'spec',
+        icon: 'file-text',
+        description: 'Planning & specifications',
+        sortOrder: 10,
+        createdAt: daysAgo(365),
+        updatedAt: now,
+      },
+    }),
+    prisma.station.create({
+      data: {
+        id: 'build',
+        name: 'build',
+        icon: 'hammer',
+        description: 'Implementation',
+        sortOrder: 20,
+        createdAt: daysAgo(365),
+        updatedAt: now,
+      },
+    }),
+    prisma.station.create({
+      data: {
+        id: 'qa',
+        name: 'qa',
+        icon: 'check-circle',
+        description: 'Quality assurance',
+        sortOrder: 30,
+        createdAt: daysAgo(365),
+        updatedAt: now,
+      },
+    }),
+    prisma.station.create({
+      data: {
+        id: 'ops',
+        name: 'ops',
+        icon: 'settings',
+        description: 'Operations',
+        sortOrder: 40,
+        createdAt: daysAgo(365),
+        updatedAt: now,
+      },
+    }),
+  ])
+
+  console.log(`Created ${stations.length} stations`)
 
   // ============================================================================
   // AGENTS

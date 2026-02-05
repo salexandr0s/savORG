@@ -11,12 +11,12 @@ export async function GET(
 ) {
   const { id, fileId } = await params
 
-  const template = getTemplateById(id)
+  const template = await getTemplateById(id)
   if (!template) {
     return NextResponse.json({ error: 'Template not found' }, { status: 404 })
   }
 
-  const content = getTemplateFileContent(fileId)
+  const content = await getTemplateFileContent(id, fileId)
   if (content === null) {
     return NextResponse.json({ error: 'File not found' }, { status: 404 })
   }

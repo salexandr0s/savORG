@@ -7,7 +7,7 @@ import {
   previewTemplateRender,
 } from '@/lib/templates'
 import { generateAgentName, generateSessionKey, AGENT_ROLE_MAP } from '@/lib/workspace'
-import type { Station } from '@clawcontrol/core'
+import type { StationId } from '@clawcontrol/core'
 
 interface CreateFromTemplateInput {
   templateId: string
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Get the template
-  const template = getTemplateById(templateId)
+  const template = await getTemplateById(templateId)
   if (!template) {
     return NextResponse.json({ error: 'Template not found' }, { status: 404 })
   }
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
 
   // Determine station from role
   const roleMapping = AGENT_ROLE_MAP[role.toLowerCase()]
-  const station: Station = roleMapping?.station || 'build'
+  const station: StationId = roleMapping?.station || 'build'
 
   // Merge defaults with provided params
   const mergedParams = {
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Preview what files would be created
-  const renderedFiles = previewTemplateRender(templateId, mergedParams)
+  const renderedFiles = await previewTemplateRender(templateId, mergedParams)
 
   // Create receipt for the operation
   const receipt = await repos.receipts.create({
@@ -231,7 +231,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'templateId is required' }, { status: 400 })
   }
 
-  const template = getTemplateById(templateId)
+  const template = await getTemplateById(templateId)
   if (!template) {
     return NextResponse.json({ error: 'Template not found' }, { status: 404 })
   }

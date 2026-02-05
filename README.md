@@ -12,7 +12,8 @@ Built on [OpenClaw](https://github.com/openclaw/openclaw). Track work orders, go
 ```bash
 git clone https://github.com/salexandr0s/clawcontrol.git
 cd clawcontrol
-npm install && npm run db:migrate && npm run dev
+./setup.sh
+npm run dev
 # → http://localhost:3000
 ```
 
@@ -20,7 +21,10 @@ npm install && npm run db:migrate && npm run dev
 ```bash
 git clone https://github.com/salexandr0s/clawcontrol.git
 cd clawcontrol
-npm install && npm run db:migrate
+npm install
+cp apps/clawcontrol/.env.example apps/clawcontrol/.env
+npm run db:migrate
+npm run build --workspace=clawcontrol
 ./start.sh --build    # Builds Mac app and starts everything
 ```
 
@@ -30,7 +34,12 @@ npm install && npm run db:migrate
 3. Start the backend:
    ```bash
    git clone https://github.com/salexandr0s/clawcontrol.git
-   cd clawcontrol && npm install && npm run db:migrate && npm run start --workspace=clawcontrol
+   cd clawcontrol
+   npm install
+   cp apps/clawcontrol/.env.example apps/clawcontrol/.env
+   npm run db:migrate
+   npm run build --workspace=clawcontrol
+   npm run start --workspace=clawcontrol
    ```
 4. Open clawcontrol.app (first time: right-click → Open)
 

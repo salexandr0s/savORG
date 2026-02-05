@@ -4,11 +4,13 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { PageHeader, EmptyState } from '@clawcontrol/ui'
 import { Terminal, Wifi, WifiOff, AlertCircle, RefreshCw } from 'lucide-react'
 import { useProtectedActionTrigger } from '@/components/protected-action-modal'
+import { agentsApi } from '@/lib/http'
 import { SessionList } from './components/session-list'
 import { ChatPanel } from './components/chat-panel'
 import { cn } from '@/lib/utils'
 import type { ConsoleSessionDTO } from '@/app/api/openclaw/console/sessions/route'
 import type { AvailabilityStatus } from '@/lib/openclaw/availability'
+import type { AgentDTO } from '@/lib/repo'
 
 // ============================================================================
 // TYPES
@@ -54,6 +56,7 @@ export function ConsoleClient() {
   const [error, setError] = useState<string | null>(null)
   const [gatewayStatus, setGatewayStatus] = useState<AvailabilityStatus>('ok')
   const [gatewayAvailable, setGatewayAvailable] = useState(true)
+  const [agentsBySessionKey, setAgentsBySessionKey] = useState<Record<string, AgentDTO>>({})
 
   // Refs for retry logic
   const retryCountRef = useRef(0)
@@ -96,6 +99,17 @@ export function ConsoleClient() {
     }
   }, [])
 
+  const fetchAgents = useCallback(async () => {
+    try {
+      const res = await agentsApi.list()
+      setAgentsBySessionKey(
+        Object.fromEntries(res.data.map((a) => [a.sessionKey, a]))
+      )
+    } catch {
+      // Ignore - console can still render without station icons
+    }
+  }, [])
+
   const fetchHistory = useCallback(async (sessionId: string) => {
     try {
       const res = await fetch(`/api/openclaw/console/sessions/${sessionId}/history`)
@@ -128,6 +142,7 @@ export function ConsoleClient() {
   // Initial fetch and polling
   useEffect(() => {
     fetchSessions()
+    fetchAgents()
 
     pollIntervalRef.current = setInterval(fetchSessions, POLL_INTERVAL_MS)
 
@@ -136,7 +151,7 @@ export function ConsoleClient() {
         clearInterval(pollIntervalRef.current)
       }
     }
-  }, [fetchSessions])
+  }, [fetchSessions, fetchAgents])
 
   // Fetch history when session selected
   useEffect(() => {
@@ -358,6 +373,7 @@ export function ConsoleClient() {
               selectedId={selectedSessionId}
               onSelect={handleSelectSession}
               gatewayStatus={gatewayStatus}
+              agentsBySessionKey={agentsBySessionKey}
             />
 
             {/* Chat panel (main area) */}
@@ -367,6 +383,7 @@ export function ConsoleClient() {
               onSend={handleSendMessage}
               streaming={streaming}
               sendDisabled={!gatewayAvailable}
+              agentsBySessionKey={agentsBySessionKey}
             />
           </>
         )}

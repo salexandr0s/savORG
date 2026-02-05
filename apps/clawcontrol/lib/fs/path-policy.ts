@@ -40,7 +40,7 @@ function pickWorkspaceRoot(): string {
 const WORKSPACE_ROOT = pickWorkspaceRoot()
 
 // Allowed top-level subdirectories within workspace
-const ALLOWED_SUBDIRS = ['agents', 'overlays', 'skills', 'playbooks', 'plugins', 'memory', 'life', 'docs', 'tools', 'templates', 'canvas', 'projects'] as const
+const ALLOWED_SUBDIRS = ['agents', 'overlays', 'skills', 'playbooks', 'plugins', 'agent-templates', 'memory', 'life', 'docs', 'tools', 'templates', 'canvas', 'projects'] as const
 type AllowedSubdir = (typeof ALLOWED_SUBDIRS)[number]
 
 // Allowed root-level files (e.g. /MEMORY.md). These do not live under a subdir.

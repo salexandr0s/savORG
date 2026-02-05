@@ -121,6 +121,28 @@ model Agent {
 }
 
 // ============================================================================
+// STATIONS
+// ============================================================================
+
+model Station {
+  /// Stable, user-facing id (kebab-case slug).
+  id          String   @id
+  /// Display name (must be unique).
+  name        String   @unique
+  /// Lucide icon key (kebab-case, e.g. "file-text").
+  icon        String
+  description String?
+  /// Optional hex color (e.g. "#3B82F6").
+  color       String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([sortOrder])
+  @@map("stations")
+}
+
+// ============================================================================
 // OPENCLAW SESSION TELEMETRY (NOT CANONICAL)
 // ============================================================================
 

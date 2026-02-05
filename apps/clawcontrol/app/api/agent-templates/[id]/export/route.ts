@@ -14,7 +14,7 @@ export async function GET(
   const { id } = await params
 
   // Get template
-  const template = getTemplateById(id)
+  const template = await getTemplateById(id)
   if (!template) {
     return NextResponse.json({ error: 'Template not found' }, { status: 404 })
   }
@@ -51,13 +51,13 @@ export async function GET(
 
   try {
     // Get all template files
-    const files = getTemplateFiles(id)
+    const files = await getTemplateFiles(id)
 
     // Build a JSON representation (in production, this would be a zip file)
     const exportData: Record<string, string> = {}
 
     for (const file of files) {
-      const content = getTemplateFileContent(file.id)
+      const content = await getTemplateFileContent(id, file.id)
       if (content !== null) {
         exportData[file.name] = content
       }

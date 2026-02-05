@@ -75,6 +75,10 @@ export type ActionKind =
   | 'agent.restart'
   | 'agent.stop'
   | 'agent.edit'
+  // Station actions
+  | 'station.create'
+  | 'station.update'
+  | 'station.delete'
   // Template actions
   | 'template.create'
   | 'template.edit'
@@ -423,6 +427,26 @@ export const ACTION_POLICIES: Record<ActionKind, ActionPolicy> = {
     confirmMode: 'CONFIRM',
     requiresApproval: false,
     description: 'Edit agent configuration',
+  },
+
+  // Station actions
+  'station.create': {
+    riskLevel: 'caution',
+    confirmMode: 'CONFIRM',
+    requiresApproval: false,
+    description: 'Create a station',
+  },
+  'station.update': {
+    riskLevel: 'caution',
+    confirmMode: 'CONFIRM',
+    requiresApproval: false,
+    description: 'Update a station',
+  },
+  'station.delete': {
+    riskLevel: 'danger',
+    confirmMode: 'CONFIRM',
+    requiresApproval: false,
+    description: 'Delete a station',
   },
 
   // Template actions

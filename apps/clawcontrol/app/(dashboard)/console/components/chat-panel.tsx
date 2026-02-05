@@ -4,8 +4,10 @@ import { useRef, useEffect } from 'react'
 import { Terminal, Bot, User, AlertCircle, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SendForm } from './send-form'
+import { StationIcon } from '@/components/station-icon'
 import type { ConsoleSessionDTO } from '@/app/api/openclaw/console/sessions/route'
 import type { ChatMessage } from '../console-client'
+import type { AgentDTO } from '@/lib/repo'
 
 // ============================================================================
 // TYPES
@@ -17,6 +19,7 @@ interface ChatPanelProps {
   onSend: (content: string) => void
   streaming: boolean
   sendDisabled: boolean
+  agentsBySessionKey: Record<string, AgentDTO>
 }
 
 // ============================================================================
@@ -132,8 +135,11 @@ export function ChatPanel({
   onSend,
   streaming,
   sendDisabled,
+  agentsBySessionKey,
 }: ChatPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const headerAgent = session ? agentsBySessionKey[session.sessionKey] : undefined
+  const headerName = session ? (headerAgent?.name || session.agentId) : ''
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -159,9 +165,13 @@ export function ChatPanel({
       {/* Session header - only show when session selected */}
       {session && (
         <div className="px-4 py-3 border-b border-bd-0 flex items-center gap-3">
-          <Bot className="w-5 h-5 text-status-progress" />
+          {headerAgent ? (
+            <StationIcon stationId={headerAgent.station} size="md" className="w-5 h-5" />
+          ) : (
+            <Bot className="w-5 h-5 text-status-progress" />
+          )}
           <div>
-            <div className="font-mono text-sm text-fg-0">{session.agentId}</div>
+            <div className="font-mono text-sm text-fg-0">{headerName}</div>
             <div className="text-xs text-fg-3">
               {session.kind} · {session.model || 'default model'}
               {session.operationId && ` · op:${session.operationId.slice(0, 8)}`}

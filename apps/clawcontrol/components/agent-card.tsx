@@ -4,6 +4,8 @@ import { cn } from '@/lib/utils'
 import { AgentAvatar } from '@/components/ui/agent-avatar'
 import { ModelBadge } from '@/components/ui/model-badge'
 import { StatusPill } from '@/components/ui/status-pill'
+import { StationIcon } from '@/components/station-icon'
+import { useStations } from '@/lib/stations-context'
 import { FileCode, Zap, MessageSquare, Settings, Clock } from 'lucide-react'
 import type { AgentDTO, SkillDTO } from '@/lib/repo'
 import type { StatusTone } from '@clawcontrol/ui/theme'
@@ -50,6 +52,9 @@ export function AgentCard({
   onTest,
   onEditFile,
 }: AgentCardProps) {
+  const { stationsById } = useStations()
+  const stationLabel = stationsById[agent.station]?.name ?? agent.station
+
   // Get enabled capabilities
   const enabledCapabilities = Object.entries(agent.capabilities)
     .filter(([, enabled]) => enabled)
@@ -76,11 +81,17 @@ export function AgentCard({
         />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <h3 className="text-sm font-semibold text-fg-0 truncate">{agent.name}</h3>
+            <div className="flex items-center gap-2 min-w-0">
+              <StationIcon stationId={agent.station} />
+              <h3 className="text-sm font-semibold text-fg-0 truncate">{agent.name}</h3>
+            </div>
             <StatusPill tone={STATUS_TONES[agent.status]} label={agent.status} />
           </div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="px-2 py-0.5 text-xs bg-bg-3 rounded text-fg-1">{agent.station}</span>
+            <span className="px-2 py-0.5 text-xs bg-bg-3 rounded text-fg-1 inline-flex items-center gap-1.5">
+              <StationIcon stationId={agent.station} />
+              {stationLabel}
+            </span>
             <ModelBadge modelId={agent.model} size="sm" />
           </div>
           <p className="text-xs text-fg-2 line-clamp-2">{agent.role}</p>

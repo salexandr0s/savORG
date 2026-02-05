@@ -6,7 +6,7 @@
  */
 
 import { mockWorkspaceFiles, mockFileContents } from '@clawcontrol/core'
-import type { Station } from '@clawcontrol/core'
+import type { StationId } from '@clawcontrol/core'
 import { isValidWorkspacePath } from './fs/path-policy'
 
 // Re-export path validation for backward compatibility
@@ -27,7 +27,7 @@ export function generateFileId(path: string, name: string): string {
 /**
  * Standard agent role prefixes
  */
-export const AGENT_ROLE_MAP: Record<string, { prefix: string; station: Station; description: string }> = {
+export const AGENT_ROLE_MAP: Record<string, { prefix: string; station: StationId; description: string }> = {
   spec: { prefix: 'SPEC', station: 'spec', description: 'Specification & requirements' },
   build: { prefix: 'BUILD', station: 'build', description: 'Implementation & coding' },
   qa: { prefix: 'QA', station: 'qa', description: 'Testing & quality assurance' },
@@ -70,7 +70,7 @@ export interface AgentTemplateInput {
   role: string
   purpose: string
   capabilities: string[]
-  station: Station
+  station: StationId
 }
 
 /**
@@ -297,7 +297,7 @@ export interface CreateAgentFilesInput {
   role: string
   purpose: string
   capabilities: string[]
-  station: Station
+  station: StationId
 }
 
 export interface CreateAgentFilesResult {

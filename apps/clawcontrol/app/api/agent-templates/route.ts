@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   const role = searchParams.get('role')
 
   // Get templates (optionally force rescan)
-  let templates = getTemplates(rescan)
+  let templates = await getTemplates(rescan)
 
   // Filter by role if specified
   if (role) {
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
 
   try {
     // Create template scaffold
-    const createResult = createTemplateScaffold(id, name, role)
+    const createResult = await createTemplateScaffold(id, name, role)
 
     if (!createResult.success) {
       await repos.receipts.finalize(receipt.id, {
@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Rescan to get the new template
-    const templates = scanTemplates()
+    const templates = await scanTemplates()
     const newTemplate = templates.find((t) => t.id === id)
 
     await repos.receipts.finalize(receipt.id, {

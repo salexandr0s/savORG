@@ -11,6 +11,7 @@ export { getRepos, createRepos, resetRepos, useMockData, type Repos } from './pr
 export type { WorkOrdersRepo } from './workOrders'
 export type { OperationsRepo, CreateOperationInput } from './operations'
 export type { AgentsRepo } from './agents'
+export type { StationsRepo, CreateStationInput, UpdateStationInput } from './stations'
 export type { ApprovalsRepo, CreateApprovalInput } from './approvals'
 export type { ActivitiesRepo, CreateActivityInput } from './activities'
 export type { ReceiptsRepo, CreateReceiptInput } from './receipts'
@@ -31,6 +32,7 @@ export type {
   OperationFilters,
   AgentDTO,
   AgentFilters,
+  StationDTO,
   ApprovalDTO,
   ApprovalFilters,
   ActivityDTO,

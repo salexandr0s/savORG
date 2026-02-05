@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
-import { getRepos } from '@/lib/repo'
-import { runCommandJson } from '@clawcontrol/adapters-openclaw'
+import { getRepos, useMockData } from '@/lib/repo'
+import { prisma } from '@/lib/db'
+import { runCommand } from '@clawcontrol/adapters-openclaw'
 
 type OpenClawAgentConfig = {
   id: string
@@ -8,28 +9,6 @@ type OpenClawAgentConfig = {
   identity?: {
     name?: string
     emoji?: string
-  }
-}
-
-function inferRoleAndStation(agentId: string): { role: string; station: string } {
-  // clawcontrolCompany defaults
-  switch (agentId) {
-    case 'main':
-      return { role: 'ceo', station: 'ops' }
-    case 'clawplan':
-      return { role: 'plan', station: 'spec' }
-    case 'clawplanreview':
-      return { role: 'planreview', station: 'spec' }
-    case 'clawbuild':
-      return { role: 'build', station: 'build' }
-    case 'clawbuildreview':
-      return { role: 'buildreview', station: 'qa' }
-    case 'clawops':
-      return { role: 'ops', station: 'ops' }
-    case 'clawsecurity':
-      return { role: 'security', station: 'ops' }
-    default:
-      return { role: 'agent', station: 'ops' }
   }
 }
 
@@ -44,6 +23,22 @@ function inferSessionKey(agentId: string): string {
   return `agent:${agentId}:${agentId}`
 }
 
+async function getDefaultStationId(): Promise<string> {
+  const repos = getRepos()
+
+  const ops = await repos.stations.getById('ops')
+  if (ops) return 'ops'
+
+  const stations = await repos.stations.list()
+  return stations[0]?.id ?? 'ops'
+}
+
+function stderrExcerpt(stderr: string): string {
+  const max = 2000
+  if (stderr.length <= max) return stderr
+  return '...(truncated)\n' + stderr.slice(-max)
+}
+
 /**
  * POST /api/openclaw/agents/sync
  *
@@ -54,29 +49,46 @@ export async function POST() {
   const repos = getRepos()
 
   // Pull from OpenClaw local config (authoritative list of agent ids)
-  const res = await runCommandJson<OpenClawAgentConfig[]>('config.agents.list.json')
-
-  if (res.error || !res.data) {
+  const cmd = await runCommand('config.agents.list.json')
+  if (cmd.exitCode !== 0) {
     return NextResponse.json(
       {
         error: 'OPENCLAW_SYNC_FAILED',
-        detail: res.error || 'Unknown error',
+        detail: cmd.stderr || cmd.error || `Command failed with exit code ${cmd.exitCode}`,
+        stderr: cmd.stderr ? stderrExcerpt(cmd.stderr) : undefined,
       },
       { status: 502 }
     )
   }
 
-  const agents = res.data
+  let agents: OpenClawAgentConfig[] = []
+  try {
+    agents = JSON.parse(cmd.stdout) as OpenClawAgentConfig[]
+  } catch {
+    return NextResponse.json(
+      {
+        error: 'OPENCLAW_SYNC_FAILED',
+        detail: 'Failed to parse JSON output',
+        stderr: cmd.stderr ? stderrExcerpt(cmd.stderr) : undefined,
+      },
+      { status: 502 }
+    )
+  }
 
   let created = 0
   let updated = 0
+  let pruned = 0
+  let pruneSkippedInUse = 0
+
+  const defaultStationId = await getDefaultStationId()
+  const openclawSessionKeys = new Set<string>()
 
   for (const a of agents) {
     if (!a?.id) continue
 
-    const { role, station } = inferRoleAndStation(a.id)
     const name = inferDisplayName(a.id, a)
     const sessionKey = inferSessionKey(a.id)
+    openclawSessionKeys.add(sessionKey)
 
     // Upsert by sessionKey (unique)
     const existing = await repos.agents.getBySessionKey(sessionKey)
@@ -84,22 +96,42 @@ export async function POST() {
     if (!existing) {
       await repos.agents.create({
         name,
-        role,
-        station: station as never,
+        role: 'agent',
+        station: defaultStationId,
         sessionKey,
-        capabilities: { [station]: true },
+        capabilities: { [defaultStationId]: true },
         wipLimit: a.id === 'clawbuild' ? 3 : 2,
       })
       created++
     } else {
       await repos.agents.update(existing.id, {
         name,
-        role,
-        station: station as never,
-        capabilities: { [station]: true },
-        // keep existing wipLimit unless it's unset
       })
       updated++
+    }
+  }
+
+  // Prune: delete DB agents missing from OpenClaw (OpenClaw-sourced only)
+  if (!useMockData()) {
+    const operations = await repos.operations.list({})
+    const assignedAgentIds = new Set<string>()
+    for (const op of operations) {
+      for (const agentId of op.assigneeAgentIds) assignedAgentIds.add(agentId)
+    }
+
+    const dbOpenclawAgents = await prisma.agent.findMany({
+      where: { sessionKey: { startsWith: 'agent:' } },
+      select: { id: true, sessionKey: true },
+    })
+
+    for (const dbAgent of dbOpenclawAgents) {
+      if (openclawSessionKeys.has(dbAgent.sessionKey)) continue
+      if (assignedAgentIds.has(dbAgent.id)) {
+        pruneSkippedInUse++
+        continue
+      }
+      await prisma.agent.delete({ where: { id: dbAgent.id } })
+      pruned++
     }
   }
 
@@ -111,6 +143,8 @@ export async function POST() {
       seen: agents.length,
       created,
       updated,
+      pruned,
+      pruneSkippedInUse,
     },
   })
 }
