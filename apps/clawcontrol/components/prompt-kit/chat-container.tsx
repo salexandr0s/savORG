@@ -21,7 +21,7 @@ export function ChatContainer({ children, className, contentClassName }: ChatCon
     <div className={cn('relative flex-1 min-h-0', className)}>
       <div
         ref={scrollRef}
-        className="h-full overflow-y-auto px-4 py-4"
+        className="h-full overflow-y-auto"
       >
         <div ref={contentRef} className={cn('space-y-4', contentClassName)}>
           {children}

@@ -8,6 +8,7 @@ import { YamlEditor } from '@/components/editors/yaml-editor'
 import { JsonEditor } from '@/components/editors/json-editor'
 import { workspaceApi, HttpError } from '@/lib/http'
 import { useProtectedAction } from '@/lib/hooks/useProtectedAction'
+import { useSettings } from '@/lib/settings-context'
 import type { ActionKind } from '@clawcontrol/core'
 import type { WorkspaceFileDTO } from '@/lib/data'
 import { cn } from '@/lib/utils'
@@ -49,6 +50,7 @@ const PROTECTED_FILES: Record<string, { actionKind: ActionKind; label: string }>
 // ============================================================================
 
 export function WorkspaceClient({ initialFiles }: Props) {
+  const { skipTypedConfirm } = useSettings()
   const [currentPath, setCurrentPath] = useState('/')
   const [filesByPath, setFilesByPath] = useState<Record<string, WorkspaceFileDTO[]>>({
     '/': initialFiles,
@@ -66,7 +68,7 @@ export function WorkspaceClient({ initialFiles }: Props) {
   const [isCreating, setIsCreating] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
-  const protectedAction = useProtectedAction()
+  const protectedAction = useProtectedAction({ skipTypedConfirm })
 
   const files = filesByPath[currentPath] ?? []
 

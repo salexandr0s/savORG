@@ -21,6 +21,7 @@ interface AppShellProps {
   breadcrumbs?: Array<{ label: string; href?: string }>
   onChipClick?: (chipId: string) => void
   onSearchClick?: () => void
+  contentPadding?: 'default' | 'none'
 }
 
 const RAIL_STORAGE_KEY = 'clawcontrol-rail-collapsed'
@@ -37,6 +38,7 @@ export function AppShell({
   breadcrumbs,
   onChipClick,
   onSearchClick,
+  contentPadding = 'default',
 }: AppShellProps) {
   const { resolved, isNarrow, isMobile } = useLayout()
   const [railCollapsed, setRailCollapsed] = useState(true) // Start collapsed to prevent flash
@@ -112,7 +114,7 @@ export function AppShell({
           <main className={cn(
             'flex-1 overflow-y-auto min-w-0',
             // Responsive padding
-            'p-3 sm:p-4',
+            contentPadding === 'default' && 'p-3 sm:p-4',
             // Prevent content from being too wide
             resolved === 'horizontal' && 'max-w-full'
           )}>

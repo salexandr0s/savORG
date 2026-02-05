@@ -6,6 +6,7 @@ import { X, Save, Loader2, FileCode, AlertCircle } from 'lucide-react'
 import { workspaceApi } from '@/lib/http'
 import { TypedConfirmModal } from '@clawcontrol/ui'
 import { useProtectedAction } from '@/lib/hooks/useProtectedAction'
+import { useSettings } from '@/lib/settings-context'
 import type { ActionKind } from '@clawcontrol/core'
 
 interface FileEditorModalProps {
@@ -29,12 +30,13 @@ export function FileEditorModal({
   fileName,
   onSaved,
 }: FileEditorModalProps) {
+  const { skipTypedConfirm } = useSettings()
   const [content, setContent] = useState('')
   const [originalContent, setOriginalContent] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const protectedAction = useProtectedAction()
+  const protectedAction = useProtectedAction({ skipTypedConfirm })
 
   // Determine if this is a protected file
   const isProtected = Object.keys(PROTECTED_FILES).some((f) => fileName.endsWith(f))

@@ -16,7 +16,7 @@ import {
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import { cn } from '@/lib/utils'
 import type { WorkOrderState } from '@clawcontrol/core'
-import type { WorkOrderWithOpsDTO } from '@/lib/repo'
+import type { AgentDTO, WorkOrderWithOpsDTO } from '@/lib/repo'
 import {
   KANBAN_COLUMNS,
   groupByState,
@@ -32,18 +32,24 @@ import { KanbanCardOverlay } from './kanban-card'
 
 interface KanbanBoardProps {
   workOrders: WorkOrderWithOpsDTO[]
+  agents: AgentDTO[]
+  assigningWorkOrderId?: string | null
   onWorkOrderClick: (wo: WorkOrderWithOpsDTO) => void
   onStateChange: (
     id: string,
     newState: WorkOrderState,
     typedConfirmText?: string
   ) => Promise<void>
+  onAssignToAgent: (id: string, agentName: string) => Promise<void>
 }
 
 export function KanbanBoard({
   workOrders,
+  agents,
+  assigningWorkOrderId,
   onWorkOrderClick,
   onStateChange,
+  onAssignToAgent,
 }: KanbanBoardProps) {
   const triggerProtectedAction = useProtectedActionTrigger()
 
@@ -227,7 +233,10 @@ export function KanbanBoard({
             tone={column.tone}
             isDangerous={column.isDangerous}
             workOrders={groupedWorkOrders[column.state] || []}
+            agents={agents}
             onCardClick={onWorkOrderClick}
+            onAssignToAgent={onAssignToAgent}
+            assigningWorkOrderId={assigningWorkOrderId}
             dropIndicator={getColumnDropIndicator(column.state)}
             canAcceptDrop={
               activeColumn

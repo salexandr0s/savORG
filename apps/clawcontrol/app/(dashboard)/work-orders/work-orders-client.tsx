@@ -8,9 +8,9 @@ import { WorkOrderStatePill, PriorityPill } from '@/components/ui/status-pill'
 import { ViewToggle, type ViewMode } from '@/components/ui/view-toggle'
 import { KanbanBoard } from '@/components/kanban'
 import { RightDrawer } from '@/components/shell/right-drawer'
-import { workOrdersApi } from '@/lib/http'
+import { agentsApi, workOrdersApi } from '@/lib/http'
 import { useWorkOrderStream } from '@/lib/hooks/useWorkOrderStream'
-import type { WorkOrderWithOpsDTO } from '@/lib/repo'
+import type { AgentDTO, WorkOrderWithOpsDTO } from '@/lib/repo'
 import type { WorkOrderState, Priority, Owner } from '@clawcontrol/core'
 import { cn, formatRelativeTime } from '@/lib/utils'
 import { ClipboardList, Plus, Filter, Loader2, X } from 'lucide-react'
@@ -23,6 +23,19 @@ interface WorkOrderFilters {
   state: WorkOrderState | 'all'
   priority: Priority | 'all'
   owner: 'user' | 'clawcontrolceo' | 'all'
+}
+
+interface DispatchCronStatus {
+  available: boolean
+  exists: boolean
+  enabled: boolean
+  jobId: string | null
+  name: string
+  schedule: string | null
+  recommendedEvery: string
+  overlapGuard: boolean
+  duplicateJobIds: string[]
+  error?: string
 }
 
 const DEFAULT_FILTERS: WorkOrderFilters = {
@@ -59,6 +72,38 @@ const OWNER_OPTIONS: { value: Owner; label: string }[] = [
   { value: 'clawcontrolceo', label: 'clawcontrol CEO' },
 ]
 
+const TAG_PRESETS = [
+  'bug',
+  'feature',
+  'research',
+  'content',
+  'infrastructure',
+  'urgent',
+  'blocked',
+  'needs-review',
+]
+
+function parseTagsInput(input: string): string[] {
+  if (!input.trim()) return []
+  const normalized = input
+    .split(',')
+    .map((tag) => tag.trim().toLowerCase())
+    .filter(Boolean)
+  return Array.from(new Set(normalized)).slice(0, 20)
+}
+
+function formatOwnerLabel(owner: string): string {
+  if (owner === 'clawcontrolceo') return 'clawcontrol CEO'
+  if (owner === 'user') return 'User'
+  return owner
+}
+
+function getOwnerTextClass(owner: string): string {
+  if (owner === 'clawcontrolceo') return 'text-status-progress'
+  if (owner === 'user') return 'text-fg-1'
+  return 'text-status-info'
+}
+
 // ============================================================================
 // NEW WORK ORDER FORM
 // ============================================================================
@@ -68,6 +113,7 @@ interface NewWorkOrderFormData {
   goalMd: string
   priority: Priority
   owner: Owner
+  tagsInput: string
 }
 
 const DEFAULT_FORM_DATA: NewWorkOrderFormData = {
@@ -75,6 +121,7 @@ const DEFAULT_FORM_DATA: NewWorkOrderFormData = {
   goalMd: '',
   priority: 'P2',
   owner: 'user',
+  tagsInput: '',
 }
 
 interface NewWorkOrderModalProps {
@@ -121,16 +168,13 @@ function NewWorkOrderModal({ isOpen, onClose, onCreated }: NewWorkOrderModalProp
     setError(null)
 
     try {
-      const response = await fetch('/api/work-orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+      await workOrdersApi.create({
+        title: formData.title,
+        goalMd: formData.goalMd,
+        priority: formData.priority,
+        owner: formData.owner,
+        tags: parseTagsInput(formData.tagsInput),
       })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || 'Failed to create work order')
-      }
 
       onCreated()
       onClose()
@@ -198,6 +242,48 @@ function NewWorkOrderModal({ isOpen, onClose, onCreated }: NewWorkOrderModalProp
               disabled={isSubmitting}
               className="w-full px-3 py-2 text-sm bg-bg-2 border border-bd-1 rounded-[var(--radius-md)] text-fg-0 placeholder:text-fg-2 focus:outline-none focus:ring-1 focus:ring-status-info/50 resize-none disabled:opacity-50"
             />
+          </div>
+
+          {/* Tags */}
+          <div>
+            <label htmlFor="wo-tags" className="block text-xs font-medium text-fg-1 mb-1.5">
+              Tags
+            </label>
+            <input
+              id="wo-tags"
+              type="text"
+              value={formData.tagsInput}
+              onChange={(e) => setFormData((f) => ({ ...f, tagsInput: e.target.value }))}
+              placeholder="feature, urgent, research"
+              disabled={isSubmitting}
+              className="w-full px-3 py-2 text-sm bg-bg-2 border border-bd-1 rounded-[var(--radius-md)] text-fg-0 placeholder:text-fg-2 focus:outline-none focus:ring-1 focus:ring-status-info/50 disabled:opacity-50"
+            />
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {TAG_PRESETS.map((tag) => {
+                const selected = parseTagsInput(formData.tagsInput).includes(tag)
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => {
+                      const nextTags = parseTagsInput(formData.tagsInput)
+                      const updated = nextTags.includes(tag)
+                        ? nextTags.filter((value) => value !== tag)
+                        : [...nextTags, tag]
+                      setFormData((f) => ({ ...f, tagsInput: updated.join(', ') }))
+                    }}
+                    className={cn(
+                      'px-2 py-0.5 text-[11px] rounded-full border transition-colors',
+                      selected
+                        ? 'bg-status-info/10 text-status-info border-status-info/30'
+                        : 'bg-bg-3 text-fg-2 border-bd-0 hover:text-fg-1'
+                    )}
+                  >
+                    {tag}
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           {/* Priority & Owner Row */}
@@ -297,6 +383,25 @@ const workOrderColumns: Column<WorkOrderWithOpsDTO>[] = [
     ),
   },
   {
+    key: 'tags',
+    header: 'Tags',
+    render: (row) => (
+      <div className="flex flex-wrap gap-1 max-w-[220px]">
+        {row.tags.slice(0, 3).map((tag) => (
+          <span
+            key={tag}
+            className="px-1.5 py-0.5 text-[10px] rounded-full bg-bg-3 text-fg-1 border border-bd-0"
+          >
+            {tag}
+          </span>
+        ))}
+        {row.tags.length > 3 && (
+          <span className="text-[10px] text-fg-2">+{row.tags.length - 3}</span>
+        )}
+      </div>
+    ),
+  },
+  {
     key: 'state',
     header: 'State',
     width: '100px',
@@ -313,15 +418,12 @@ const workOrderColumns: Column<WorkOrderWithOpsDTO>[] = [
     key: 'owner',
     header: 'Owner',
     width: '100px',
-	    render: (row) => (
-	      <span className={cn(
-	        'text-xs',
-	        row.owner === 'clawcontrolceo' ? 'text-status-progress' : 'text-fg-1'
-	      )}>
-	        {row.owner === 'clawcontrolceo' ? 'clawcontrol CEO' : 'User'}
-	      </span>
-	    ),
-	  },
+    render: (row) => (
+      <span className={cn('text-xs', getOwnerTextClass(row.owner))}>
+        {formatOwnerLabel(row.owner)}
+      </span>
+    ),
+  },
   {
     key: 'updatedAt',
     header: 'Updated',
@@ -358,6 +460,20 @@ function WorkOrderDrawerContent({ workOrder }: WorkOrderDrawerProps) {
       {/* Title */}
       <h3 className="text-base font-medium text-fg-0">{workOrder.title}</h3>
 
+      {/* Tags */}
+      {workOrder.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {workOrder.tags.map((tag) => (
+            <span
+              key={tag}
+              className="px-2 py-0.5 text-[11px] rounded-full bg-bg-3 text-fg-1 border border-bd-0"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Goal */}
       {workOrder.goalMd && (
         <div className="text-sm text-fg-1 whitespace-pre-wrap">
@@ -391,10 +507,12 @@ function WorkOrderDrawerContent({ workOrder }: WorkOrderDrawerProps) {
 
       {/* Metadata */}
       <div className="pt-3 border-t border-bd-0 space-y-2">
-	        <div className="flex justify-between text-xs">
-	          <span className="text-fg-2">Owner</span>
-	          <span className="text-fg-1">{workOrder.owner === 'clawcontrolceo' ? 'clawcontrol CEO' : 'User'}</span>
-	        </div>
+        <div className="flex justify-between text-xs">
+          <span className="text-fg-2">Owner</span>
+          <span className={cn('text-fg-1', getOwnerTextClass(workOrder.owner))}>
+            {formatOwnerLabel(workOrder.owner)}
+          </span>
+        </div>
         <div className="flex justify-between text-xs">
           <span className="text-fg-2">Routing</span>
           <span className="font-mono text-fg-1">{workOrder.routingTemplate}</span>
@@ -429,6 +547,11 @@ function WorkOrderDrawerContent({ workOrder }: WorkOrderDrawerProps) {
 export function WorkOrdersClient() {
   const router = useRouter()
   const [workOrders, setWorkOrders] = useState<WorkOrderWithOpsDTO[]>([])
+  const [agents, setAgents] = useState<AgentDTO[]>([])
+  const [dispatchCron, setDispatchCron] = useState<DispatchCronStatus | null>(null)
+  const [dispatchCronBusy, setDispatchCronBusy] = useState(false)
+  const [dispatchCronError, setDispatchCronError] = useState<string | null>(null)
+  const [assigningWorkOrderId, setAssigningWorkOrderId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -470,10 +593,49 @@ export function WorkOrdersClient() {
     }
   }, [])
 
+  const fetchDispatchCronStatus = useCallback(async () => {
+    try {
+      const response = await fetch('/api/dispatch/cron', {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      })
+
+      const json = (await response.json()) as { data?: DispatchCronStatus; error?: string }
+      if (!response.ok || !json.data) {
+        throw new Error(json.error || 'Failed to load dispatch cron status')
+      }
+
+      setDispatchCron(json.data)
+      setDispatchCronError(json.data.error ?? null)
+    } catch (err) {
+      setDispatchCronError(err instanceof Error ? err.message : 'Failed to load dispatch cron status')
+    }
+  }, [])
+
   // Initial fetch
   useEffect(() => {
     fetchWorkOrders()
-  }, [fetchWorkOrders])
+    fetchDispatchCronStatus()
+  }, [fetchWorkOrders, fetchDispatchCronStatus])
+
+  useEffect(() => {
+    let isMounted = true
+    const fetchAgents = async () => {
+      try {
+        const result = await agentsApi.list()
+        if (isMounted) {
+          setAgents(result.data)
+        }
+      } catch (err) {
+        console.error('Failed to load agents:', err)
+      }
+    }
+
+    fetchAgents()
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   // Persist view preference
   useEffect(() => {
@@ -521,6 +683,66 @@ export function WorkOrdersClient() {
     [fetchWorkOrders]
   )
 
+  const handleAssignToAgent = useCallback(
+    async (id: string, agentName: string) => {
+      setAssigningWorkOrderId(id)
+
+      // Planned column behaves as an assignment queue. Claiming assigns owner and activates.
+      setWorkOrders((prev) =>
+        prev.map((wo) =>
+          wo.id === id
+            ? { ...wo, owner: agentName, state: 'active', updatedAt: new Date() }
+            : wo
+        )
+      )
+
+      try {
+        await workOrdersApi.update(id, {
+          owner: agentName,
+          state: 'active',
+        })
+        await fetchWorkOrders()
+      } catch (err) {
+        console.error('Failed to assign work order:', err)
+        await fetchWorkOrders()
+      } finally {
+        setAssigningWorkOrderId(null)
+      }
+    },
+    [fetchWorkOrders]
+  )
+
+  const handleToggleDispatchCron = useCallback(async () => {
+    if (dispatchCronBusy) return
+
+    const targetEnabled = !(dispatchCron?.enabled ?? false)
+    setDispatchCronBusy(true)
+    setDispatchCronError(null)
+
+    try {
+      const response = await fetch('/api/dispatch/cron', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ enabled: targetEnabled }),
+      })
+
+      const json = (await response.json()) as { data?: DispatchCronStatus; error?: string }
+      if (!response.ok || !json.data) {
+        throw new Error(json.error || 'Failed to update dispatch cron')
+      }
+
+      setDispatchCron(json.data)
+      setDispatchCronError(json.data.error ?? null)
+    } catch (err) {
+      setDispatchCronError(err instanceof Error ? err.message : 'Failed to update dispatch cron')
+    } finally {
+      setDispatchCronBusy(false)
+    }
+  }, [dispatchCron?.enabled, dispatchCronBusy])
+
   // Handle card click in board view
   const handleCardClick = useCallback((wo: WorkOrderWithOpsDTO) => {
     setSelectedWorkOrder(wo)
@@ -544,14 +766,13 @@ export function WorkOrdersClient() {
   // Apply filters to work orders
   const filteredWorkOrders = workOrders.filter((wo) => {
     if (filters.state !== 'all' && wo.state !== filters.state) return false
-	    if (filters.priority !== 'all' && wo.priority !== filters.priority) return false
-	    if (filters.owner !== 'all') {
-	      const isCEO = wo.owner === 'clawcontrolceo'
-	      if (filters.owner === 'clawcontrolceo' && !isCEO) return false
-	      if (filters.owner === 'user' && isCEO) return false
-	    }
-	    return true
-	  })
+    if (filters.priority !== 'all' && wo.priority !== filters.priority) return false
+    if (filters.owner !== 'all') {
+      if (filters.owner === 'clawcontrolceo' && wo.owner !== 'clawcontrolceo') return false
+      if (filters.owner === 'user' && wo.owner !== 'user') return false
+    }
+    return true
+  })
 
   // All filtered work orders shown on board
   const boardWorkOrders = filteredWorkOrders
@@ -585,6 +806,34 @@ export function WorkOrdersClient() {
           <div className="flex items-center gap-2">
             <ViewToggle value={view} onChange={setView} />
             <button
+              onClick={handleToggleDispatchCron}
+              disabled={dispatchCronBusy || dispatchCron?.available === false}
+              title={
+                dispatchCron?.available === false
+                  ? dispatchCron.error || 'Dispatch cron is unavailable'
+                  : dispatchCron?.enabled
+                    ? 'Disable manager dispatch cron'
+                    : 'Enable manager dispatch cron'
+              }
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] border transition-colors',
+                dispatchCron?.available === false
+                  ? 'bg-status-warning/10 text-status-warning border-status-warning/20'
+                  : dispatchCron?.enabled
+                    ? 'bg-status-success/10 text-status-success border-status-success/20 hover:bg-status-success/20'
+                    : 'bg-bg-3 text-fg-1 border-bd-0 hover:text-fg-0',
+                'disabled:opacity-60 disabled:cursor-not-allowed'
+              )}
+            >
+              {dispatchCronBusy
+                ? 'Dispatch Cron...'
+                : dispatchCron?.available === false
+                  ? 'Dispatch Cron Unavailable'
+                  : dispatchCron?.enabled
+                    ? 'Dispatch Cron On'
+                    : 'Dispatch Cron Off'}
+            </button>
+            <button
               onClick={() => setFilterDrawerOpen(true)}
               className={cn(
                 'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] border border-bd-0',
@@ -612,6 +861,12 @@ export function WorkOrdersClient() {
         }
       />
 
+      {dispatchCronError && (
+        <div className="p-2 rounded-[var(--radius-md)] border border-status-warning/20 bg-status-warning/10 text-status-warning text-xs">
+          Dispatch cron: {dispatchCronError}
+        </div>
+      )}
+
       {/* Table View */}
       {view === 'table' && (
         <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-bd-0 overflow-hidden">
@@ -637,8 +892,11 @@ export function WorkOrdersClient() {
         <div className="flex-1 min-h-0 h-[calc(100vh-180px)]">
           <KanbanBoard
             workOrders={boardWorkOrders}
+            agents={agents}
+            assigningWorkOrderId={assigningWorkOrderId}
             onWorkOrderClick={handleCardClick}
             onStateChange={handleStateChange}
+            onAssignToAgent={handleAssignToAgent}
           />
         </div>
       )}

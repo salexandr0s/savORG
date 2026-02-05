@@ -55,7 +55,7 @@ export function useGatewayChat() {
   } = useChatStore()
 
   const sendMessage = useCallback(
-    async (sessionId: string, text: string, typedConfirmText: string) => {
+    async (sessionId: string, text: string) => {
       if (!sessionId) return
       if (isStreaming) return
 
@@ -92,7 +92,7 @@ export function useGatewayChat() {
         const res = await fetch(`/api/openclaw/console/sessions/${sessionId}/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: content, typedConfirmText }),
+          body: JSON.stringify({ text: content }),
         })
 
         if (!res.ok) {
@@ -206,4 +206,3 @@ export function useGatewayChat() {
 
   return { sendMessage, abort }
 }
-

@@ -13,7 +13,12 @@ export type WorkOrderState =
 
 export type Priority = 'P0' | 'P1' | 'P2' | 'P3'
 
-export type Owner = 'user' | 'clawcontrolceo'
+/**
+ * Work order owner.
+ * Built-in values include `user` and `clawcontrolceo`, but this can also hold
+ * dynamic agent names when work is assigned from the Planned queue.
+ */
+export type Owner = string
 
 export interface WorkOrder {
   id: string
@@ -23,6 +28,7 @@ export interface WorkOrder {
   state: WorkOrderState
   priority: Priority
   owner: Owner
+  tags: string[]
   routingTemplate: string
   blockedReason: string | null
   createdAt: Date

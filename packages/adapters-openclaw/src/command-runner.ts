@@ -369,6 +369,8 @@ type DynamicCommandSpec = {
   baseArgs: readonly string[]
   requiredParams: readonly string[]
   optionalParams?: readonly string[]
+  /** Parameters that are rendered as bare flags (`--flag`) when value is `true`. */
+  booleanFlags?: readonly string[]
   danger: boolean
   description: string
   /**
@@ -384,7 +386,11 @@ type DynamicCommandSpec = {
 const defaultParamValidator = (value: string) => /^[a-zA-Z0-9_-]+$/.test(value)
 
 const noNewlines = (maxLen: number) => (value: string) =>
-  value.length > 0 && value.length <= maxLen && !/[\u0000\r\n]/.test(value)
+  value.length > 0 &&
+  value.length <= maxLen &&
+  !value.includes('\0') &&
+  !value.includes('\r') &&
+  !value.includes('\n')
 
 const cronNameValidator = (value: string) => /^[a-zA-Z0-9_-]{1,64}$/.test(value)
 
@@ -417,6 +423,38 @@ export const ALLOWED_DYNAMIC_COMMANDS = {
     danger: true,
     description: 'Disable a cron job (requires --id)',
   },
+  'cron.edit.every': {
+    baseArgs: ['cron', 'edit', '--json'],
+    requiredParams: ['id', 'every'] as const,
+    danger: true,
+    description: 'Edit cron frequency as interval duration (requires --id, --every)',
+    paramValidators: {
+      id: defaultParamValidator,
+      every: (v) => /^([1-9][0-9]*)(ms|s|m|h|d|w)$/.test(v),
+    },
+  },
+  'cron.edit.cron': {
+    baseArgs: ['cron', 'edit', '--json'],
+    requiredParams: ['id', 'cron'] as const,
+    optionalParams: ['tz'] as const,
+    danger: true,
+    description: 'Edit cron frequency as cron expression (requires --id, --cron)',
+    paramValidators: {
+      id: defaultParamValidator,
+      cron: noNewlines(256),
+      tz: noNewlines(128),
+    },
+  },
+  'cron.edit.at': {
+    baseArgs: ['cron', 'edit', '--json'],
+    requiredParams: ['id', 'at'] as const,
+    danger: true,
+    description: 'Edit cron frequency as one-shot time (requires --id, --at)',
+    paramValidators: {
+      id: defaultParamValidator,
+      at: noNewlines(128),
+    },
+  },
   'cron.create': {
     baseArgs: ['cron', 'add', '--json'],
     requiredParams: ['name', 'schedule', 'command'] as const,
@@ -428,6 +466,25 @@ export const ALLOWED_DYNAMIC_COMMANDS = {
       schedule: noNewlines(256),
       command: noNewlines(2000),
       enabled: (v) => v === 'true' || v === 'false',
+    },
+  },
+  'cron.add.agent': {
+    baseArgs: ['cron', 'add', '--json'],
+    requiredParams: ['name', 'every', 'agent', 'session', 'wake', 'message'] as const,
+    optionalParams: ['description', 'disabled'] as const,
+    booleanFlags: ['disabled'] as const,
+    danger: true,
+    description:
+      'Create an agent cron job (requires --name, --every, --agent, --session, --wake, --message)',
+    paramValidators: {
+      name: cronNameValidator,
+      every: noNewlines(64),
+      agent: defaultParamValidator,
+      session: (v) => v === 'main' || v === 'isolated',
+      wake: (v) => v === 'now' || v === 'next-heartbeat',
+      message: noNewlines(2000),
+      description: noNewlines(512),
+      disabled: (v) => v === 'true' || v === 'false',
     },
   },
   'cron.delete': {
@@ -529,10 +586,15 @@ export async function runDynamicCommandJson<T = unknown>(
 
   // Build args with parameters (stable order: required then optional)
   const args: string[] = [...spec.baseArgs]
+  const boolFlags = new Set(spec.booleanFlags ?? [])
   for (const key of spec.requiredParams) {
     const value = params[key]
     const valid = validateParam(spec, key, value)
     if (!valid.ok) return { error: valid.error, exitCode: 1 }
+    if (boolFlags.has(key)) {
+      if (value === 'true') args.push(`--${key}`)
+      continue
+    }
     args.push(`--${key}`, value)
   }
   for (const key of spec.optionalParams ?? []) {
@@ -540,6 +602,10 @@ export async function runDynamicCommandJson<T = unknown>(
     if (value === undefined) continue
     const valid = validateParam(spec, key, value)
     if (!valid.ok) return { error: valid.error, exitCode: 1 }
+    if (boolFlags.has(key)) {
+      if (value === 'true') args.push(`--${key}`)
+      continue
+    }
     args.push(`--${key}`, value)
   }
 

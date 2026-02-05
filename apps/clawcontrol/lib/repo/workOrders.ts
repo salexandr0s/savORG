@@ -21,6 +21,7 @@ export interface CreateWorkOrderInput {
   goalMd: string
   priority?: string
   owner?: string
+  tags?: string[]
   routingTemplate?: string
 }
 
@@ -30,6 +31,7 @@ export interface UpdateWorkOrderInput {
   state?: string
   priority?: string
   owner?: string
+  tags?: string[]
   blockedReason?: string | null
 }
 
@@ -175,6 +177,7 @@ export function createDbWorkOrdersRepo(): WorkOrdersRepo {
           state: 'planned',
           priority: input.priority || 'P2',
           owner: input.owner || 'user',
+          tags: serializeTags(input.tags),
           routingTemplate: input.routingTemplate || 'default_routing',
         },
       })
@@ -197,6 +200,7 @@ export function createDbWorkOrdersRepo(): WorkOrdersRepo {
           ...(input.state !== undefined && { state: input.state }),
           ...(input.priority !== undefined && { priority: input.priority }),
           ...(input.owner !== undefined && { owner: input.owner }),
+          ...(input.tags !== undefined && { tags: serializeTags(input.tags) }),
           ...(input.blockedReason !== undefined && { blockedReason: input.blockedReason }),
           ...(input.state === 'shipped' && { shippedAt: new Date() }),
         },
@@ -291,6 +295,7 @@ function toDTO(row: {
   state: string
   priority: string
   owner: string
+  tags: string
   routingTemplate: string
   blockedReason: string | null
   createdAt: Date
@@ -304,11 +309,35 @@ function toDTO(row: {
     goalMd: row.goalMd,
     state: row.state as WorkOrderDTO['state'],
     priority: row.priority as WorkOrderDTO['priority'],
-    owner: row.owner as WorkOrderDTO['owner'],
+    owner: row.owner,
+    tags: parseTags(row.tags),
     routingTemplate: row.routingTemplate,
     blockedReason: row.blockedReason,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     shippedAt: row.shippedAt,
   }
+}
+
+function parseTags(raw: string): string[] {
+  try {
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter((tag) => typeof tag === 'string')
+      .map((tag) => tag.trim())
+      .filter(Boolean)
+      .slice(0, 20)
+  } catch {
+    return []
+  }
+}
+
+function serializeTags(tags?: string[] | null): string {
+  if (!Array.isArray(tags) || tags.length === 0) return '[]'
+  const normalized = tags
+    .filter((tag) => typeof tag === 'string')
+    .map((tag) => tag.trim().toLowerCase())
+    .filter(Boolean)
+  return JSON.stringify(Array.from(new Set(normalized)).slice(0, 20))
 }

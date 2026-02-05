@@ -31,6 +31,8 @@ export interface TypedConfirmModalProps {
   entityName?: string
   /** Whether the action is in progress */
   isLoading?: boolean
+  /** Optional settings route for disabling typed confirmations */
+  settingsHref?: string
 }
 
 // ============================================================================
@@ -48,6 +50,7 @@ export function TypedConfirmModal({
   workOrderCode,
   entityName,
   isLoading = false,
+  settingsHref = '/settings',
 }: TypedConfirmModalProps) {
   const [inputValue, setInputValue] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -207,10 +210,27 @@ export function TypedConfirmModal({
           )}
 
           {/* Receipt notice */}
-          <div className="flex items-center gap-2 px-3 py-2 bg-bg-2 rounded-[var(--radius-md)] border border-bd-0">
-            <span className="text-xs text-fg-2">
-              This action will be logged in the activity stream
-            </span>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 px-3 py-2 bg-bg-2 rounded-[var(--radius-md)] border border-bd-0">
+              <span className="text-xs text-fg-2">
+                This action will be logged in the activity stream
+              </span>
+            </div>
+
+            {confirmMode !== 'NONE' && (
+              <div className="px-3 py-2 bg-bg-2 rounded-[var(--radius-md)] border border-bd-0">
+                <span className="text-xs text-fg-2">
+                  You can disable this confirmation in{' '}
+                  <a
+                    href={settingsHref}
+                    className="text-status-info hover:text-status-info/80 underline underline-offset-2"
+                  >
+                    Settings
+                  </a>
+                  .
+                </span>
+              </div>
+            )}
           </div>
         </div>
 

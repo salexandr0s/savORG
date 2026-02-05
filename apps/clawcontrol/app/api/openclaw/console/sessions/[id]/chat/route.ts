@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { prisma } from '@/lib/db'
 import { getRepos } from '@/lib/repo'
-import { enforceTypedConfirm } from '@/lib/with-governor'
 import {
   getWsConsoleClient,
   checkGatewayAvailability,
@@ -16,7 +15,6 @@ import { getRequestActor } from '@/lib/request-actor'
 
 interface ChatRequestBody {
   text: string
-  typedConfirmText?: string
 }
 
 // ============================================================================
@@ -30,13 +28,11 @@ interface ChatRequestBody {
  * routes by sessionKey and injects into the existing session's context.
  * This is TRUE session injection, not just agent messaging.
  *
- * Governor-gated: Requires typed confirmation ("CONFIRM").
  * Creates Activity + Receipt for audit trail.
  * Returns SSE stream with response chunks from the agent.
  *
  * Request body:
  * - text: Message to send (required, 1-10000 chars)
- * - typedConfirmText: Confirmation text (required, must be "CONFIRM")
  */
 export async function POST(
   request: NextRequest,
@@ -56,7 +52,7 @@ export async function POST(
     )
   }
 
-  const { text, typedConfirmText } = body
+  const { text } = body
 
   // Validate text
   if (!text || typeof text !== 'string') {
@@ -96,24 +92,6 @@ export async function POST(
         details: { latencyMs: availability.latencyMs, gatewayError: availability.error },
       },
       { status: 503 }
-    )
-  }
-
-  // Enforce typed confirmation (governor-gated)
-  const enforcement = await enforceTypedConfirm({
-    actionKind: 'console.session.chat',
-    typedConfirmText,
-  })
-
-  if (!enforcement.allowed) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: 'Typed confirmation required',
-        code: enforcement.errorType,
-        confirmMode: enforcement.policy.confirmMode,
-      },
-      { status: enforcement.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403 }
     )
   }
 

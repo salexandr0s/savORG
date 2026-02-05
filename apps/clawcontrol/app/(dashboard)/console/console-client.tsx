@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { EmptyState } from '@clawcontrol/ui'
 import { Terminal, AlertCircle, RefreshCw } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
-import { useProtectedActionTrigger } from '@/components/protected-action-modal'
 import { agentsApi } from '@/lib/http'
 import { useGatewayChat } from '@/lib/hooks/useGatewayChat'
 import { useChatStore, type ChatMessage } from '@/lib/stores/chat-store'
@@ -71,7 +70,6 @@ export function ConsoleClient() {
   const retryCountRef = useRef(0)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
-  const triggerProtectedAction = useProtectedActionTrigger()
   const { sendMessage, abort } = useGatewayChat()
   const {
     messages,
@@ -199,19 +197,8 @@ export function ConsoleClient() {
 
   const handleSendMessage = useCallback(async (content: string) => {
     if (!selectedSessionId || isStreaming) return
-
-    triggerProtectedAction({
-      actionKind: 'console.session.chat',
-      actionTitle: 'Send to Session',
-      actionDescription: `Send message to session (true session injection)`,
-      onConfirm: async (typedConfirmText) => {
-        await sendMessage(selectedSessionId, content, typedConfirmText)
-      },
-      onError: (err) => {
-        setError(err.message)
-      },
-    })
-  }, [selectedSessionId, isStreaming, triggerProtectedAction, sendMessage])
+    await sendMessage(selectedSessionId, content)
+  }, [selectedSessionId, isStreaming, sendMessage])
 
   const handleRefresh = useCallback(() => {
     setLoading(true)

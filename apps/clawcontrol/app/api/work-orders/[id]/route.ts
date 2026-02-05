@@ -72,7 +72,7 @@ export async function PATCH(
 
   try {
     const body = await request.json()
-    const { title, goalMd, state, priority, owner, blockedReason, typedConfirmText } = body
+    const { title, goalMd, state, priority, owner, tags, blockedReason, typedConfirmText } = body
 
     const repos = getRepos()
     const { actor } = getRequestActor(request)
@@ -133,12 +133,13 @@ export async function PATCH(
       }
 
       // If there are other updates beyond state, apply them separately
-      if (title !== undefined || goalMd !== undefined || priority !== undefined || owner !== undefined || blockedReason !== undefined) {
+      if (title !== undefined || goalMd !== undefined || priority !== undefined || owner !== undefined || tags !== undefined || blockedReason !== undefined) {
         const updated = await repos.workOrders.update(id, {
           title,
           goalMd,
           priority,
           owner,
+          tags,
           blockedReason,
         })
         return NextResponse.json({ data: updated })
@@ -154,6 +155,7 @@ export async function PATCH(
       state,
       priority,
       owner,
+      tags,
       blockedReason,
     })
 

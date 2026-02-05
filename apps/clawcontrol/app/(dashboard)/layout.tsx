@@ -3,6 +3,7 @@
 import { AppShell } from '@/components/shell/app-shell'
 import { SearchModal, useSearchModal } from '@/components/shell/search-modal'
 import { ProtectedActionProvider } from '@/components/protected-action-modal'
+import { usePathname } from 'next/navigation'
 
 /**
  * Dashboard Layout
@@ -17,10 +18,15 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const search = useSearchModal()
+  const pathname = usePathname()
+  const isConsoleRoute = pathname === '/console' || pathname.startsWith('/console/')
 
   return (
     <ProtectedActionProvider>
-      <AppShell onSearchClick={search.onOpen}>
+      <AppShell
+        onSearchClick={search.onOpen}
+        contentPadding={isConsoleRoute ? 'none' : 'default'}
+      >
         {children}
       </AppShell>
       <SearchModal open={search.open} onClose={search.onClose} />

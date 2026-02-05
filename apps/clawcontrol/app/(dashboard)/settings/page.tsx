@@ -430,20 +430,34 @@ export default function SettingsPage() {
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => setSkipTypedConfirm(!skipTypedConfirm)}
-              className={cn(
-                'relative w-11 h-6 rounded-full transition-colors',
-                skipTypedConfirm ? 'bg-status-warning' : 'bg-bg-3'
-              )}
-            >
-              <span
+            <div className="inline-flex items-center gap-1 p-1 rounded-[var(--radius-md)] bg-bg-3 border border-bd-0 shrink-0">
+              <button
+                type="button"
+                onClick={() => setSkipTypedConfirm(false)}
                 className={cn(
-                  'absolute top-1 w-4 h-4 rounded-full bg-white transition-transform',
-                  skipTypedConfirm ? 'translate-x-6' : 'translate-x-1'
+                  'px-2.5 py-1 text-xs font-medium rounded-[var(--radius-sm)] transition-colors',
+                  !skipTypedConfirm
+                    ? 'bg-bg-1 text-fg-0'
+                    : 'text-fg-2 hover:text-fg-0'
                 )}
-              />
-            </button>
+                aria-pressed={!skipTypedConfirm}
+              >
+                Off
+              </button>
+              <button
+                type="button"
+                onClick={() => setSkipTypedConfirm(true)}
+                className={cn(
+                  'px-2.5 py-1 text-xs font-medium rounded-[var(--radius-sm)] transition-colors',
+                  skipTypedConfirm
+                    ? 'bg-status-warning text-black'
+                    : 'text-fg-2 hover:text-fg-0'
+                )}
+                aria-pressed={skipTypedConfirm}
+              >
+                On
+              </button>
+            </div>
           </div>
 
           {skipTypedConfirm && (

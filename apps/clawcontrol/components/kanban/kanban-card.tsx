@@ -1,21 +1,47 @@
 'use client'
 
+import { useEffect, useMemo, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { cn } from '@/lib/utils'
 import { formatRelativeTime } from '@/lib/utils'
 import { PriorityPill } from '@/components/ui/status-pill'
 import { isWorkOrderStale, getStaleDurationHours } from '@/lib/kanban-helpers'
-import type { WorkOrderWithOpsDTO } from '@/lib/repo'
+import type { AgentDTO, WorkOrderWithOpsDTO } from '@/lib/repo'
 import type { WorkOrderState } from '@clawcontrol/core'
 import { Clock } from 'lucide-react'
 
 interface KanbanCardProps {
   workOrder: WorkOrderWithOpsDTO
+  agents: AgentDTO[]
   onClick: () => void
+  onAssignToAgent: (id: string, agentName: string) => Promise<void>
+  assigningWorkOrderId?: string | null
 }
 
-export function KanbanCard({ workOrder, onClick }: KanbanCardProps) {
+function formatOwnerLabel(owner: string): string {
+  if (owner === 'clawcontrolceo') return 'clawcontrol CEO'
+  if (owner === 'user') return 'User'
+  return owner
+}
+
+function getOwnerTextClass(owner: string): string {
+  if (owner === 'clawcontrolceo') return 'text-status-progress'
+  if (owner === 'user') return 'text-fg-1'
+  return 'text-status-info'
+}
+
+function stopEvent(event: React.SyntheticEvent) {
+  event.stopPropagation()
+}
+
+export function KanbanCard({
+  workOrder,
+  agents,
+  onClick,
+  onAssignToAgent,
+  assigningWorkOrderId,
+}: KanbanCardProps) {
   const {
     attributes,
     listeners,
@@ -46,6 +72,21 @@ export function KanbanCard({ workOrder, onClick }: KanbanCardProps) {
   const isStale = isWorkOrderStale(workOrder)
   const staleHours = isStale ? getStaleDurationHours(workOrder) : 0
   const staleDays = Math.floor(staleHours / 24)
+  const isAssigning = assigningWorkOrderId === workOrder.id
+
+  const availableAgents = useMemo(
+    () => agents.filter((agent) => agent.status !== 'error'),
+    [agents]
+  )
+  const [selectedAgent, setSelectedAgent] = useState('')
+
+  useEffect(() => {
+    if (workOrder.state !== 'planned') return
+    if (selectedAgent) return
+    if (availableAgents.length > 0) {
+      setSelectedAgent(availableAgents[0].name)
+    }
+  }, [availableAgents, selectedAgent, workOrder.state])
 
   return (
     <div
@@ -85,6 +126,23 @@ export function KanbanCard({ workOrder, onClick }: KanbanCardProps) {
         {workOrder.title}
       </p>
 
+      {/* Tags */}
+      {workOrder.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-2">
+          {workOrder.tags.slice(0, 4).map((tag) => (
+            <span
+              key={tag}
+              className="px-1.5 py-0.5 text-[10px] rounded-full bg-bg-3 text-fg-1 border border-bd-0"
+            >
+              {tag}
+            </span>
+          ))}
+          {workOrder.tags.length > 4 && (
+            <span className="text-[10px] text-fg-2">+{workOrder.tags.length - 4}</span>
+          )}
+        </div>
+      )}
+
       {/* Progress Bar (only if has operations) */}
       {totalOps > 0 && (
         <div className="mb-2">
@@ -101,28 +159,69 @@ export function KanbanCard({ workOrder, onClick }: KanbanCardProps) {
         </div>
       )}
 
-      {/* Footer: Updated time + Stale/Owner badges */}
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] text-fg-2 flex-shrink-0">
-          {formatRelativeTime(workOrder.updatedAt)}
-        </span>
-        <div className="flex items-center gap-1.5">
-          {isStale && (
-            <span
-              className="flex items-center gap-1 text-[10px] font-medium text-status-warning px-1.5 py-0.5 rounded bg-status-warning/10"
-              title={`No updates in ${staleDays > 0 ? `${staleDays}d` : `${staleHours}h`}`}
-            >
-              <Clock className="w-2.5 h-2.5" />
-              {staleDays > 0 ? `${staleDays}d` : `${staleHours}h`}
-            </span>
-          )}
-          {workOrder.owner === 'clawcontrolceo' && (
-            <span className="text-[10px] font-mono font-medium text-status-progress px-1.5 py-0.5 rounded bg-status-progress/10">
-              CEO
-            </span>
-          )}
+      {/* Footer metadata */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className={cn('text-[11px] truncate', getOwnerTextClass(workOrder.owner))}>
+            {formatOwnerLabel(workOrder.owner)}
+          </span>
+          <span className="text-[11px] text-fg-2 flex-shrink-0">
+            {formatRelativeTime(workOrder.updatedAt)}
+          </span>
         </div>
+        {isStale && (
+          <div className="flex items-center gap-1 text-[10px] font-medium text-status-warning">
+            <Clock className="w-2.5 h-2.5" />
+            <span title={`No updates in ${staleDays > 0 ? `${staleDays}d` : `${staleHours}h`}`}>
+              Stale {staleDays > 0 ? `${staleDays}d` : `${staleHours}h`}
+            </span>
+          </div>
+        )}
       </div>
+
+      {/* Planned queue assignment */}
+      {workOrder.state === 'planned' && (
+        <div
+          className="mt-2 pt-2 border-t border-bd-0/60 space-y-1.5"
+          onClick={stopEvent}
+          onPointerDown={stopEvent}
+        >
+          <span className="text-[10px] uppercase tracking-wide text-fg-3">
+            Assign to Agent
+          </span>
+          <div className="flex items-center gap-1.5">
+            <select
+              value={selectedAgent}
+              onChange={(event) => setSelectedAgent(event.target.value)}
+              onClick={stopEvent}
+              onPointerDown={stopEvent}
+              className="flex-1 min-w-0 px-2 py-1 text-[11px] bg-bg-3 border border-bd-0 rounded-[var(--radius-sm)] text-fg-1 focus:outline-none focus:ring-1 focus:ring-status-info/40"
+            >
+              {availableAgents.length === 0 && (
+                <option value="">No available agents</option>
+              )}
+              {availableAgents.map((agent) => (
+                <option key={agent.id} value={agent.name}>
+                  {agent.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={async (event) => {
+                stopEvent(event)
+                if (!selectedAgent || isAssigning) return
+                await onAssignToAgent(workOrder.id, selectedAgent)
+              }}
+              onPointerDown={stopEvent}
+              disabled={!selectedAgent || isAssigning || availableAgents.length === 0}
+              className="px-2 py-1 text-[11px] font-medium rounded-[var(--radius-sm)] bg-status-info text-bg-0 hover:bg-status-info/90 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isAssigning ? 'Assigning...' : 'Assign'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -158,6 +257,19 @@ export function KanbanCardOverlay({ workOrder }: { workOrder: WorkOrderWithOpsDT
         {workOrder.title}
       </p>
 
+      {workOrder.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-2">
+          {workOrder.tags.slice(0, 3).map((tag) => (
+            <span
+              key={tag}
+              className="px-1.5 py-0.5 text-[10px] rounded-full bg-bg-3 text-fg-1 border border-bd-0"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Progress Bar */}
       {totalOps > 0 && (
         <div className="mb-2">
@@ -179,11 +291,9 @@ export function KanbanCardOverlay({ workOrder }: { workOrder: WorkOrderWithOpsDT
         <span className="text-[11px] text-fg-2">
           {formatRelativeTime(workOrder.updatedAt)}
         </span>
-        {workOrder.owner === 'clawcontrolceo' && (
-          <span className="text-[10px] font-mono font-medium text-status-progress px-1.5 py-0.5 rounded bg-status-progress/10">
-            CEO
-          </span>
-        )}
+        <span className={cn('text-[10px] font-medium', getOwnerTextClass(workOrder.owner))}>
+          {formatOwnerLabel(workOrder.owner)}
+        </span>
       </div>
     </div>
   )

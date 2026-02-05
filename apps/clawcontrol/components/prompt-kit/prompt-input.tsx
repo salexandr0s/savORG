@@ -69,7 +69,7 @@ export function PromptInput({
   }, [submit])
 
   return (
-    <div className={cn('bg-bg-1 p-4', className)}>
+    <div className={cn('bg-bg-1', className)}>
       <div
         className={cn(
           'flex items-end gap-2 rounded-[10px] px-3 py-2',

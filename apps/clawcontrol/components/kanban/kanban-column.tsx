@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 import type { StatusTone } from '@clawcontrol/ui/theme'
 import { statusToneClasses } from '@clawcontrol/ui/theme'
 import type { WorkOrderState } from '@clawcontrol/core'
-import type { WorkOrderWithOpsDTO } from '@/lib/repo'
+import type { AgentDTO, WorkOrderWithOpsDTO } from '@/lib/repo'
 import { KanbanCard } from './kanban-card'
 import type { DropIndicator } from '@/lib/kanban-helpers'
 import { AlertTriangle } from 'lucide-react'
@@ -20,7 +20,10 @@ interface KanbanColumnProps {
   tone: StatusTone
   isDangerous?: boolean
   workOrders: WorkOrderWithOpsDTO[]
+  agents: AgentDTO[]
   onCardClick: (wo: WorkOrderWithOpsDTO) => void
+  onAssignToAgent: (id: string, agentName: string) => Promise<void>
+  assigningWorkOrderId?: string | null
   dropIndicator?: DropIndicator
   /** Whether this column can accept the currently dragged item */
   canAcceptDrop?: boolean
@@ -34,7 +37,10 @@ export function KanbanColumn({
   tone,
   isDangerous,
   workOrders,
+  agents,
   onCardClick,
+  onAssignToAgent,
+  assigningWorkOrderId,
   dropIndicator,
   canAcceptDrop,
   isDragging,
@@ -136,7 +142,10 @@ export function KanbanColumn({
             <KanbanCard
               key={workOrder.id}
               workOrder={workOrder}
+              agents={agents}
               onClick={() => onCardClick(workOrder)}
+              onAssignToAgent={onAssignToAgent}
+              assigningWorkOrderId={assigningWorkOrderId}
             />
           ))}
         </SortableContext>

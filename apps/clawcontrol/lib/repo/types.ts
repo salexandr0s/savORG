@@ -16,7 +16,8 @@ export interface WorkOrderDTO {
   goalMd: string
   state: 'planned' | 'active' | 'blocked' | 'review' | 'shipped' | 'cancelled'
   priority: 'P0' | 'P1' | 'P2' | 'P3'
-  owner: 'user' | 'clawcontrolceo'
+  owner: string
+  tags: string[]
   routingTemplate: string
   blockedReason: string | null
   createdAt: Date

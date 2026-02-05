@@ -27,6 +27,7 @@ model WorkOrder {
   state           String   @default("planned") // planned|active|blocked|review|shipped|cancelled
   priority        String   @default("P2") // P0|P1|P2|P3
   owner           String   @default("user") // user|clawcontrolceo
+  tags            String   @default("[]") // JSON array of labels
   routingTemplate String   @default("default_routing") @map("routing_template")
 
   // Workflow chain tracking

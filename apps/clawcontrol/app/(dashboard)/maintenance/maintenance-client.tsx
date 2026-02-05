@@ -7,6 +7,7 @@ import { RightDrawer } from '@/components/shell/right-drawer'
 import { YamlEditor } from '@/components/editors/yaml-editor'
 import { playbooksApi, maintenanceApi, type PlaybookWithContent, type MaintenanceStatus, type PlaybookRunResult, HttpError } from '@/lib/http'
 import { useProtectedAction } from '@/lib/hooks/useProtectedAction'
+import { useSettings } from '@/lib/settings-context'
 import type { GatewayStatusDTO } from '@/lib/data'
 import type { ActionKind } from '@clawcontrol/core'
 import { cn } from '@/lib/utils'
@@ -92,6 +93,7 @@ const ACTION_CONFIG: Record<MaintenanceAction, {
 }
 
 export function MaintenanceClient({ gateway: initialGateway, playbooks: initialPlaybooks }: Props) {
+  const { skipTypedConfirm } = useSettings()
   const [gateway, setGateway] = useState(initialGateway)
   const [playbooks, setPlaybooks] = useState(initialPlaybooks)
   const [selectedPlaybook, setSelectedPlaybook] = useState<PlaybookWithContent | null>(null)
@@ -118,7 +120,7 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
 
   const [localOnly, setLocalOnly] = useState<MaintenanceStatus['localOnly'] | null>(null)
 
-  const protectedAction = useProtectedAction()
+  const protectedAction = useProtectedAction({ skipTypedConfirm })
 
   const applyMaintenanceStatus = useCallback((status: MaintenanceStatus) => {
     setGateway((prev) => ({

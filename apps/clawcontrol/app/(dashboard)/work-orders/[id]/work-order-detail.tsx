@@ -52,6 +52,27 @@ const tabs: Tab[] = [
   { id: 'activity', label: 'Activity', icon: Activity },
 ]
 
+function parseTagsInput(input: string): string[] {
+  if (!input.trim()) return []
+  const normalized = input
+    .split(',')
+    .map((tag) => tag.trim().toLowerCase())
+    .filter(Boolean)
+  return Array.from(new Set(normalized)).slice(0, 20)
+}
+
+function formatOwnerLabel(owner: string): string {
+  if (owner === 'clawcontrolceo') return 'clawcontrol CEO'
+  if (owner === 'user') return 'User'
+  return owner
+}
+
+function getOwnerTextClass(owner: string): string {
+  if (owner === 'clawcontrolceo') return 'text-status-progress'
+  if (owner === 'user') return 'text-fg-0'
+  return 'text-status-info'
+}
+
 interface WorkOrderDetailProps {
   workOrderId: string
 }
@@ -64,6 +85,8 @@ export function WorkOrderDetail({ workOrderId }: WorkOrderDetailProps) {
   const [agentStationsByName, setAgentStationsByName] = useState<Record<string, string>>({})
   const [approvals, setApprovals] = useState<ApprovalDTO[]>([])
   const [receipts, setReceipts] = useState<ReceiptDTO[]>([])
+  const [tagInput, setTagInput] = useState('')
+  const [savingTags, setSavingTags] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TabId>('overview')
@@ -81,6 +104,7 @@ export function WorkOrderDetail({ workOrderId }: WorkOrderDetailProps) {
           agentsApi.list(),
         ])
         setWorkOrder(woResult.data)
+        setTagInput(woResult.data.tags.join(', '))
         setOperations(opsResult.data)
         setActivities(activitiesResult.data)
         setApprovals(approvalsResult.data)
@@ -94,6 +118,12 @@ export function WorkOrderDetail({ workOrderId }: WorkOrderDetailProps) {
     }
     fetchData()
   }, [workOrderId])
+
+  useEffect(() => {
+    if (workOrder) {
+      setTagInput(workOrder.tags.join(', '))
+    }
+  }, [workOrder?.id, workOrder?.tags])
 
   // Refresh operations, activities, approvals, and receipts after changes
   const refreshData = async () => {
@@ -185,6 +215,20 @@ export function WorkOrderDetail({ workOrderId }: WorkOrderDetailProps) {
     })
   }
 
+  const handleSaveTags = async () => {
+    const nextTags = parseTagsInput(tagInput)
+    setSavingTags(true)
+    try {
+      await workOrdersApi.update(workOrderId, { tags: nextTags })
+      setWorkOrder((prev) => (prev ? { ...prev, tags: nextTags, updatedAt: new Date() } : prev))
+      await refreshData()
+    } catch (err) {
+      console.error('Failed to save tags:', err)
+    } finally {
+      setSavingTags(false)
+    }
+  }
+
   return (
     <div className="max-w-[1200px] space-y-4">
       {/* Breadcrumb */}
@@ -247,6 +291,39 @@ export function WorkOrderDetail({ workOrderId }: WorkOrderDetailProps) {
           </button>
         </div>
       )}
+
+      {/* Tags */}
+      <div className="p-4 bg-bg-2 border border-bd-0 rounded-[var(--radius-md)]">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <h3 className="text-sm font-medium text-fg-0">Tags</h3>
+          <button
+            onClick={handleSaveTags}
+            disabled={savingTags}
+            className="px-3 py-1.5 text-xs font-medium rounded-[var(--radius-sm)] bg-status-info text-bg-0 hover:bg-status-info/90 disabled:opacity-50"
+          >
+            {savingTags ? 'Saving...' : 'Save Tags'}
+          </button>
+        </div>
+        <input
+          value={tagInput}
+          onChange={(e) => setTagInput(e.target.value)}
+          placeholder="feature, urgent, research"
+          className="w-full px-3 py-2 text-sm bg-bg-1 border border-bd-1 rounded-[var(--radius-md)] text-fg-0 placeholder:text-fg-2 focus:outline-none focus:ring-1 focus:ring-status-info/40"
+        />
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {workOrder.tags.length === 0 && (
+            <span className="text-xs text-fg-3">No tags assigned</span>
+          )}
+          {workOrder.tags.map((tag) => (
+            <span
+              key={tag}
+              className="px-2 py-0.5 text-[11px] rounded-full bg-bg-3 text-fg-1 border border-bd-0"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      </div>
 
       {/* Tab Bar */}
       <div className="flex border-b border-bd-0 overflow-x-auto scrollbar-hide">
@@ -380,12 +457,9 @@ function OverviewTab({
             <Clock className="w-4 h-4 text-fg-2" />
             <span className="text-xs font-medium text-fg-1">Owner</span>
           </div>
-	          <div className={cn(
-	            'text-lg font-semibold',
-	            workOrder.owner === 'clawcontrolceo' ? 'text-status-progress' : 'text-fg-0'
-	          )}>
-	            {workOrder.owner === 'clawcontrolceo' ? 'clawcontrol CEO' : 'User'}
-	          </div>
+          <div className={cn('text-lg font-semibold', getOwnerTextClass(workOrder.owner))}>
+            {formatOwnerLabel(workOrder.owner)}
+          </div>
           <div className="text-xs text-fg-2 mt-1">
             Created {formatRelativeTime(workOrder.createdAt)}
           </div>

@@ -222,6 +222,7 @@ export const workOrdersApi = {
     goalMd: string
     priority?: string
     owner?: string
+    tags?: string[]
   }) => apiPost<{ data: WorkOrderDTO }>('/api/work-orders', data),
 
   update: (id: string, data: Partial<{
@@ -230,6 +231,7 @@ export const workOrdersApi = {
     state: string
     priority: string
     owner: string
+    tags: string[]
     blockedReason: string | null
     /** Required for protected state transitions (ship, cancel) */
     typedConfirmText: string

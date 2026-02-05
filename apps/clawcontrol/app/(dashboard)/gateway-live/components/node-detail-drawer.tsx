@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { X, Bot, MessageSquare, Wrench, Settings, Radio, Shield, Loader2, Eye, Code } from 'lucide-react'
 import { TypedConfirmModal } from '@clawcontrol/ui'
 import { useProtectedAction } from '@/lib/hooks/useProtectedAction'
+import { useSettings } from '@/lib/settings-context'
 import { ModalFrame } from '@/components/ui/modal'
 import type { GraphNode, GraphNodeKind } from '@/lib/openclaw/live-graph'
 
@@ -22,11 +23,12 @@ const NODE_KIND_CONFIG: Record<GraphNodeKind, { label: string; icon: typeof Bot;
 }
 
 export function NodeDetailDrawer({ node, onClose }: NodeDetailDrawerProps) {
+  const { skipTypedConfirm } = useSettings()
   const config = NODE_KIND_CONFIG[node.kind]
   const Icon = config.icon
   const [rawDetails, setRawDetails] = useState<object | null>(null)
   const [isLoadingRaw, setIsLoadingRaw] = useState(false)
-  const protectedAction = useProtectedAction()
+  const protectedAction = useProtectedAction({ skipTypedConfirm })
 
   const handleRequestRawDetails = () => {
     protectedAction.trigger({

@@ -6,6 +6,7 @@ import { CanonicalTable, type Column } from '@/components/ui/canonical-table'
 import { StatusPill } from '@/components/ui/status-pill'
 import { RightDrawer } from '@/components/shell/right-drawer'
 import { useProtectedAction } from '@/lib/hooks/useProtectedAction'
+import { useSettings } from '@/lib/settings-context'
 import { pluginsApi, type PluginWithConfig, type PluginDoctorResult, type PluginCapabilities, type PluginResponseMeta } from '@/lib/http'
 import type { PluginDTO } from '@/lib/data'
 import { cn } from '@/lib/utils'
@@ -138,6 +139,7 @@ const pluginColumns: Column<PluginDTO>[] = [
 ]
 
 export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Props) {
+  const { skipTypedConfirm } = useSettings()
   const [plugins, setPlugins] = useState(initialPlugins)
   const [meta, setMeta] = useState<PluginResponseMeta | undefined>(initialMeta)
   const [selectedPlugin, setSelectedPlugin] = useState<PluginWithConfig | null>(null)
@@ -158,7 +160,7 @@ export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Pr
   const [installError, setInstallError] = useState<string | null>(null)
   const [isProbing, setIsProbing] = useState(false)
 
-  const protectedAction = useProtectedAction()
+  const protectedAction = useProtectedAction({ skipTypedConfirm })
 
   const enabledCount = plugins.filter((p) => p.enabled).length
   const errorCount = plugins.filter((p) => p.status === 'error').length

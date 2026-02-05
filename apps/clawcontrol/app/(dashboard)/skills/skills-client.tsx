@@ -7,6 +7,7 @@ import { StatusPill } from '@/components/ui/status-pill'
 import { RightDrawer } from '@/components/shell/right-drawer'
 import { MarkdownEditor } from '@/components/editors'
 import { useProtectedAction } from '@/lib/hooks/useProtectedAction'
+import { useSettings } from '@/lib/settings-context'
 import { skillsApi, type SkillWithContent, type SkillValidationResult, HttpError } from '@/lib/http'
 import type { SkillDTO, AgentDTO } from '@/lib/data'
 import { cn } from '@/lib/utils'
@@ -43,6 +44,7 @@ const scopeTabs: { id: TabScope; label: string; icon: typeof Globe }[] = [
 ]
 
 export function SkillsClient({ skills: initialSkills, agents }: Props) {
+  const { skipTypedConfirm } = useSettings()
   const [skills, setSkills] = useState(initialSkills)
   const [activeTab, setActiveTab] = useState<TabScope>('all')
   const [selectedSkill, setSelectedSkill] = useState<SkillWithContent | null>(null)
@@ -60,7 +62,7 @@ export function SkillsClient({ skills: initialSkills, agents }: Props) {
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [uploadFile, setUploadFile] = useState<File | null>(null)
 
-  const protectedAction = useProtectedAction()
+  const protectedAction = useProtectedAction({ skipTypedConfirm })
 
   // Filter skills by scope
   const filteredSkills = activeTab === 'all'

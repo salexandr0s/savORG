@@ -42,15 +42,23 @@ export async function dispatchToAgent(input: {
   task: string
   context?: Record<string, unknown>
 }): Promise<{ sessionKey: string; sessionId: string | null }> {
-  const agent = await prisma.agent.findUnique({ where: { name: input.agentName } })
+  const agent = await prisma.agent.findFirst({
+    where: {
+      OR: [
+        { name: input.agentName },
+        { sessionKey: { startsWith: `agent:${input.agentName}:` } },
+      ],
+    },
+  })
   if (!agent) {
     throw new Error(`Agent not found: ${input.agentName}`)
   }
 
-  const sessionKey = `agent:${input.agentName}:wo:${input.workOrderId}:op:${input.operationId}`
+  const runtimeAgentId = extractAgentIdFromSessionKey(agent.sessionKey) ?? input.agentName
+  const sessionKey = `agent:${runtimeAgentId}:wo:${input.workOrderId}:op:${input.operationId}`
 
   const result = await spawnAgentSession({
-    agentId: input.agentName,
+    agentId: runtimeAgentId,
     label: sessionKey,
     task: input.task,
     context: input.context ?? {},
@@ -60,7 +68,7 @@ export async function dispatchToAgent(input: {
   // Best-effort status update (telemetry-only)
   await prisma.agent
     .update({
-      where: { name: input.agentName },
+      where: { id: agent.id },
       data: { status: 'active', lastSeenAt: new Date() },
     })
     .catch(() => {})
@@ -69,21 +77,26 @@ export async function dispatchToAgent(input: {
 }
 
 export function mapAgentToStation(agentName: string): string {
-  const stationMap: Record<string, string> = {
-    clawcontrolguard: 'screen',
-    clawcontrolceo: 'strategic',
-    clawcontrolmanager: 'orchestration',
-    clawcontrolresearch: 'spec',
-    clawcontrolplan: 'spec',
-    clawcontrolplanreview: 'spec',
-    clawcontrolbuild: 'build',
-    clawcontrolbuildreview: 'qa',
-    clawcontrolui: 'build',
-    clawcontroluireview: 'qa',
-    clawcontrolops: 'ops',
-    clawcontrolsecurity: 'qa',
+  const normalized = agentName.toLowerCase().replace(/\s+/g, '')
+
+  if (normalized.includes('guard')) return 'screen'
+  if (normalized.includes('ceo')) return 'strategic'
+  if (normalized.includes('manager')) return 'orchestration'
+  if (normalized.includes('research') || normalized.includes('plan') || normalized.includes('spec')) {
+    return 'spec'
   }
-  return stationMap[agentName] ?? 'build'
+  if (normalized.includes('ops') || normalized.includes('infra')) return 'ops'
+  if (normalized.includes('review') || normalized.includes('qa') || normalized.includes('security')) {
+    return 'qa'
+  }
+  if (normalized.includes('ui') || normalized.includes('build')) return 'build'
+  return 'build'
+}
+
+function extractAgentIdFromSessionKey(sessionKey: string): string | null {
+  const parts = sessionKey.split(':')
+  if (parts[0] !== 'agent' || !parts[1]) return null
+  return parts[1]
 }
 
 export function evaluateCondition(condition: string, context: Record<string, unknown>): boolean {
@@ -407,4 +420,3 @@ export function buildEscalationMessage(
     '- `MODIFY` — Provide new instructions',
   ].join('\n')
 }
-

@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
 
-    const { title, goalMd, priority = 'P2', owner = 'user' } = body
+    const { title, goalMd, priority = 'P2', owner = 'user', tags } = body
 
     if (!title || !goalMd) {
       return NextResponse.json(
@@ -85,6 +85,7 @@ export async function POST(request: NextRequest) {
       goalMd,
       priority,
       owner,
+      tags,
     })
 
     // Log work order creation for audit trail (P0 Security Fix)
@@ -99,6 +100,7 @@ export async function POST(request: NextRequest) {
         title,
         priority,
         owner,
+        tags: data.tags,
         state: data.state,
       },
     })

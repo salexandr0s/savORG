@@ -6,6 +6,7 @@ import { CanonicalTable, type Column } from '@/components/ui/canonical-table'
 import { StatusPill } from '@/components/ui/status-pill'
 import { RightDrawer } from '@/components/shell/right-drawer'
 import { useProtectedAction } from '@/lib/hooks/useProtectedAction'
+import { useSettings } from '@/lib/settings-context'
 import { templatesApi, type TemplateWithFiles, type TemplateFile } from '@/lib/http'
 import type { AgentTemplate } from '@clawcontrol/core'
 import { cn } from '@/lib/utils'
@@ -126,6 +127,7 @@ const templateColumns: Column<AgentTemplate>[] = [
 // ============================================================================
 
 export function AgentTemplatesClient({ templates: initialTemplates }: Props) {
+  const { skipTypedConfirm } = useSettings()
   const [templates, setTemplates] = useState(initialTemplates)
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateWithFiles | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -154,7 +156,7 @@ export function AgentTemplatesClient({ templates: initialTemplates }: Props) {
   // Export state
   const [isExporting, setIsExporting] = useState(false)
 
-  const protectedAction = useProtectedAction()
+  const protectedAction = useProtectedAction({ skipTypedConfirm })
 
   const validCount = templates.filter((t) => t.isValid).length
   const invalidCount = templates.filter((t) => !t.isValid).length

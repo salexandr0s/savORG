@@ -14,6 +14,7 @@ import {
   HttpError,
 } from '@/lib/http'
 import { useProtectedAction } from '@/lib/hooks/useProtectedAction'
+import { useSettings } from '@/lib/settings-context'
 import { cn } from '@/lib/utils'
 import {
   Shield,
@@ -48,6 +49,7 @@ type AuditState = {
 
 export function SecurityClient() {
   const router = useRouter()
+  const { skipTypedConfirm } = useSettings()
   const [state, setState] = useState<AuditState>({
     isRunning: false,
     auditType: null,
@@ -58,7 +60,7 @@ export function SecurityClient() {
   })
   const [isCreatingWorkOrder, setIsCreatingWorkOrder] = useState(false)
 
-  const protectedAction = useProtectedAction()
+  const protectedAction = useProtectedAction({ skipTypedConfirm })
 
   const runAudit = useCallback((type: AuditType) => {
     // Fix mode requires confirmation
