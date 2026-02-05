@@ -10,8 +10,28 @@
 export async function register() {
   // Only run on Node.js runtime (not Edge)
   if (process.env.NEXT_RUNTIME === 'nodejs') {
-    const { enableWalMode } = await import('./lib/db')
+    const { enableWalMode, ensureReservedWorkOrders } = await import('./lib/db')
     await enableWalMode()
     console.log('[boot] WAL mode enabled')
+
+    try {
+      await ensureReservedWorkOrders()
+      console.log('[boot] Reserved work orders ensured')
+    } catch (err) {
+      console.warn(
+        '[boot] Reserved work order bootstrap skipped:',
+        err instanceof Error ? err.message : String(err)
+      )
+    }
+
+    try {
+      const { syncAgentsFromOpenClaw } = await import('./lib/sync-agents')
+      const result = await syncAgentsFromOpenClaw()
+      if (result.added || result.updated) {
+        console.log(`[boot] Synced agents from OpenClaw: ${result.added} added, ${result.updated} updated`)
+      }
+    } catch (err) {
+      console.warn('[boot] OpenClaw agent sync skipped:', err instanceof Error ? err.message : String(err))
+    }
   }
 }

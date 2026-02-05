@@ -72,7 +72,14 @@ export function RailNav({ collapsed, onToggle }: RailNavProps) {
         "h-[var(--topbar-height)] flex items-center border-b border-bd-0 shrink-0",
         collapsed ? "justify-center px-0" : "px-4"
       )}>
-        <span className="text-sm font-semibold text-fg-0 tracking-wide">S</span>
+        {collapsed ? (
+          <img src="/images/logo-icon.png" alt="ClawControl" className="w-8 h-8 object-contain" />
+        ) : (
+          <div className="flex items-center gap-2">
+            <img src="/images/logo-icon.png" alt="ClawControl" className="w-7 h-7 object-contain" />
+            <span className="text-sm font-semibold text-fg-0 tracking-wide">ClawControl</span>
+          </div>
+        )}
       </div>
 
       {/* Nav Items */}

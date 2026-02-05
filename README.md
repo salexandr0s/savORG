@@ -1,6 +1,10 @@
-# clawcontrol
+<p align="center">
+  <img src="assets/logo-icon.png" alt="ClawControl" width="120">
+</p>
 
-**Local-first ops console for AI agent orchestration.**
+<h1 align="center">ClawControl</h1>
+
+<p align="center"><strong>Local-first ops console for AI agent orchestration.</strong></p>
 
 Built on [OpenClaw](https://github.com/openclaw/openclaw). Track work orders, govern dangerous actions, stream agent activity in real-time.
 

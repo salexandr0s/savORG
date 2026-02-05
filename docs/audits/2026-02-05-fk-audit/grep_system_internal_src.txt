@@ -1,0 +1,71 @@
+apps/clawcontrol/app/api/receipts/route.ts:108:      actor: 'system',
+apps/clawcontrol/app/api/receipts/[id]/finalize/route.ts:65:      actor: 'system',
+apps/clawcontrol/app/api/stations/route.ts:125:    workOrderId: 'system',
+apps/clawcontrol/app/api/stations/[id]/route.ts:85:    workOrderId: 'system',
+apps/clawcontrol/app/api/stations/[id]/route.ts:173:    workOrderId: 'system',
+apps/clawcontrol/app/api/openclaw/sessions/sync/route.ts:59:          actor: 'system',
+apps/clawcontrol/app/api/openclaw/sessions/sync/route.ts:156:          actor: 'system',
+apps/clawcontrol/app/api/openclaw/console/sessions/[id]/history/route.ts:14:  role: 'operator' | 'agent' | 'system'
+apps/clawcontrol/app/api/openclaw/console/sessions/[id]/history/route.ts:85:      let role: 'operator' | 'agent' | 'system' = 'system'
+apps/clawcontrol/app/api/security/audit/route.ts:131:    workOrderId: 'system',
+apps/clawcontrol/app/api/security/audit/route.ts:195:      entityType: 'system',
+apps/clawcontrol/app/api/plugins/restart/route.ts:51:    workOrderId: 'system',
+apps/clawcontrol/app/api/plugins/restart/route.ts:80:      entityId: 'system',
+apps/clawcontrol/app/api/plugins/route.ts:162:    workOrderId: 'system',
+apps/clawcontrol/app/api/plugins/[id]/config/route.ts:98:    workOrderId: 'system',
+apps/clawcontrol/app/api/plugins/[id]/doctor/route.ts:49:    workOrderId: 'system', // Standalone operation not tied to a work order
+apps/clawcontrol/app/api/plugins/[id]/route.ts:154:    workOrderId: 'system',
+apps/clawcontrol/app/api/agents/create-from-template/route.ts:114:    workOrderId: 'system',
+apps/clawcontrol/app/api/agents/[id]/provision/route.ts:57:    workOrderId: 'system',
+apps/clawcontrol/app/api/agents/[id]/test/route.ts:39:    workOrderId: 'system',
+apps/clawcontrol/app/api/agents/create/route.ts:89:    workOrderId: 'system',
+apps/clawcontrol/app/api/playbooks/[id]/run/route.ts:75:    workOrderId: workOrderId || 'system',
+apps/clawcontrol/app/api/operations/route.ts:97:      actor: 'system',
+apps/clawcontrol/app/api/maintenance/[action]/route.ts:138:    workOrderId: 'system',
+apps/clawcontrol/app/api/maintenance/[action]/route.ts:197:      entityType: 'system',
+apps/clawcontrol/app/api/maintenance/recover/route.ts:75:    workOrderId: 'system',
+apps/clawcontrol/app/api/maintenance/recover/route.ts:139:        entityType: 'system',
+apps/clawcontrol/app/api/maintenance/recover/route.ts:175:        entityType: 'system',
+apps/clawcontrol/app/api/maintenance/recover/route.ts:193:      workOrderId: 'system',
+apps/clawcontrol/app/api/maintenance/recover/route.ts:237:        workOrderId: 'system',
+apps/clawcontrol/app/api/maintenance/recover/route.ts:276:      workOrderId: 'system',
+apps/clawcontrol/app/api/maintenance/recover/route.ts:362:      entityType: 'system',
+apps/clawcontrol/app/api/maintenance/recover/route.ts:389:      entityType: 'system',
+apps/clawcontrol/app/api/approvals/route.ts:120:      actor: 'system',
+apps/clawcontrol/app/api/approvals/route.ts:134:      actor: 'system',
+apps/clawcontrol/app/api/agent-templates/route.ts:83:    workOrderId: 'system',
+apps/clawcontrol/app/api/agent-templates/[id]/route.ts:87:    workOrderId: 'system',
+apps/clawcontrol/app/api/agent-templates/[id]/export/route.ts:46:    workOrderId: 'system',
+apps/clawcontrol/app/api/agent-templates/import/route.ts:154:    workOrderId: 'system',
+apps/clawcontrol/app/(dashboard)/work-orders/[id]/work-order-detail.tsx:874:                    typeKey === 'system' && 'bg-fg-3/10 text-fg-2'
+apps/clawcontrol/app/(dashboard)/work-orders/[id]/work-order-detail.tsx:884:                      {activity.actor !== 'system' && (
+apps/clawcontrol/app/(dashboard)/now/now-dashboard.tsx:51:  type: 'work_order' | 'operation' | 'agent' | 'system'
+apps/clawcontrol/app/(dashboard)/now/page.tsx:58:    type: act.entityType as 'work_order' | 'operation' | 'agent' | 'system',
+apps/clawcontrol/app/(dashboard)/live/live-client.tsx:28:type ActivityType = 'all' | 'work_order' | 'operation' | 'agent' | 'system' | 'approval'
+apps/clawcontrol/app/(dashboard)/live/live-client.tsx:167:                  <option value="system">System</option>
+apps/clawcontrol/app/(dashboard)/live/live-client.tsx:322:          typeKey === 'system' && 'bg-fg-3/10 text-fg-2',
+apps/clawcontrol/app/(dashboard)/live/live-client.tsx:336:          {activity.actor !== 'system' && (
+apps/clawcontrol/app/(dashboard)/console/components/chat-panel.tsx:42:  const isSystem = message.role === 'system'
+apps/clawcontrol/app/(dashboard)/console/console-client.tsx:21:  role: 'operator' | 'agent' | 'system'
+apps/clawcontrol/app/(dashboard)/console/console-client.tsx:122:          role: 'operator' | 'agent' | 'system'
+apps/clawcontrol/prisma/seed.ts:54:        id: 'system',
+apps/clawcontrol/prisma/seed.ts:60:        owner: 'system',
+apps/clawcontrol/prisma/seed.ts:61:        routingTemplate: 'system',
+apps/clawcontrol/prisma/seed.ts:542:        actor: 'system',
+apps/clawcontrol/prisma/seed.ts:566:        actor: 'system',
+apps/clawcontrol/prisma/seed.ts:614:        actor: 'system',
+apps/clawcontrol/lib/request-actor.ts:11:  /** Formatted actor string matching existing patterns (e.g., 'user', 'system', 'agent:claw-alpha') */
+apps/clawcontrol/lib/request-actor.ts:13:  actorType: 'user' | 'system' | 'agent'
+apps/clawcontrol/lib/request-actor.ts:22: * - x-clawcontrol-actor-type: The actor type ('user' | 'system' | 'agent')
+apps/clawcontrol/lib/request-actor.ts:26: * - type='system' -> 'system'
+apps/clawcontrol/lib/request-actor.ts:29: * Falls back to 'system' if no headers provided.
+apps/clawcontrol/lib/request-actor.ts:33:  const actorType = request.headers.get('x-clawcontrol-actor-type') as 'user' | 'system' | 'agent' | null
+apps/clawcontrol/lib/request-actor.ts:37:    return { actor: 'system', actorType: 'system' }
+apps/clawcontrol/lib/request-actor.ts:53:    case 'system':
+apps/clawcontrol/lib/request-actor.ts:54:      return { actor: 'system', actorType: 'system' }
+apps/clawcontrol/lib/skill-validator.ts:74:  const reserved = ['global', 'agent', 'system', 'core', 'internal']
+apps/clawcontrol/lib/workflows/executor.ts:253:        actor: 'system',
+apps/clawcontrol/lib/workflows/executor.ts:285:            actor: 'system',
+apps/clawcontrol/lib/workflows/executor.ts:317:        actor: 'system',
+apps/clawcontrol/lib/workflows/executor.ts:352:      actor: 'system',
+apps/clawcontrol/lib/approval-gate.ts:189:    actor: actor || 'system',

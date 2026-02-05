@@ -76,3 +76,63 @@ export async function getJournalMode(): Promise<string> {
 
   return result[0]?.journal_mode ?? 'unknown'
 }
+
+type ReservedWorkOrderSeed = {
+  id: string
+  code: string
+  title: string
+  goalMd: string
+  state: string
+  priority: string
+  owner: string
+  routingTemplate: string
+}
+
+const RESERVED_WORK_ORDERS: ReservedWorkOrderSeed[] = [
+  {
+    id: 'system',
+    code: 'WO-SYS',
+    title: 'System Operations',
+    goalMd: 'Internal work order for system maintenance actions and receipts.',
+    state: 'active',
+    priority: 'P3',
+    owner: 'system',
+    routingTemplate: 'system',
+  },
+  {
+    id: 'console',
+    code: 'WO-CONSOLE',
+    title: 'Console Operations',
+    goalMd: 'Internal work order for OpenClaw console sessions and receipts.',
+    state: 'active',
+    priority: 'P3',
+    owner: 'system',
+    routingTemplate: 'system',
+  },
+]
+
+/**
+ * Ensure reserved/system work orders exist.
+ *
+ * Many internal routes create receipts that must satisfy the required
+ * `Receipt.workOrderId` FK. On existing DBs, seed scripts may not have run,
+ * so we upsert these work orders at startup.
+ */
+export async function ensureReservedWorkOrders(): Promise<void> {
+  for (const wo of RESERVED_WORK_ORDERS) {
+    await prisma.workOrder.upsert({
+      where: { id: wo.id },
+      create: {
+        id: wo.id,
+        code: wo.code,
+        title: wo.title,
+        goalMd: wo.goalMd,
+        state: wo.state,
+        priority: wo.priority,
+        owner: wo.owner,
+        routingTemplate: wo.routingTemplate,
+      },
+      update: {},
+    })
+  }
+}

@@ -63,6 +63,21 @@ async function main() {
         updatedAt: now,
       },
     }),
+    // Console work order for OpenClaw console receipts (must exist for FK constraint)
+    prisma.workOrder.create({
+      data: {
+        id: 'console',
+        code: 'WO-CONSOLE',
+        title: 'Console Operations',
+        goalMd: 'Internal work order for OpenClaw console sessions and receipts.',
+        state: 'active',
+        priority: 'P3',
+        owner: 'system',
+        routingTemplate: 'system',
+        createdAt: daysAgo(365),
+        updatedAt: now,
+      },
+    }),
     prisma.workOrder.create({
       data: {
         id: 'wo_01',
