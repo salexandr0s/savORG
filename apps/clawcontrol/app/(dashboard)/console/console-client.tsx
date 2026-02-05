@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { PageHeader, EmptyState } from '@clawcontrol/ui'
-import { Terminal, Wifi, WifiOff, AlertCircle, RefreshCw } from 'lucide-react'
+import { EmptyState } from '@clawcontrol/ui'
+import { Terminal, AlertCircle, RefreshCw } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useProtectedActionTrigger } from '@/components/protected-action-modal'
 import { agentsApi } from '@/lib/http'
@@ -10,7 +10,6 @@ import { useGatewayChat } from '@/lib/hooks/useGatewayChat'
 import { useChatStore, type ChatMessage } from '@/lib/stores/chat-store'
 import { SessionList } from './components/session-list'
 import { ChatPanel } from './components/chat-panel'
-import { cn } from '@/lib/utils'
 import type { ConsoleSessionDTO } from '@/app/api/openclaw/console/sessions/route'
 import type { AvailabilityStatus } from '@/lib/openclaw/availability'
 import type { AgentDTO } from '@/lib/repo'
@@ -253,45 +252,6 @@ export function ConsoleClient() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <PageHeader
-        title="Console"
-        actions={
-          <div className="flex items-center gap-3">
-            {/* Gateway status indicator */}
-            <div className={cn(
-              'flex items-center gap-2 px-3 py-1.5 rounded text-xs',
-              gatewayStatus === 'ok' && 'bg-status-success/10 text-status-success',
-              gatewayStatus === 'degraded' && 'bg-status-warning/10 text-status-warning',
-              gatewayStatus === 'unavailable' && 'bg-status-danger/10 text-status-danger',
-            )}>
-              {gatewayAvailable ? (
-                <Wifi className="w-3.5 h-3.5" />
-              ) : (
-                <WifiOff className="w-3.5 h-3.5" />
-              )}
-              <span className="font-medium">
-                {gatewayStatus === 'ok' && 'Connected'}
-                {gatewayStatus === 'degraded' && 'Degraded'}
-                {gatewayStatus === 'unavailable' && 'Unavailable'}
-              </span>
-            </div>
-
-            {/* Refresh button */}
-            <button
-              onClick={handleRefresh}
-              disabled={loading}
-              className={cn(
-                'p-2 rounded hover:bg-bg-3/50 transition-colors',
-                loading && 'opacity-50 cursor-not-allowed'
-              )}
-            >
-              <RefreshCw className={cn('w-4 h-4 text-fg-2', loading && 'animate-spin')} />
-            </button>
-          </div>
-        }
-      />
-
       {/* Error banner */}
       {combinedError && (
         <div className="mx-4 mt-4 p-3 bg-status-danger/10 border border-status-danger/20 rounded flex items-center gap-2">
@@ -349,6 +309,10 @@ export function ConsoleClient() {
               onAbort={handleAbort}
               sendDisabled={!gatewayAvailable}
               agentsBySessionKey={agentsBySessionKey}
+              gatewayStatus={gatewayStatus}
+              gatewayAvailable={gatewayAvailable}
+              loading={loading}
+              onRefresh={handleRefresh}
             />
           </>
         )}

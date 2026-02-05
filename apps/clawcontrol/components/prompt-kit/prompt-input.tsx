@@ -69,11 +69,11 @@ export function PromptInput({
   }, [submit])
 
   return (
-    <div className={cn('border-t border-bd-0 bg-bg-1 p-4', className)}>
+    <div className={cn('bg-bg-1 p-4', className)}>
       <div
         className={cn(
-          'flex items-end gap-2 border rounded-[var(--radius-md)] px-2 py-2',
-          disabled ? 'bg-bg-2 border-bd-0 opacity-80' : 'bg-bg-0 border-bd-1'
+          'flex items-end gap-2 rounded-[10px] px-3 py-2',
+          disabled ? 'bg-bg-2 opacity-80' : 'bg-bg-0'
         )}
       >
         <textarea
@@ -134,4 +134,3 @@ export function PromptInput({
     </div>
   )
 }
-

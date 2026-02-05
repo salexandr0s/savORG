@@ -1,6 +1,6 @@
 'use client'
 
-import { Terminal, Bot, XCircle } from 'lucide-react'
+import { Terminal, Bot, XCircle, Wifi, WifiOff, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { StationIcon } from '@/components/station-icon'
 import { ChatContainer, Message, PromptInput } from '@/components/prompt-kit'
@@ -8,6 +8,7 @@ import { SessionActivity } from './session-activity'
 import type { ConsoleSessionDTO } from '@/app/api/openclaw/console/sessions/route'
 import type { ChatMessage } from '@/lib/stores/chat-store'
 import type { AgentDTO } from '@/lib/repo'
+import type { AvailabilityStatus } from '@/lib/openclaw/availability'
 
 // ============================================================================
 // TYPES
@@ -22,6 +23,10 @@ interface ChatPanelProps {
   onAbort: () => void
   sendDisabled: boolean
   agentsBySessionKey: Record<string, AgentDTO>
+  gatewayStatus: AvailabilityStatus
+  gatewayAvailable: boolean
+  loading: boolean
+  onRefresh: () => void
 }
 
 // ============================================================================
@@ -37,6 +42,10 @@ export function ChatPanel({
   onAbort,
   sendDisabled,
   agentsBySessionKey,
+  gatewayStatus,
+  gatewayAvailable,
+  loading,
+  onRefresh,
 }: ChatPanelProps) {
   const headerAgent = session ? agentsBySessionKey[session.sessionKey] : undefined
   const headerName = session ? (headerAgent?.name || session.agentId) : ''
@@ -52,6 +61,11 @@ export function ChatPanel({
     if (streaming) return 'Waiting for response...'
     return `Send to ${session.sessionKey || session.agentId}...`
   }
+
+  const gatewayStatusLabel =
+    gatewayStatus === 'ok' ? 'Gateway connected'
+    : gatewayStatus === 'degraded' ? 'Gateway degraded'
+    : 'Gateway unavailable'
 
   return (
     <div className="flex-1 flex flex-col bg-bg-0 min-w-0">
@@ -71,25 +85,58 @@ export function ChatPanel({
             </div>
           </div>
 
-          {/* Context usage */}
-          {session.percentUsed !== null && (
-            <div className="ml-auto flex items-center gap-2">
-              <div className="w-24 h-1.5 bg-bg-3 rounded-full overflow-hidden">
-                <div
-                  className={cn(
-                    'h-full transition-all',
-                    session.percentUsed > 80
-                      ? 'bg-status-danger'
-                      : session.percentUsed > 50
-                        ? 'bg-status-warning'
-                        : 'bg-status-success'
-                  )}
-                  style={{ width: `${session.percentUsed}%` }}
-                />
+          <div className="ml-auto flex items-center gap-2">
+            {/* Context usage */}
+            {session.percentUsed !== null && (
+              <div className="flex items-center gap-2">
+                <div className="w-24 h-1.5 bg-bg-3 rounded-full overflow-hidden">
+                  <div
+                    className={cn(
+                      'h-full transition-all',
+                      session.percentUsed > 80
+                        ? 'bg-status-danger'
+                        : session.percentUsed > 50
+                          ? 'bg-status-warning'
+                          : 'bg-status-success'
+                    )}
+                    style={{ width: `${session.percentUsed}%` }}
+                  />
+                </div>
+                <span className="text-xs text-fg-3">{session.percentUsed}%</span>
               </div>
-              <span className="text-xs text-fg-3">{session.percentUsed}%</span>
+            )}
+
+            <div
+              className={cn(
+                'inline-flex items-center justify-center w-8 h-8 rounded-[var(--radius-md)]',
+                gatewayStatus === 'ok' && 'text-status-success',
+                gatewayStatus === 'degraded' && 'text-status-warning',
+                gatewayStatus === 'unavailable' && 'text-status-danger'
+              )}
+              title={gatewayStatusLabel}
+            >
+              {gatewayAvailable ? (
+                <Wifi className="w-4 h-4" />
+              ) : (
+                <WifiOff className="w-4 h-4" />
+              )}
             </div>
-          )}
+
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={loading}
+              className={cn(
+                'inline-flex items-center justify-center w-8 h-8 rounded-[var(--radius-md)] transition-colors',
+                loading
+                  ? 'opacity-50 cursor-not-allowed text-fg-3'
+                  : 'text-fg-2 hover:text-fg-0 hover:bg-bg-3/50'
+              )}
+              title="Reload sessions"
+            >
+              <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+            </button>
+          </div>
 
           {/* Cancel */}
           {streaming && (

@@ -135,9 +135,11 @@ export function createWsConsoleClient(config?: ConsoleClientConfig): WsAdapter {
   return createWsAdapter({
     wsUrl,
     wsToken: token,
-    wsClientId: 'openclaw-control-ui',  // Use valid gateway client ID
-    wsClientMode: 'ui',                  // Use valid gateway client mode
-    wsReadonly: false,                   // Enable write operations
+    // Server-side bridge should identify as backend/cli (same pattern as WebClaw),
+    // so gateway control-ui origin allowlisting is not required for chat.send.
+    wsClientId: 'cli',
+    wsClientMode: 'backend',
+    wsReadonly: false,
   })
 }
 

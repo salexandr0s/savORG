@@ -55,23 +55,23 @@ export const Message = memo(function Message({
   const isSystem = role === 'system'
 
   const avatar = useMemo(() => {
-    if (isOperator) return <User className="w-4 h-4 text-status-info" />
+    if (isOperator) return <User className="w-4 h-4 text-fg-1" />
     if (isSystem) return <Terminal className="w-4 h-4 text-fg-2" />
-    return <Bot className="w-4 h-4 text-status-progress" />
+    return <Bot className="w-4 h-4 text-fg-1" />
   }, [isOperator, isSystem])
 
   const wrapperAlign = isSystem ? 'justify-center' : isOperator ? 'justify-end' : 'justify-start'
 
   const bubbleClasses = cn(
-    'group relative px-4 py-3 border text-sm break-words',
-    'rounded-[var(--radius-md)]',
+    'group relative px-4 py-3 text-sm break-words',
+    'rounded-[10px]',
     isOperator
-      ? 'bg-status-info text-white border-transparent'
+      ? 'bg-bg-2 text-fg-0'
       : isSystem
-        ? 'bg-bg-2 text-fg-0 border-bd-0'
-        : 'bg-bg-3 text-fg-0 border-bd-0',
+        ? 'bg-bg-2 text-fg-0'
+        : 'bg-bg-3 text-fg-0',
     pending && 'opacity-70',
-    error && 'border-status-danger/60'
+    error && 'outline outline-1 outline-status-danger/50'
   )
 
   return (
@@ -82,12 +82,18 @@ export const Message = memo(function Message({
       transition={{ duration: 0.18 }}
       className={cn('flex w-full', wrapperAlign, className)}
     >
-      <div className={cn('flex gap-3 max-w-[880px] w-full', isSystem && 'max-w-[760px]')}>
+      <div
+        className={cn(
+          'flex gap-3 max-w-[880px] w-full',
+          isSystem && 'max-w-[760px]',
+          isOperator && 'flex-row-reverse'
+        )}
+      >
         {!isSystem && (
           <div
             className={cn(
-              'mt-0.5 w-8 h-8 rounded-[var(--radius-md)] flex items-center justify-center flex-shrink-0 border',
-              isOperator ? 'bg-status-info/10 border-status-info/20' : 'bg-bg-2 border-bd-0'
+              'mt-0.5 w-8 h-8 rounded-[10px] flex items-center justify-center flex-shrink-0',
+              isOperator ? 'bg-bg-3' : 'bg-bg-2'
             )}
           >
             {avatar}
