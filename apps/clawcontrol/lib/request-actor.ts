@@ -8,7 +8,7 @@
 import type { NextRequest } from 'next/server'
 
 export interface ActorInfo {
-  /** Formatted actor string matching existing patterns (e.g., 'user', 'system', 'agent:claw-alpha') */
+  /** Formatted actor string matching existing patterns (e.g., 'user', 'system', 'agent:build-worker') */
   actor: string
   actorType: 'user' | 'system' | 'agent'
   actorId?: string
@@ -18,7 +18,7 @@ export interface ActorInfo {
  * Extract actor from request headers.
  *
  * Headers:
- * - x-clawcontrol-actor-id: The actor identifier (e.g., 'claw-alpha', 'admin')
+ * - x-clawcontrol-actor-id: The actor identifier (e.g., 'build-worker', 'admin')
  * - x-clawcontrol-actor-type: The actor type ('user' | 'system' | 'agent')
  *
  * Formats the actor string according to existing patterns:

@@ -19,9 +19,9 @@ export async function GET(
 ) {
   const { id } = await context.params
 
-  try {
-    const repos = getRepos()
-    const data = await repos.agents.getById(id)
+	  try {
+	    const repos = getRepos()
+	    const data = await repos.agents.getById(id)
 
     if (!data) {
       return NextResponse.json(
@@ -56,12 +56,33 @@ export async function PATCH(
 
   try {
     const body = await request.json()
-    const { status, currentWorkOrderId, role, station, capabilities, wipLimit, sessionKey, model, fallbacks, typedConfirmText } = body
+    const {
+      status,
+      currentWorkOrderId,
+      role,
+      station,
+      capabilities,
+      wipLimit,
+      sessionKey,
+      model,
+      fallbacks,
+      displayName,
+      slug,
+      runtimeAgentId,
+      typedConfirmText,
+    } = body
 
-    const repos = getRepos()
+	    const repos = getRepos()
 
-    // Get current agent to check status change
-    const currentAgent = await repos.agents.getById(id)
+	    if (slug !== undefined || runtimeAgentId !== undefined) {
+	      return NextResponse.json(
+	        { error: 'Slug and runtimeAgentId are immutable via this endpoint' },
+	        { status: 400 }
+	      )
+	    }
+
+	    // Get current agent to check status change
+	    const currentAgent = await repos.agents.getById(id)
     if (!currentAgent) {
       return NextResponse.json(
         { error: 'Agent not found' },
@@ -91,6 +112,7 @@ export async function PATCH(
       capabilities !== undefined ||
       wipLimit !== undefined ||
       sessionKey !== undefined ||
+      displayName !== undefined ||
       model !== undefined ||
       fallbacks !== undefined
 
@@ -123,7 +145,7 @@ export async function PATCH(
         payloadJson: {
           actionKind: protectedAction,
           previous: currentAgent,
-          next: { status, role, station, wipLimit, sessionKey },
+          next: { status, role, station, wipLimit, sessionKey, displayName },
         },
       })
     }
@@ -146,6 +168,8 @@ export async function PATCH(
       capabilities,
       wipLimit,
       sessionKey,
+      displayName,
+      ...(displayName !== undefined ? { nameSource: 'user' as const } : {}),
       model,
       fallbacks: fallbacksForDb,
     })

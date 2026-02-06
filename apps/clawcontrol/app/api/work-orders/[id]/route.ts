@@ -72,10 +72,21 @@ export async function PATCH(
 
   try {
     const body = await request.json()
-    const { title, goalMd, state, priority, owner, tags, blockedReason, typedConfirmText } = body
+    const {
+      title,
+      goalMd,
+      state,
+      priority,
+      owner,
+      ownerType,
+      ownerAgentId,
+      tags,
+      blockedReason,
+      typedConfirmText,
+    } = body
 
     const repos = getRepos()
-    const { actor } = getRequestActor(request)
+    const actorInfo = getRequestActor(request)
 
     // Always fetch current for comparison
     const current = await repos.workOrders.getById(id)
@@ -107,7 +118,7 @@ export async function PATCH(
         const governorResult = await enforceGovernor({
           actionKind,
           workOrderId: id,
-          actor,
+          actor: actorInfo.actor,
           typedConfirmText,
         })
 
@@ -122,7 +133,9 @@ export async function PATCH(
       const result = await repos.workOrders.updateStateWithActivity(
         id,
         state,
-        actor
+        actorInfo.actor,
+        actorInfo.actorType,
+        actorInfo.actorType === 'agent' ? actorInfo.actorId ?? null : null
       )
 
       if (!result) {
@@ -133,12 +146,23 @@ export async function PATCH(
       }
 
       // If there are other updates beyond state, apply them separately
-      if (title !== undefined || goalMd !== undefined || priority !== undefined || owner !== undefined || tags !== undefined || blockedReason !== undefined) {
+      if (
+        title !== undefined ||
+        goalMd !== undefined ||
+        priority !== undefined ||
+        owner !== undefined ||
+        ownerType !== undefined ||
+        ownerAgentId !== undefined ||
+        tags !== undefined ||
+        blockedReason !== undefined
+      ) {
         const updated = await repos.workOrders.update(id, {
           title,
           goalMd,
           priority,
           owner,
+          ownerType,
+          ownerAgentId,
           tags,
           blockedReason,
         })
@@ -155,6 +179,8 @@ export async function PATCH(
       state,
       priority,
       owner,
+      ownerType,
+      ownerAgentId,
       tags,
       blockedReason,
     })

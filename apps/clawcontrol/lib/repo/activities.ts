@@ -6,6 +6,7 @@
  */
 
 import { prisma } from '../db'
+import { normalizeActorRef, type ActorType } from '../agent-identity'
 import { publishActivity } from '../pubsub'
 import type { ActivityDTO, ActivityFilters, PaginationOptions } from './types'
 
@@ -16,6 +17,9 @@ import type { ActivityDTO, ActivityFilters, PaginationOptions } from './types'
 export interface CreateActivityInput {
   type: string
   actor: string
+  actorType?: ActorType
+  actorAgentId?: string | null
+  actorLabel?: string
   entityType: string
   entityId: string
   summary: string
@@ -70,12 +74,20 @@ export function createDbActivitiesRepo(): ActivitiesRepo {
 
     async create(input: CreateActivityInput): Promise<ActivityDTO> {
       const id = `act_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+      const actorRef = normalizeActorRef({
+        actor: input.actor,
+        actorType: input.actorType,
+        actorAgentId: input.actorAgentId,
+      })
+
       const row = await prisma.activity.create({
         data: {
           id,
           ts: new Date(),
           type: input.type,
-          actor: input.actor,
+          actor: actorRef.actor,
+          actorType: actorRef.actorType,
+          actorAgentId: actorRef.actorAgentId,
           entityType: input.entityType,
           entityId: input.entityId,
           summary: input.summary,
@@ -111,11 +123,34 @@ function buildWhere(filters?: ActivityFilters) {
   return where
 }
 
+function formatActorLabel(
+  actor: string,
+  actorType: string | null | undefined,
+  actorAgentId: string | null | undefined
+): string {
+  if ((actorType ?? '').toLowerCase() === 'user') return 'User'
+  if ((actorType ?? '').toLowerCase() === 'system') return 'System'
+
+  if ((actorType ?? '').toLowerCase() === 'agent') {
+    if (actor.toLowerCase().startsWith('agent:')) {
+      return actor.slice('agent:'.length)
+    }
+    return actorAgentId || 'Agent'
+  }
+
+  if (actor.toLowerCase().startsWith('agent:')) return actor.slice('agent:'.length)
+  if (actor === 'user') return 'User'
+  if (actor === 'system') return 'System'
+  return actor
+}
+
 function toDTO(row: {
   id: string
   ts: Date
   type: string
   actor: string
+  actorType?: string | null
+  actorAgentId?: string | null
   entityType: string
   entityId: string
   summary: string
@@ -126,6 +161,9 @@ function toDTO(row: {
     ts: row.ts,
     type: row.type,
     actor: row.actor,
+    actorType: ((row.actorType ?? 'system') as ActivityDTO['actorType']),
+    actorAgentId: row.actorAgentId ?? null,
+    actorLabel: formatActorLabel(row.actor, row.actorType, row.actorAgentId),
     entityType: row.entityType,
     entityId: row.entityId,
     summary: row.summary,

@@ -6,6 +6,7 @@
 
 import { prisma, RESERVED_WORK_ORDER_IDS } from '../db'
 import { indexWorkOrder } from '../db/fts'
+import { formatOwnerLabel, normalizeActorRef, normalizeOwnerRef, type ActorType, type OwnerType } from '../agent-identity'
 import type {
   WorkOrderDTO,
   WorkOrderWithOpsDTO,
@@ -21,6 +22,8 @@ export interface CreateWorkOrderInput {
   goalMd: string
   priority?: string
   owner?: string
+  ownerType?: OwnerType
+  ownerAgentId?: string | null
   tags?: string[]
   routingTemplate?: string
 }
@@ -31,6 +34,8 @@ export interface UpdateWorkOrderInput {
   state?: string
   priority?: string
   owner?: string
+  ownerType?: OwnerType
+  ownerAgentId?: string | null
   tags?: string[]
   blockedReason?: string | null
 }
@@ -56,7 +61,9 @@ export interface WorkOrdersRepo {
   updateStateWithActivity(
     id: string,
     newState: string,
-    actor: string
+    actor: string,
+    actorType?: ActorType,
+    actorAgentId?: string | null
   ): Promise<StateTransitionResult | null>
 }
 
@@ -72,7 +79,8 @@ export function createDbWorkOrdersRepo(): WorkOrdersRepo {
         where,
         orderBy: { updatedAt: 'desc' },
       })
-      return rows.map(toDTO)
+      const ownerLabels = await resolveOwnerLabels(rows.map((row) => row.ownerAgentId).filter((v): v is string => Boolean(v)))
+      return rows.map((row) => toDTO(row as unknown as PrismaWorkOrderRow, ownerLabels.get(row.ownerAgentId ?? '')))
     },
 
     async listWithOps(filters?: WorkOrderFilters): Promise<WorkOrderWithOpsDTO[]> {
@@ -86,8 +94,9 @@ export function createDbWorkOrdersRepo(): WorkOrdersRepo {
           },
         },
       })
+      const ownerLabels = await resolveOwnerLabels(rows.map((row) => row.ownerAgentId).filter((v): v is string => Boolean(v)))
       return rows.map((row) => ({
-        ...toDTO(row),
+        ...toDTO(row as unknown as PrismaWorkOrderRow, ownerLabels.get(row.ownerAgentId ?? '')),
         operations: row.operations.map((op) => ({
           id: op.id,
           status: op.status,
@@ -97,12 +106,24 @@ export function createDbWorkOrdersRepo(): WorkOrdersRepo {
 
     async getById(id: string): Promise<WorkOrderDTO | null> {
       const row = await prisma.workOrder.findUnique({ where: { id } })
-      return row ? toDTO(row) : null
+      if (!row) return null
+
+      const ownerLabel = row.ownerAgentId
+        ? await resolveOwnerLabel(row.ownerAgentId)
+        : undefined
+
+      return toDTO(row as unknown as PrismaWorkOrderRow, ownerLabel)
     },
 
     async getByCode(code: string): Promise<WorkOrderDTO | null> {
       const row = await prisma.workOrder.findUnique({ where: { code } })
-      return row ? toDTO(row) : null
+      if (!row) return null
+
+      const ownerLabel = row.ownerAgentId
+        ? await resolveOwnerLabel(row.ownerAgentId)
+        : undefined
+
+      return toDTO(row as unknown as PrismaWorkOrderRow, ownerLabel)
     },
 
     async countByState(): Promise<Record<string, number>> {
@@ -140,8 +161,13 @@ export function createDbWorkOrdersRepo(): WorkOrdersRepo {
         },
       })
       if (!row) return null
+
+      const ownerLabel = row.ownerAgentId
+        ? await resolveOwnerLabel(row.ownerAgentId)
+        : undefined
+
       return {
-        ...toDTO(row),
+        ...toDTO(row as unknown as PrismaWorkOrderRow, ownerLabel),
         operations: row.operations.map((op) => ({
           id: op.id,
           status: op.status,
@@ -168,6 +194,11 @@ export function createDbWorkOrdersRepo(): WorkOrdersRepo {
       }
 
       const code = `WO-${String(maxNum + 1).padStart(3, '0')}`
+      const ownerRef = normalizeOwnerRef({
+        owner: input.owner,
+        ownerType: input.ownerType,
+        ownerAgentId: input.ownerAgentId,
+      })
 
       const row = await prisma.workOrder.create({
         data: {
@@ -176,7 +207,9 @@ export function createDbWorkOrdersRepo(): WorkOrdersRepo {
           goalMd: input.goalMd,
           state: 'planned',
           priority: input.priority || 'P2',
-          owner: input.owner || 'user',
+          owner: ownerRef.owner,
+          ownerType: ownerRef.ownerType,
+          ownerAgentId: ownerRef.ownerAgentId,
           tags: serializeTags(input.tags),
           routingTemplate: input.routingTemplate || 'default_routing',
         },
@@ -185,12 +218,22 @@ export function createDbWorkOrdersRepo(): WorkOrdersRepo {
       // Index for search
       await indexWorkOrder(row.id, row.code, row.title, row.goalMd)
 
-      return toDTO(row)
+      const ownerLabel = ownerRef.ownerAgentId
+        ? await resolveOwnerLabel(ownerRef.ownerAgentId)
+        : undefined
+
+      return toDTO(row as unknown as PrismaWorkOrderRow, ownerLabel)
     },
 
     async update(id: string, input: UpdateWorkOrderInput): Promise<WorkOrderDTO | null> {
       const existing = await prisma.workOrder.findUnique({ where: { id } })
       if (!existing) return null
+
+      const ownerRef = normalizeOwnerRef({
+        owner: input.owner !== undefined ? input.owner : existing.owner,
+        ownerType: input.ownerType !== undefined ? input.ownerType : existing.ownerType,
+        ownerAgentId: input.ownerAgentId !== undefined ? input.ownerAgentId : existing.ownerAgentId,
+      })
 
       const row = await prisma.workOrder.update({
         where: { id },
@@ -199,7 +242,13 @@ export function createDbWorkOrdersRepo(): WorkOrdersRepo {
           ...(input.goalMd !== undefined && { goalMd: input.goalMd }),
           ...(input.state !== undefined && { state: input.state }),
           ...(input.priority !== undefined && { priority: input.priority }),
-          ...(input.owner !== undefined && { owner: input.owner }),
+          ...(input.owner !== undefined || input.ownerType !== undefined || input.ownerAgentId !== undefined
+            ? {
+                owner: ownerRef.owner,
+                ownerType: ownerRef.ownerType,
+                ownerAgentId: ownerRef.ownerAgentId,
+              }
+            : {}),
           ...(input.tags !== undefined && { tags: serializeTags(input.tags) }),
           ...(input.blockedReason !== undefined && { blockedReason: input.blockedReason }),
           ...(input.state === 'shipped' && { shippedAt: new Date() }),
@@ -211,13 +260,19 @@ export function createDbWorkOrdersRepo(): WorkOrdersRepo {
         await indexWorkOrder(row.id, row.code, row.title, row.goalMd)
       }
 
-      return toDTO(row)
+      const ownerLabel = ownerRef.ownerAgentId
+        ? await resolveOwnerLabel(ownerRef.ownerAgentId)
+        : undefined
+
+      return toDTO(row as unknown as PrismaWorkOrderRow, ownerLabel)
     },
 
     async updateStateWithActivity(
       id: string,
       newState: string,
-      actor: string
+      actor: string,
+      actorType?: ActorType,
+      actorAgentId?: string | null
     ): Promise<StateTransitionResult | null> {
       return prisma.$transaction(async (tx) => {
         // Get current state
@@ -225,6 +280,11 @@ export function createDbWorkOrdersRepo(): WorkOrdersRepo {
         if (!existing) return null
 
         const previousState = existing.state
+        const normalizedActor = normalizeActorRef({
+          actor,
+          actorType,
+          actorAgentId,
+        })
 
         // Update work order
         const row = await tx.workOrder.update({
@@ -242,7 +302,9 @@ export function createDbWorkOrdersRepo(): WorkOrdersRepo {
             id: activityId,
             ts: new Date(),
             type: 'work_order.state_changed',
-            actor,
+            actor: normalizedActor.actor,
+            actorType: normalizedActor.actorType,
+            actorAgentId: normalizedActor.actorAgentId,
             entityType: 'work_order',
             entityId: id,
             summary: `Work order transitioned to ${newState}`,
@@ -253,8 +315,12 @@ export function createDbWorkOrdersRepo(): WorkOrdersRepo {
           },
         })
 
+        const ownerLabel = row.ownerAgentId
+          ? await resolveOwnerLabel(row.ownerAgentId)
+          : undefined
+
         return {
-          workOrder: toDTO(row),
+          workOrder: toDTO(row as unknown as PrismaWorkOrderRow, ownerLabel),
           previousState,
           activityId,
         }
@@ -281,13 +347,29 @@ function buildWhere(filters?: WorkOrderFilters) {
   if (filters.priority) {
     where.priority = Array.isArray(filters.priority) ? { in: filters.priority } : filters.priority
   }
+  if (filters.ownerType) {
+    where.ownerType = filters.ownerType
+  }
+  if (filters.ownerAgentId) {
+    where.ownerAgentId = filters.ownerAgentId
+  }
   if (filters.owner) {
-    where.owner = filters.owner
+    const owner = filters.owner.trim()
+    if (owner.toLowerCase() === 'user' || owner.toLowerCase() === 'system') {
+      where.ownerType = owner.toLowerCase()
+    } else if (owner.toLowerCase().startsWith('agent:')) {
+      where.ownerAgentId = owner.slice('agent:'.length)
+    } else {
+      where.OR = [
+        { owner: owner },
+        { ownerAgentId: owner },
+      ]
+    }
   }
   return where
 }
 
-function toDTO(row: {
+interface PrismaWorkOrderRow {
   id: string
   code: string
   title: string
@@ -295,13 +377,21 @@ function toDTO(row: {
   state: string
   priority: string
   owner: string
+  ownerType?: string | null
+  ownerAgentId?: string | null
   tags: string
   routingTemplate: string
   blockedReason: string | null
   createdAt: Date
   updatedAt: Date
   shippedAt: Date | null
-}): WorkOrderDTO {
+}
+
+function toDTO(row: PrismaWorkOrderRow, resolvedOwnerLabel?: string): WorkOrderDTO {
+  const ownerType = normalizeOwnerType(row.ownerType, row.owner)
+  const ownerAgentId = row.ownerAgentId ?? parseOwnerAgentId(row.owner)
+  const ownerLabel = formatOwnerLabel(row.owner, ownerType, resolvedOwnerLabel)
+
   return {
     id: row.id,
     code: row.code,
@@ -310,6 +400,9 @@ function toDTO(row: {
     state: row.state as WorkOrderDTO['state'],
     priority: row.priority as WorkOrderDTO['priority'],
     owner: row.owner,
+    ownerType,
+    ownerAgentId,
+    ownerLabel,
     tags: parseTags(row.tags),
     routingTemplate: row.routingTemplate,
     blockedReason: row.blockedReason,
@@ -317,6 +410,43 @@ function toDTO(row: {
     updatedAt: row.updatedAt,
     shippedAt: row.shippedAt,
   }
+}
+
+function parseOwnerAgentId(owner: string): string | null {
+  if (!owner.toLowerCase().startsWith('agent:')) return null
+  const id = owner.slice('agent:'.length).trim()
+  return id || null
+}
+
+function normalizeOwnerType(ownerType: string | null | undefined, owner: string): OwnerType {
+  const normalizedType = (ownerType ?? '').trim().toLowerCase()
+  if (normalizedType === 'agent' || normalizedType === 'system' || normalizedType === 'user') {
+    return normalizedType
+  }
+
+  const normalizedOwner = owner.trim().toLowerCase()
+  if (normalizedOwner === 'system') return 'system'
+  if (normalizedOwner === 'user' || normalizedOwner === '') return 'user'
+  return normalizedOwner.startsWith('agent:') ? 'agent' : 'agent'
+}
+
+async function resolveOwnerLabels(ownerAgentIds: string[]): Promise<Map<string, string>> {
+  const uniqueIds = Array.from(new Set(ownerAgentIds))
+  if (uniqueIds.length === 0) return new Map()
+
+  const agents = await prisma.agent.findMany({
+    where: { id: { in: uniqueIds } },
+    select: { id: true, displayName: true, name: true },
+  })
+
+  return new Map(
+    agents.map((agent) => [agent.id, agent.displayName?.trim() || agent.name])
+  )
+}
+
+async function resolveOwnerLabel(ownerAgentId: string): Promise<string | undefined> {
+  const ownerLabels = await resolveOwnerLabels([ownerAgentId])
+  return ownerLabels.get(ownerAgentId)
 }
 
 function parseTags(raw: string): string[] {

@@ -207,6 +207,8 @@ export const workOrdersApi = {
     state?: string
     priority?: string
     owner?: string
+    ownerType?: 'user' | 'agent' | 'system'
+    ownerAgentId?: string
     q?: string
     limit?: number
     cursor?: string
@@ -222,6 +224,8 @@ export const workOrdersApi = {
     goalMd: string
     priority?: string
     owner?: string
+    ownerType?: 'user' | 'agent' | 'system'
+    ownerAgentId?: string | null
     tags?: string[]
   }) => apiPost<{ data: WorkOrderDTO }>('/api/work-orders', data),
 
@@ -231,6 +235,8 @@ export const workOrdersApi = {
     state: string
     priority: string
     owner: string
+    ownerType: 'user' | 'agent' | 'system'
+    ownerAgentId: string | null
     tags: string[]
     blockedReason: string | null
     /** Required for protected state transitions (ship, cancel) */
@@ -278,6 +284,7 @@ export const agentsApi = {
     role: string
     purpose: string
     capabilities?: string[]
+    displayName?: string
     customName?: string
     typedConfirmText: string
   }) =>
@@ -299,6 +306,7 @@ export const agentsApi = {
     capabilities: Record<string, boolean>
     wipLimit: number
     sessionKey: string
+    displayName: string
     model: string
     fallbacks: string[] | string
     typedConfirmText: string
@@ -374,11 +382,13 @@ export const agentsApi = {
       }
     }>(`/api/agents/create-from-template?templateId=${templateId}`),
 
-  previewFromTemplate: (data: { templateId: string; params: Record<string, unknown> }) =>
+  previewFromTemplate: (data: { templateId: string; params: Record<string, unknown>; displayName?: string }) =>
     apiPost<{
       data: {
         template: { id: string; name: string; version: string; role: string }
-        agentName: string
+        agentDisplayName: string
+        agentSlug: string
+        agentName: string // legacy alias
         sessionKey: string
         files: Array<{ source: string; destination: string; contentPreview: string }>
       }
@@ -387,6 +397,7 @@ export const agentsApi = {
   createFromTemplate: (data: {
     templateId: string
     params: Record<string, unknown>
+    displayName?: string
     typedConfirmText: string
   }) =>
     fetch('/api/agents/create-from-template', {
@@ -398,6 +409,8 @@ export const agentsApi = {
       if (!res.ok) throw new Error(json.error || 'Failed to create agent from template')
       return json as {
         data: AgentDTO
+        agentDisplayName?: string
+        agentSlug?: string
         files: Array<{ source: string; destination: string; contentPreview: string }>
         template: { id: string; name: string; version: string }
         receiptId: string

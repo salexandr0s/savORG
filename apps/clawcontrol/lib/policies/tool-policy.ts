@@ -3,7 +3,8 @@ import 'server-only'
 import { prisma } from '../db'
 
 export interface ToolRequest {
-  agentName: string
+  agentId?: string
+  agentName?: string
   tool: string
   args?: Record<string, unknown>
   operationId?: string
@@ -15,6 +16,8 @@ export interface PolicyResult {
   reason?: string
   requiresApproval?: boolean
   approvalType?: string
+  resolvedAgentId?: string
+  resolvedAgentName?: string
 }
 
 function safeParseJsonObject(value: string): Record<string, unknown> | null {
@@ -29,21 +32,58 @@ function safeParseJsonObject(value: string): Record<string, unknown> | null {
   }
 }
 
+function isReviewLikeAgent(agent: { role: string; station: string; kind?: string | null }): boolean {
+  const role = agent.role.toLowerCase()
+  const station = agent.station.toLowerCase()
+  const kind = (agent.kind ?? '').toLowerCase()
+
+  return (
+    kind === 'guard' ||
+    station === 'qa' ||
+    role.includes('review') ||
+    role.includes('qa') ||
+    role.includes('audit')
+  )
+}
+
+async function findAgent(request: ToolRequest) {
+  if (request.agentId) {
+    const byId = await prisma.agent.findUnique({ where: { id: request.agentId } })
+    if (byId) return byId
+  }
+
+  if (request.agentName) {
+    const token = request.agentName
+    const byName = await prisma.agent.findFirst({
+      where: {
+        OR: [
+          { name: token },
+          { displayName: token },
+          { slug: token },
+          { runtimeAgentId: token },
+        ],
+      },
+    })
+    if (byName) return byName
+  }
+
+  return null
+}
+
 /**
  * Checks if an agent is allowed to use a specific tool based on DB capabilities.
  */
 export async function checkToolPolicy(request: ToolRequest): Promise<PolicyResult> {
-  const agent = await prisma.agent.findUnique({
-    where: { name: request.agentName },
-  })
+  const agent = await findAgent(request)
 
   if (!agent) {
-    return { allowed: false, reason: `Unknown agent: ${request.agentName}` }
+    const token = request.agentId || request.agentName || 'unknown'
+    return { allowed: false, reason: `Unknown agent: ${token}` }
   }
 
   const capabilities = safeParseJsonObject(agent.capabilities)
   if (!capabilities) {
-    return { allowed: false, reason: `Invalid capabilities JSON for agent: ${request.agentName}` }
+    return { allowed: false, reason: `Invalid capabilities JSON for agent: ${agent.id}` }
   }
 
   const toolRequirements: Record<string, string[]> = {
@@ -64,35 +104,74 @@ export async function checkToolPolicy(request: ToolRequest): Promise<PolicyResul
     if (!capabilities[cap]) {
       return {
         allowed: false,
-        reason: `Agent ${request.agentName} lacks capability: ${cap}`,
+        reason: `Agent ${agent.id} lacks capability: ${cap}`,
+        resolvedAgentId: agent.id,
+        resolvedAgentName: agent.displayName ?? agent.name,
       }
     }
   }
 
-  // Special case: BuildReview exec allowlist
-  if (request.tool === 'exec' && request.agentName === 'clawcontrolbuildreview') {
+  // Review-style agents should only run explicitly allowlisted commands.
+  if (request.tool === 'exec') {
     const allowlist = Array.isArray(capabilities.exec_allowlist)
       ? (capabilities.exec_allowlist as unknown[]).filter((x): x is string => typeof x === 'string')
       : []
 
-    const command = String(request.args?.command ?? request.args?.cmd ?? '')
+    const reviewLike = isReviewLikeAgent({
+      role: agent.role,
+      station: agent.station,
+      kind: agent.kind,
+    })
+    if (!reviewLike && allowlist.length === 0) {
+      return {
+        allowed: true,
+        resolvedAgentId: agent.id,
+        resolvedAgentName: agent.displayName ?? agent.name,
+      }
+    }
+
+    const command = String(request.args?.command ?? request.args?.cmd ?? '').trim()
+    if (!command) {
+      return {
+        allowed: false,
+        reason: 'Missing command for exec policy evaluation',
+        resolvedAgentId: agent.id,
+        resolvedAgentName: agent.displayName ?? agent.name,
+      }
+    }
+
+    if (allowlist.length === 0) {
+      return {
+        allowed: false,
+        reason: `Review agent ${agent.id} has no exec allowlist configured`,
+        resolvedAgentId: agent.id,
+        resolvedAgentName: agent.displayName ?? agent.name,
+      }
+    }
 
     const isAllowed = allowlist.some((pattern) => command.startsWith(pattern))
 
     if (!isAllowed) {
       return {
         allowed: false,
-        reason: `Command not in BuildReview allowlist: ${command}`,
+        reason: `Command not in review exec allowlist: ${command}`,
+        resolvedAgentId: agent.id,
+        resolvedAgentName: agent.displayName ?? agent.name,
       }
     }
   }
 
-  return { allowed: true }
+  return {
+    allowed: true,
+    resolvedAgentId: agent.id,
+    resolvedAgentName: agent.displayName ?? agent.name,
+  }
 }
 
 /**
  * Route helper that enforces tool policies based on JSON body fields:
- * - agentName
+ * - agentId (preferred)
+ * - agentName (compatibility fallback)
  * - tool
  * - args (optional)
  *
@@ -116,9 +195,10 @@ export function withToolPolicy<
 
     const maybe = body as Partial<ToolRequest> | null
 
-    if (maybe?.agentName && maybe?.tool) {
+    if ((maybe?.agentId || maybe?.agentName) && maybe?.tool) {
       const result = await checkToolPolicy({
-        agentName: String(maybe.agentName),
+        agentId: maybe.agentId ? String(maybe.agentId) : undefined,
+        agentName: maybe.agentName ? String(maybe.agentName) : undefined,
         tool: String(maybe.tool),
         args: (maybe as { args?: unknown }).args as Record<string, unknown> | undefined,
         operationId: maybe.operationId ? String(maybe.operationId) : undefined,
@@ -126,19 +206,24 @@ export function withToolPolicy<
       })
 
       if (!result.allowed) {
+        const resolvedAgentId = result.resolvedAgentId
+        const actorToken = resolvedAgentId ?? String(maybe.agentId ?? maybe.agentName ?? 'unknown')
         const entityType = maybe.operationId ? 'operation' : 'agent'
-        const entityId = maybe.operationId ? String(maybe.operationId) : String(maybe.agentName)
+        const entityId = maybe.operationId ? String(maybe.operationId) : actorToken
 
         await prisma.activity
           .create({
             data: {
               type: 'policy.tool_denied',
-              actor: `agent:${maybe.agentName}`,
+              actor: `agent:${actorToken}`,
+              actorType: 'agent',
+              actorAgentId: resolvedAgentId ?? null,
               entityType,
               entityId,
               summary: `Tool policy denied: ${maybe.tool}`,
               payloadJson: JSON.stringify({
-                agentName: maybe.agentName,
+                agentId: resolvedAgentId ?? maybe.agentId ?? null,
+                agentName: maybe.agentName ?? result.resolvedAgentName ?? null,
                 tool: maybe.tool,
                 args: (maybe as { args?: unknown }).args ?? null,
                 reason: result.reason ?? null,
@@ -157,4 +242,3 @@ export function withToolPolicy<
     return handler(req, ctx) as unknown as Response
   }
 }
-

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRepos } from '@/lib/repo'
 import type { WorkOrderFilters } from '@/lib/repo'
+import { normalizeOwnerRef, ownerToActor } from '@/lib/agent-identity'
 
 /**
  * GET /api/work-orders
@@ -28,6 +29,16 @@ export async function GET(request: NextRequest) {
   const owner = searchParams.get('owner')
   if (owner) {
     filters.owner = owner
+  }
+
+  const ownerType = searchParams.get('ownerType')
+  if (ownerType === 'user' || ownerType === 'agent' || ownerType === 'system') {
+    filters.ownerType = ownerType
+  }
+
+  const ownerAgentId = searchParams.get('ownerAgentId')
+  if (ownerAgentId) {
+    filters.ownerAgentId = ownerAgentId
   }
 
   // Limit (for cursor pagination)
@@ -70,7 +81,15 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
 
-    const { title, goalMd, priority = 'P2', owner = 'user', tags } = body
+    const {
+      title,
+      goalMd,
+      priority = 'P2',
+      owner = 'user',
+      ownerType,
+      ownerAgentId,
+      tags,
+    } = body
 
     if (!title || !goalMd) {
       return NextResponse.json(
@@ -79,19 +98,25 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const normalizedOwner = normalizeOwnerRef({ owner, ownerType, ownerAgentId })
+
     const repos = getRepos()
     const data = await repos.workOrders.create({
       title,
       goalMd,
       priority,
-      owner,
+      owner: normalizedOwner.owner,
+      ownerType: normalizedOwner.ownerType,
+      ownerAgentId: normalizedOwner.ownerAgentId,
       tags,
     })
 
     // Log work order creation for audit trail (P0 Security Fix)
     await repos.activities.create({
       type: 'work_order.created',
-      actor: owner === 'clawcontrolceo' ? 'agent:clawcontrolceo' : 'user',
+      actor: ownerToActor(normalizedOwner.owner, normalizedOwner.ownerType, normalizedOwner.ownerAgentId),
+      actorType: normalizedOwner.ownerType === 'agent' ? 'agent' : normalizedOwner.ownerType,
+      actorAgentId: normalizedOwner.ownerAgentId,
       entityType: 'work_order',
       entityId: data.id,
       summary: `Work order ${data.code} created: ${title}`,
@@ -99,7 +124,9 @@ export async function POST(request: NextRequest) {
         code: data.code,
         title,
         priority,
-        owner,
+        owner: normalizedOwner.owner,
+        ownerType: normalizedOwner.ownerType,
+        ownerAgentId: normalizedOwner.ownerAgentId,
         tags: data.tags,
         state: data.state,
       },

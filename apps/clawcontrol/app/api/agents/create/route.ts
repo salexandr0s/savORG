@@ -7,6 +7,7 @@ import {
   createAgentFiles,
   AGENT_ROLE_MAP,
 } from '@/lib/workspace'
+import { buildUniqueSlug, slugifyDisplayName } from '@/lib/agent-identity'
 import type { StationId } from '@clawcontrol/core'
 
 /**
@@ -22,7 +23,7 @@ import type { StationId } from '@clawcontrol/core'
  */
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { role, purpose, capabilities = [], customName, typedConfirmText } = body
+  const { role, purpose, capabilities = [], customName, displayName, typedConfirmText } = body
 
   // Validate required fields
   if (!role || typeof role !== 'string') {
@@ -57,14 +58,19 @@ export async function POST(request: NextRequest) {
 
   const repos = getRepos()
 
-  // Generate agent name (or use custom)
-  const name = customName || generateAgentName(role)
+  // Resolve user-facing name and immutable slug
+  const resolvedDisplayName = String(displayName ?? customName ?? generateAgentName(role)).trim()
+  const existingAgents = await repos.agents.list()
+  const slug = buildUniqueSlug(
+    slugifyDisplayName(resolvedDisplayName),
+    existingAgents.map((agent) => agent.slug)
+  )
 
-  // Check if agent already exists
-  const existing = await repos.agents.getByName(name)
+  // Check if display name already exists
+  const existing = await repos.agents.getByName(resolvedDisplayName)
   if (existing) {
     return NextResponse.json(
-      { error: 'AGENT_EXISTS', message: `Agent with name "${name}" already exists` },
+      { error: 'AGENT_EXISTS', message: `Agent with display name "${resolvedDisplayName}" already exists` },
       { status: 409 }
     )
   }
@@ -74,7 +80,7 @@ export async function POST(request: NextRequest) {
   const station: StationId = roleMapping?.station || 'build'
 
   // Generate session key
-  const sessionKey = generateSessionKey(name)
+  const sessionKey = generateSessionKey(slug)
 
   // Build capabilities object
   const capabilitiesObj: Record<string, boolean> = {}
@@ -89,18 +95,19 @@ export async function POST(request: NextRequest) {
     workOrderId: 'system',
     kind: 'manual',
     commandName: 'agent.create',
-    commandArgs: { name, role, station, purpose },
+    commandArgs: { displayName: resolvedDisplayName, slug, role, station, purpose },
   })
 
   try {
     // Step 1: Create workspace files
     await repos.receipts.append(receipt.id, {
       stream: 'stdout',
-      chunk: `Creating workspace files for ${name}...\n`,
+      chunk: `Creating workspace files for ${resolvedDisplayName} (${slug})...\n`,
     })
 
     const filesResult = await createAgentFiles({
-      name,
+      displayName: resolvedDisplayName,
+      slug,
       role,
       purpose,
       capabilities,
@@ -151,7 +158,11 @@ export async function POST(request: NextRequest) {
     })
 
     const agent = await repos.agents.create({
-      name,
+      name: resolvedDisplayName,
+      displayName: resolvedDisplayName,
+      slug,
+      runtimeAgentId: slug,
+      nameSource: displayName || customName ? 'user' : 'system',
       role,
       station,
       sessionKey,
@@ -174,7 +185,8 @@ export async function POST(request: NextRequest) {
       durationMs: 0,
       parsedJson: {
         agentId: agent.id,
-        name,
+        displayName: resolvedDisplayName,
+        slug,
         role,
         station,
         sessionKey,
@@ -188,9 +200,10 @@ export async function POST(request: NextRequest) {
       actor: 'user',
       entityType: 'agent',
       entityId: agent.id,
-      summary: `Created new agent: ${name}`,
+      summary: `Created new agent: ${resolvedDisplayName}`,
       payloadJson: {
-        name,
+        displayName: resolvedDisplayName,
+        slug,
         role,
         station,
         purpose,

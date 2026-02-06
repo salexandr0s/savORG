@@ -10,25 +10,18 @@ import { isWorkOrderStale, getStaleDurationHours } from '@/lib/kanban-helpers'
 import type { AgentDTO, WorkOrderWithOpsDTO } from '@/lib/repo'
 import type { WorkOrderState } from '@clawcontrol/core'
 import { Clock } from 'lucide-react'
+import { formatOwnerLabel, ownerTextTone } from '@/lib/agent-identity'
 
 interface KanbanCardProps {
   workOrder: WorkOrderWithOpsDTO
   agents: AgentDTO[]
   onClick: () => void
-  onAssignToAgent: (id: string, agentName: string) => Promise<void>
+  onAssignToAgent: (id: string, agentId: string) => Promise<void>
   assigningWorkOrderId?: string | null
 }
 
-function formatOwnerLabel(owner: string): string {
-  if (owner === 'clawcontrolceo') return 'clawcontrol CEO'
-  if (owner === 'user') return 'User'
-  return owner
-}
-
-function getOwnerTextClass(owner: string): string {
-  if (owner === 'clawcontrolceo') return 'text-status-progress'
-  if (owner === 'user') return 'text-fg-1'
-  return 'text-status-info'
+function getOwnerTextClass(owner: string, ownerType?: string): string {
+  return ownerTextTone(owner, ownerType) === 'user' ? 'text-fg-1' : 'text-status-progress'
 }
 
 function stopEvent(event: React.SyntheticEvent) {
@@ -84,7 +77,7 @@ export function KanbanCard({
     if (workOrder.state !== 'planned') return
     if (selectedAgent) return
     if (availableAgents.length > 0) {
-      setSelectedAgent(availableAgents[0].name)
+      setSelectedAgent(availableAgents[0].id)
     }
   }, [availableAgents, selectedAgent, workOrder.state])
 
@@ -162,8 +155,8 @@ export function KanbanCard({
       {/* Footer metadata */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between gap-2">
-          <span className={cn('text-[11px] truncate', getOwnerTextClass(workOrder.owner))}>
-            {formatOwnerLabel(workOrder.owner)}
+          <span className={cn('text-[11px] truncate', getOwnerTextClass(workOrder.owner, workOrder.ownerType))}>
+            {formatOwnerLabel(workOrder.owner, workOrder.ownerType, workOrder.ownerLabel)}
           </span>
           <span className="text-[11px] text-fg-2 flex-shrink-0">
             {formatRelativeTime(workOrder.updatedAt)}
@@ -201,8 +194,8 @@ export function KanbanCard({
                 <option value="">No available agents</option>
               )}
               {availableAgents.map((agent) => (
-                <option key={agent.id} value={agent.name}>
-                  {agent.name}
+                <option key={agent.id} value={agent.id}>
+                  {agent.displayName}
                 </option>
               ))}
             </select>

@@ -12,8 +12,8 @@ import type { ActionKind } from '@clawcontrol/core'
 interface FileEditorModalProps {
   isOpen: boolean
   onClose: () => void
-  filePath: string // e.g., "/agents/clawbuild.md"
-  fileName: string // e.g., "clawbuild.md"
+  filePath: string // e.g., "/agents/agent-build.md"
+  fileName: string // e.g., "agent-build.md"
   onSaved?: () => void
 }
 

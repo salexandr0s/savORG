@@ -7,6 +7,7 @@
 import { readFile, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { homedir } from 'os'
+import { extractAgentIdFromSessionKey } from '@/lib/agent-identity'
 
 const OPENCLAW_CONFIG_PATH = join(homedir(), '.openclaw', 'openclaw.json')
 
@@ -36,15 +37,8 @@ export interface SyncResult {
 
 /**
  * Extract agent ID from session key
- * e.g., "agent:savorgbuild:main" -> "savorgbuild"
+ * e.g., "agent:build-worker:main" -> "build-worker"
  */
-function extractAgentId(sessionKey: string): string | null {
-  const parts = sessionKey.split(':')
-  if (parts[0] === 'agent' && parts.length >= 2) {
-    return parts[1]
-  }
-  return null
-}
 
 /**
  * Sync an agent's model configuration to OpenClaw config file
@@ -56,7 +50,7 @@ export async function syncAgentModelToOpenClaw(
 ): Promise<SyncResult> {
   try {
     // Extract agent ID from session key
-    const agentId = extractAgentId(sessionKey)
+    const agentId = extractAgentIdFromSessionKey(sessionKey)
     if (!agentId) {
       return { ok: false, error: `Invalid session key format: ${sessionKey}` }
     }
@@ -129,7 +123,7 @@ export async function getAgentModelFromOpenClaw(
   sessionKey: string
 ): Promise<{ model?: string; fallbacks?: string[] } | null> {
   try {
-    const agentId = extractAgentId(sessionKey)
+    const agentId = extractAgentIdFromSessionKey(sessionKey)
     if (!agentId) return null
 
     const raw = await readFile(OPENCLAW_CONFIG_PATH, 'utf-8')

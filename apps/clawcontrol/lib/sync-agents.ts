@@ -2,6 +2,7 @@ import 'server-only'
 
 import { getRepos } from '@/lib/repo'
 import { getOpenClawConfig } from '@/lib/openclaw-client'
+import { buildOpenClawSessionKey, inferDefaultAgentWipLimit, slugifyDisplayName } from '@/lib/agent-identity'
 
 export interface SyncAgentsOptions {
   forceRefresh?: boolean
@@ -12,10 +13,7 @@ function inferDisplayName(agent: { id: string; identity?: string }): string {
 }
 
 function inferSessionKey(agentId: string): string {
-  // Matches OpenClaw session key convention for agent stores.
-  // main is special because it's typically agent:main:main
-  if (agentId === 'main') return 'agent:main:main'
-  return `agent:${agentId}:${agentId}`
+  return buildOpenClawSessionKey(agentId)
 }
 
 async function getDefaultStationId(): Promise<string> {
@@ -52,16 +50,32 @@ export async function syncAgentsFromOpenClaw(
     if (!existing) {
       await repos.agents.create({
         name,
+        displayName: name,
+        slug: slugifyDisplayName(name),
+        runtimeAgentId: agent.id,
+        kind: 'worker',
+        dispatchEligible: true,
+        nameSource: 'openclaw',
         role: 'agent',
         station: defaultStationId,
         sessionKey,
         capabilities: { [defaultStationId]: true },
-        wipLimit: agent.id === 'clawbuild' ? 3 : 2,
+        wipLimit: inferDefaultAgentWipLimit({
+          id: agent.id,
+          name,
+          station: defaultStationId,
+        }),
       })
       added++
     } else {
       await repos.agents.update(existing.id, {
-        name,
+        ...(existing.nameSource === 'user'
+          ? {}
+          : {
+              displayName: name,
+              nameSource: 'openclaw',
+            }),
+        runtimeAgentId: agent.id,
         ...(agent.model ? { model: agent.model } : {}),
       })
       updated++

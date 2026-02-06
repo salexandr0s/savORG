@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { PageHeader, EmptyState } from '@clawcontrol/ui'
 import { CanonicalTable, type Column } from '@/components/ui/canonical-table'
@@ -14,6 +14,7 @@ import type { AgentDTO, WorkOrderWithOpsDTO } from '@/lib/repo'
 import type { WorkOrderState, Priority, Owner } from '@clawcontrol/core'
 import { cn, formatRelativeTime } from '@/lib/utils'
 import { ClipboardList, Plus, Filter, Loader2, X } from 'lucide-react'
+import { formatOwnerLabel, ownerTextTone } from '@/lib/agent-identity'
 
 // ============================================================================
 // FILTER TYPES
@@ -22,7 +23,7 @@ import { ClipboardList, Plus, Filter, Loader2, X } from 'lucide-react'
 interface WorkOrderFilters {
   state: WorkOrderState | 'all'
   priority: Priority | 'all'
-  owner: 'user' | 'clawcontrolceo' | 'all'
+  owner: string | 'all'
 }
 
 interface DispatchCronStatus {
@@ -46,11 +47,6 @@ const DEFAULT_FILTERS: WorkOrderFilters = {
 
 const STATES: (WorkOrderState | 'all')[] = ['all', 'planned', 'active', 'blocked', 'review', 'shipped', 'cancelled']
 const PRIORITIES: (Priority | 'all')[] = ['all', 'P0', 'P1', 'P2', 'P3']
-const OWNERS: { value: WorkOrderFilters['owner']; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'user', label: 'User' },
-  { value: 'clawcontrolceo', label: 'clawcontrol CEO' },
-]
 
 // ============================================================================
 // CONSTANTS
@@ -64,12 +60,6 @@ const PRIORITY_OPTIONS: { value: Priority; label: string; description: string }[
   { value: 'P1', label: 'P1', description: 'High - Do this week' },
   { value: 'P2', label: 'P2', description: 'Medium - Normal priority' },
   { value: 'P3', label: 'P3', description: 'Low - When time permits' },
-]
-
-// Owner options for create form
-const OWNER_OPTIONS: { value: Owner; label: string }[] = [
-  { value: 'user', label: 'User' },
-  { value: 'clawcontrolceo', label: 'clawcontrol CEO' },
 ]
 
 const TAG_PRESETS = [
@@ -92,16 +82,8 @@ function parseTagsInput(input: string): string[] {
   return Array.from(new Set(normalized)).slice(0, 20)
 }
 
-function formatOwnerLabel(owner: string): string {
-  if (owner === 'clawcontrolceo') return 'clawcontrol CEO'
-  if (owner === 'user') return 'User'
-  return owner
-}
-
-function getOwnerTextClass(owner: string): string {
-  if (owner === 'clawcontrolceo') return 'text-status-progress'
-  if (owner === 'user') return 'text-fg-1'
-  return 'text-status-info'
+function getOwnerTextClass(owner: string, ownerType?: string): string {
+  return ownerTextTone(owner, ownerType) === 'user' ? 'text-fg-1' : 'text-status-progress'
 }
 
 // ============================================================================
@@ -128,9 +110,10 @@ interface NewWorkOrderModalProps {
   isOpen: boolean
   onClose: () => void
   onCreated: () => void
+  ownerOptions: { value: Owner; label: string }[]
 }
 
-function NewWorkOrderModal({ isOpen, onClose, onCreated }: NewWorkOrderModalProps) {
+function NewWorkOrderModal({ isOpen, onClose, onCreated, ownerOptions }: NewWorkOrderModalProps) {
   const [formData, setFormData] = useState<NewWorkOrderFormData>(DEFAULT_FORM_DATA)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -168,11 +151,22 @@ function NewWorkOrderModal({ isOpen, onClose, onCreated }: NewWorkOrderModalProp
     setError(null)
 
     try {
+      const ownerToken = formData.owner
+      const isAgentOwner = ownerToken.startsWith('agent:')
+      const normalizedOwnerType = isAgentOwner
+        ? 'agent'
+        : ownerToken === 'system'
+          ? 'system'
+          : 'user'
+      const normalizedOwnerAgentId = isAgentOwner ? ownerToken.slice('agent:'.length) : null
+
       await workOrdersApi.create({
         title: formData.title,
         goalMd: formData.goalMd,
         priority: formData.priority,
-        owner: formData.owner,
+        owner: ownerToken,
+        ownerType: normalizedOwnerType,
+        ownerAgentId: normalizedOwnerAgentId,
         tags: parseTagsInput(formData.tagsInput),
       })
 
@@ -320,7 +314,7 @@ function NewWorkOrderModal({ isOpen, onClose, onCreated }: NewWorkOrderModalProp
                 disabled={isSubmitting}
                 className="w-full px-3 py-2 text-sm bg-bg-2 border border-bd-1 rounded-[var(--radius-md)] text-fg-0 focus:outline-none focus:ring-1 focus:ring-status-info/50 disabled:opacity-50"
               >
-                {OWNER_OPTIONS.map((opt) => (
+                {ownerOptions.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
                   </option>
@@ -419,8 +413,8 @@ const workOrderColumns: Column<WorkOrderWithOpsDTO>[] = [
     header: 'Owner',
     width: '100px',
     render: (row) => (
-      <span className={cn('text-xs', getOwnerTextClass(row.owner))}>
-        {formatOwnerLabel(row.owner)}
+      <span className={cn('text-xs', getOwnerTextClass(row.owner, row.ownerType))}>
+        {formatOwnerLabel(row.owner, row.ownerType, row.ownerLabel)}
       </span>
     ),
   },
@@ -509,8 +503,8 @@ function WorkOrderDrawerContent({ workOrder }: WorkOrderDrawerProps) {
       <div className="pt-3 border-t border-bd-0 space-y-2">
         <div className="flex justify-between text-xs">
           <span className="text-fg-2">Owner</span>
-          <span className={cn('text-fg-1', getOwnerTextClass(workOrder.owner))}>
-            {formatOwnerLabel(workOrder.owner)}
+          <span className={cn('text-fg-1', getOwnerTextClass(workOrder.owner, workOrder.ownerType))}>
+            {formatOwnerLabel(workOrder.owner, workOrder.ownerType, workOrder.ownerLabel)}
           </span>
         </div>
         <div className="flex justify-between text-xs">
@@ -574,6 +568,53 @@ export function WorkOrdersClient() {
 
   // New work order modal state
   const [createModalOpen, setCreateModalOpen] = useState(false)
+
+  const ownerOptions = useMemo<{ value: Owner; label: string }[]>(() => {
+    const staticValues: Array<{ value: Owner; label: string }> = [
+      { value: 'user', label: 'User' },
+      { value: 'system', label: 'System' },
+    ]
+    const agentValues = agents.map((agent) => ({
+      value: `agent:${agent.id}`,
+      label: agent.displayName,
+    }))
+
+    return [...staticValues, ...agentValues]
+  }, [agents])
+
+  const ownerFilterOptions = useMemo<{ value: WorkOrderFilters['owner']; label: string }[]>(() => {
+    const values = new Map<string, string>()
+    values.set('user', 'User')
+    values.set('system', 'System')
+
+    for (const agent of agents) {
+      values.set(`agent:${agent.id}`, agent.displayName)
+    }
+
+    for (const workOrder of workOrders) {
+      if (workOrder.ownerType === 'agent' && workOrder.ownerAgentId) {
+        values.set(
+          `agent:${workOrder.ownerAgentId}`,
+          workOrder.ownerLabel || formatOwnerLabel(workOrder.owner, workOrder.ownerType, workOrder.ownerLabel)
+        )
+        continue
+      }
+
+      const fallbackValue = workOrder.ownerType || workOrder.owner
+      values.set(
+        fallbackValue,
+        workOrder.ownerLabel || formatOwnerLabel(workOrder.owner, workOrder.ownerType, workOrder.ownerLabel)
+      )
+    }
+
+    return [
+      { value: 'all', label: 'All' },
+      ...Array.from(values.entries()).map(([value, label]) => ({
+        value,
+        label,
+      })),
+    ]
+  }, [agents, workOrders])
 
   // Count active filters
   const activeFilterCount = Object.entries(filters).filter(
@@ -684,21 +725,33 @@ export function WorkOrdersClient() {
   )
 
   const handleAssignToAgent = useCallback(
-    async (id: string, agentName: string) => {
+    async (id: string, agentId: string) => {
       setAssigningWorkOrderId(id)
+      const assignedAgent = agents.find((agent) => agent.id === agentId)
+      const ownerLabel = assignedAgent?.displayName || `agent:${agentId}`
 
       // Planned column behaves as an assignment queue. Claiming assigns owner and activates.
       setWorkOrders((prev) =>
         prev.map((wo) =>
           wo.id === id
-            ? { ...wo, owner: agentName, state: 'active', updatedAt: new Date() }
+            ? {
+                ...wo,
+                owner: `agent:${agentId}`,
+                ownerType: 'agent',
+                ownerAgentId: agentId,
+                ownerLabel,
+                state: 'active',
+                updatedAt: new Date(),
+              }
             : wo
         )
       )
 
       try {
         await workOrdersApi.update(id, {
-          owner: agentName,
+          owner: `agent:${agentId}`,
+          ownerType: 'agent',
+          ownerAgentId: agentId,
           state: 'active',
         })
         await fetchWorkOrders()
@@ -709,7 +762,7 @@ export function WorkOrdersClient() {
         setAssigningWorkOrderId(null)
       }
     },
-    [fetchWorkOrders]
+    [agents, fetchWorkOrders]
   )
 
   const handleToggleDispatchCron = useCallback(async () => {
@@ -768,8 +821,16 @@ export function WorkOrdersClient() {
     if (filters.state !== 'all' && wo.state !== filters.state) return false
     if (filters.priority !== 'all' && wo.priority !== filters.priority) return false
     if (filters.owner !== 'all') {
-      if (filters.owner === 'clawcontrolceo' && wo.owner !== 'clawcontrolceo') return false
-      if (filters.owner === 'user' && wo.owner !== 'user') return false
+      const ownerFilter = filters.owner
+      if (ownerFilter.startsWith('agent:')) {
+        if (wo.ownerType !== 'agent' || wo.ownerAgentId !== ownerFilter.slice('agent:'.length)) {
+          return false
+        }
+      } else if (ownerFilter === 'user' || ownerFilter === 'system') {
+        if (wo.ownerType !== ownerFilter) return false
+      } else if (wo.owner !== ownerFilter) {
+        return false
+      }
     }
     return true
   })
@@ -967,7 +1028,7 @@ export function WorkOrdersClient() {
           <div>
             <label className="block text-xs font-medium text-fg-1 mb-2">Owner</label>
             <div className="flex flex-wrap gap-1.5">
-              {OWNERS.map(({ value, label }) => (
+              {ownerFilterOptions.map(({ value, label }) => (
                 <button
                   key={value}
                   onClick={() => setFilters((f) => ({ ...f, owner: value }))}
@@ -1002,6 +1063,7 @@ export function WorkOrdersClient() {
         isOpen={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
         onCreated={fetchWorkOrders}
+        ownerOptions={ownerOptions}
       />
     </div>
   )

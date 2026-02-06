@@ -9,12 +9,7 @@ const DISPATCH_CRON_LEGACY_NAMES = new Set([
 ])
 
 const DISPATCH_DEFAULT_EVERY = '20m'
-const DISPATCH_AGENT_ID_CANDIDATES = [
-  'savorgdispatch',
-  'clawcontroldispatch',
-  'savorgmanager',
-  'clawcontrolmanager',
-]
+const DEFAULT_DISPATCH_AGENT_ID = process.env.OPENCLAW_DISPATCH_AGENT_ID?.trim() || 'main'
 const DISPATCH_SESSION_TARGET = 'isolated'
 const DISPATCH_WAKE_MODE = 'next-heartbeat'
 const DISPATCH_MESSAGE =
@@ -36,6 +31,10 @@ interface CronJobListItem {
 
 interface OpenClawAgentConfig {
   id: string
+  name?: string
+  identity?: {
+    name?: string
+  }
 }
 
 interface DispatchCronStatus {
@@ -140,17 +139,32 @@ async function ensureDispatchCronExists(enabled: boolean): Promise<{ ok: true } 
 
 async function resolveDispatchAgentId(): Promise<string> {
   const agentsRes = await runCommandJson<unknown>('config.agents.list.json', { timeout: 30_000 })
-  if (agentsRes.error) return DISPATCH_AGENT_ID_CANDIDATES[0]
+  if (agentsRes.error) return DEFAULT_DISPATCH_AGENT_ID
 
   const agents = Array.isArray(agentsRes.data) ? (agentsRes.data as OpenClawAgentConfig[]) : []
-  const ids = new Set(agents.map((agent) => agent.id))
+  if (agents.length === 0) return DEFAULT_DISPATCH_AGENT_ID
 
-  for (const candidate of DISPATCH_AGENT_ID_CANDIDATES) {
-    if (ids.has(candidate)) return candidate
+  const ranked = agents
+    .map((agent) => {
+      const text = `${agent.id} ${agent.name ?? ''} ${agent.identity?.name ?? ''}`.toLowerCase()
+      let score = 0
+
+      if (text.includes('dispatch')) score += 60
+      if (text.includes('manager')) score += 35
+      if (text.includes('router')) score += 25
+      if (text.includes('ceo') || text.includes('guard')) score -= 30
+      if (agent.id === 'main') score += 5
+
+      return { agent, score }
+    })
+    .sort((a, b) => b.score - a.score || a.agent.id.localeCompare(b.agent.id))
+
+  if ((ranked[0]?.score ?? -1) > 0) {
+    return ranked[0].agent.id
   }
 
-  // Fall back to first candidate; caller will surface create error if agent is invalid.
-  return DISPATCH_AGENT_ID_CANDIDATES[0]
+  // Fallback to first configured agent id when no dispatch-like candidate is obvious.
+  return agents[0]?.id ?? DEFAULT_DISPATCH_AGENT_ID
 }
 
 async function setJobEnabled(jobId: string, enabled: boolean): Promise<{ ok: true } | { ok: false; error: string }> {

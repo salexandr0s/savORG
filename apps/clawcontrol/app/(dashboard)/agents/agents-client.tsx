@@ -15,6 +15,7 @@ import { SkillSelector } from '@/components/skill-selector'
 import { agentsApi, operationsApi, templatesApi, skillsApi, type TemplateSummary, type SkillSummary } from '@/lib/http'
 import { AVAILABLE_MODELS, DEFAULT_MODEL } from '@/lib/models'
 import type { AgentDTO, OperationDTO } from '@/lib/repo'
+import { slugifyDisplayName } from '@/lib/agent-identity'
 import { useStations } from '@/lib/stations-context'
 import { cn } from '@/lib/utils'
 import { StationsTab, StationUpsertModal } from './stations-tab'
@@ -67,6 +68,19 @@ const CAPABILITY_OPTIONS = [
   'api',
 ]
 
+function buildAutoAgentName(role: string): string {
+  const normalized = role
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return `agent-${normalized || 'worker'}`
+}
+
+function buildAgentSlugPreview(displayName: string, role: string): string {
+  const fallback = role ? buildAutoAgentName(role) : 'agent-worker'
+  return slugifyDisplayName(displayName || fallback)
+}
+
 // ============================================================================
 // TABLE COLUMNS
 // ============================================================================
@@ -79,9 +93,9 @@ const agentColumns: Column<AgentDTO>[] = [
     mono: true,
     render: (row) => (
       <div className="flex items-center gap-2">
-        <AgentAvatar agentId={row.id} name={row.name} size="sm" />
+        <AgentAvatar agentId={row.id} name={row.displayName} size="sm" />
         <StationIcon stationId={row.station} />
-        <span className="text-status-progress">{row.name}</span>
+        <span className="text-status-progress">{row.displayName}</span>
       </div>
     ),
   },
@@ -171,7 +185,7 @@ export function AgentsClient() {
   const [showTemplateWizard, setShowTemplateWizard] = useState(false)
 
   // File editor modal state
-  const [editingFile, setEditingFile] = useState<{ agentName: string; fileName: string } | null>(null)
+  const [editingFile, setEditingFile] = useState<{ filePath: string; fileName: string } | null>(null)
 
   const triggerProtectedAction = useProtectedActionTrigger()
 
@@ -208,12 +222,12 @@ export function AgentsClient() {
     triggerProtectedAction({
       actionKind: 'agent.provision',
       actionTitle: 'Provision Agent',
-      actionDescription: `Provision ${agent.name} in OpenClaw gateway`,
-      entityName: agent.name,
+      actionDescription: `Provision ${agent.displayName} in OpenClaw gateway`,
+      entityName: agent.displayName,
       onConfirm: async (typedConfirmText) => {
         try {
           await agentsApi.provision(agent.id, typedConfirmText)
-          setCreateResult({ success: true, message: `Agent ${agent.name} provisioned successfully` })
+          setCreateResult({ success: true, message: `Agent ${agent.displayName} provisioned successfully` })
         } catch (err) {
           setCreateResult({
             success: false,
@@ -245,6 +259,7 @@ export function AgentsClient() {
   }
 
   const handleEditAgent = (agent: AgentDTO, patch: {
+    displayName?: string
     role?: string
     station?: string
     wipLimit?: number
@@ -256,15 +271,15 @@ export function AgentsClient() {
     triggerProtectedAction({
       actionKind: 'agent.edit',
       actionTitle: 'Edit Agent',
-      actionDescription: `Update configuration for ${agent.name}`,
-      entityName: agent.name,
+      actionDescription: `Update configuration for ${agent.displayName}`,
+      entityName: agent.displayName,
       onConfirm: async (typedConfirmText) => {
         await agentsApi.update(agent.id, {
           ...patch,
           typedConfirmText,
         })
         await fetchData()
-        setCreateResult({ success: true, message: `Updated ${agent.name}` })
+        setCreateResult({ success: true, message: `Updated ${agent.displayName}` })
       },
       onError: (err) => {
         setCreateResult({ success: false, message: err.message })
@@ -277,8 +292,8 @@ export function AgentsClient() {
     triggerProtectedAction({
       actionKind: 'agent.edit',
       actionTitle: 'Upload Avatar',
-      actionDescription: `Upload custom avatar for ${agent.name}`,
-      entityName: agent.name,
+      actionDescription: `Upload custom avatar for ${agent.displayName}`,
+      entityName: agent.displayName,
       onConfirm: async (typedConfirmText) => {
         const reader = new FileReader()
         reader.onload = async () => {
@@ -304,8 +319,8 @@ export function AgentsClient() {
     triggerProtectedAction({
       actionKind: 'agent.edit',
       actionTitle: 'Reset Avatar',
-      actionDescription: `Reset avatar to default identicon for ${agent.name}`,
-      entityName: agent.name,
+      actionDescription: `Reset avatar to default identicon for ${agent.displayName}`,
+      entityName: agent.displayName,
       onConfirm: async (typedConfirmText) => {
         await fetch(`/api/agents/${agent.id}/avatar?typedConfirmText=${encodeURIComponent(typedConfirmText)}`, {
           method: 'DELETE',
@@ -324,7 +339,7 @@ export function AgentsClient() {
     triggerProtectedAction({
       actionKind: 'skill.duplicate_to_agent',
       actionTitle: 'Duplicate Skills',
-      actionDescription: `Duplicate ${skillIds.length} skill(s) to ${agent.name}`,
+      actionDescription: `Duplicate ${skillIds.length} skill(s) to ${agent.displayName}`,
       onConfirm: async (typedConfirmText) => {
         for (const skillId of skillIds) {
           await skillsApi.duplicate('global', skillId, {
@@ -342,8 +357,9 @@ export function AgentsClient() {
   }
 
   // Handle file edit
-  const handleFileEdit = (agentName: string, fileName: string) => {
-    setEditingFile({ agentName, fileName })
+  const handleFileEdit = (filePath: string, fileName?: string) => {
+    const parsedName = fileName || filePath.split('/').filter(Boolean).pop() || 'file'
+    setEditingFile({ filePath, fileName: parsedName })
   }
 
   // Handle file saved (called by FileEditorModal after successful save)
@@ -354,20 +370,24 @@ export function AgentsClient() {
 
   // Handle create agent
   const handleCreateAgent = (formData: CreateAgentFormData) => {
+    const resolvedDisplayName = formData.displayName || buildAutoAgentName(formData.role)
+    const previewSlug = buildAgentSlugPreview(resolvedDisplayName, formData.role)
+
     triggerProtectedAction({
       actionKind: 'agent.create',
       actionTitle: 'Create Agent',
-      actionDescription: `Create new agent "${formData.role}" with name claw${formData.role.toUpperCase()}`,
+      actionDescription: `Create new agent "${resolvedDisplayName}" (${previewSlug})`,
       onConfirm: async (typedConfirmText) => {
         try {
           const result = await agentsApi.create({
             role: formData.role,
             purpose: formData.purpose,
             capabilities: formData.capabilities,
+            displayName: formData.displayName || undefined,
             typedConfirmText,
           })
 
-          setCreateResult({ success: true, message: `Agent ${result.data.name} created successfully` })
+          setCreateResult({ success: true, message: `Agent ${result.data.displayName} created successfully` })
           setShowCreateModal(false)
 
           // Refresh agents list
@@ -387,7 +407,11 @@ export function AgentsClient() {
   }
 
   // Handle create from template
-  const handleCreateFromTemplate = (templateId: string, params: Record<string, unknown>) => {
+  const handleCreateFromTemplate = (
+    templateId: string,
+    params: Record<string, unknown>,
+    displayName?: string
+  ) => {
     triggerProtectedAction({
       actionKind: 'agent.create_from_template',
       actionTitle: 'Create Agent from Template',
@@ -397,10 +421,11 @@ export function AgentsClient() {
           const result = await agentsApi.createFromTemplate({
             templateId,
             params,
+            displayName,
             typedConfirmText,
           })
 
-          setCreateResult({ success: true, message: `Agent ${result.data.name} created from template successfully` })
+          setCreateResult({ success: true, message: `Agent ${result.data.displayName} created from template successfully` })
           setShowTemplateWizard(false)
 
           // Refresh agents list
@@ -569,7 +594,7 @@ export function AgentsClient() {
                       agent={agent}
                       onProvision={() => handleProvisionAgent(agent)}
                       onTest={() => handleTestAgent(agent)}
-                      onEditFile={(fileName) => handleFileEdit(agent.name, fileName)}
+                      onEditFile={(filePath, fileName) => handleFileEdit(filePath, fileName)}
                       onClick={() => setSelectedId(agent.id)}
                     />
                   ))
@@ -619,7 +644,7 @@ export function AgentsClient() {
             <FileEditorModal
               isOpen={!!editingFile}
               onClose={() => setEditingFile(null)}
-              filePath={`agents/${editingFile.agentName}/${editingFile.fileName}`}
+              filePath={editingFile.filePath}
               fileName={editingFile.fileName}
               onSaved={handleFileSaved}
             />
@@ -629,7 +654,7 @@ export function AgentsClient() {
           <RightDrawer
             open={!!selectedAgent}
             onClose={() => setSelectedId(undefined)}
-            title={selectedAgent?.name}
+            title={selectedAgent?.displayName}
             description={selectedAgent?.role}
           >
             {selectedAgent && (
@@ -642,7 +667,7 @@ export function AgentsClient() {
                 onAvatarUpload={(file) => handleAvatarUpload(selectedAgent, file)}
                 onAvatarReset={() => handleAvatarReset(selectedAgent)}
                 onDuplicateSkills={(skillIds) => handleDuplicateSkills(selectedAgent, skillIds)}
-                onEditFile={(fileName) => handleFileEdit(selectedAgent.name, fileName)}
+                onEditFile={(filePath, fileName) => handleFileEdit(filePath, fileName)}
               />
             )}
           </RightDrawer>
@@ -657,6 +682,7 @@ export function AgentsClient() {
 // ============================================================================
 
 interface CreateAgentFormData {
+  displayName: string
   role: string
   purpose: string
   capabilities: string[]
@@ -671,6 +697,7 @@ function CreateAgentModal({
   onClose: () => void
   onSubmit: (data: CreateAgentFormData) => void
 }) {
+  const [displayName, setDisplayName] = useState('')
   const [role, setRole] = useState('')
   const [purpose, setPurpose] = useState('')
   const [capabilities, setCapabilities] = useState<string[]>([])
@@ -679,7 +706,7 @@ function CreateAgentModal({
     e.preventDefault()
     if (!role || !purpose) return
 
-    onSubmit({ role, purpose, capabilities })
+    onSubmit({ displayName: displayName.trim(), role, purpose, capabilities })
   }
 
   const toggleCapability = (cap: string) => {
@@ -689,7 +716,8 @@ function CreateAgentModal({
   }
 
   const selectedRole = ROLE_OPTIONS.find((r) => r.value === role)
-  const previewName = role ? `claw${role.toUpperCase()}` : 'claw...'
+  const previewName = displayName || (role ? buildAutoAgentName(role) : 'agent-...')
+  const previewSlug = buildAgentSlugPreview(previewName, role)
 
   if (!isOpen) return null
 
@@ -725,9 +753,21 @@ function CreateAgentModal({
               <Bot className="w-8 h-8 text-status-progress" />
               <div>
                 <p className="font-mono text-lg text-fg-0">{previewName}</p>
-                <p className="text-xs text-fg-2">Auto-generated from role</p>
+                <p className="text-xs text-fg-2">Slug: {previewSlug}</p>
               </div>
             </div>
+          </div>
+
+          {/* Display Name */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-fg-1">Display Name (optional)</label>
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder={role ? buildAutoAgentName(role) : 'agent-worker'}
+              className="w-full px-3 py-2 bg-bg-2 border border-bd-0 rounded-[var(--radius-md)] text-sm text-fg-0 placeholder:text-fg-3"
+            />
           </div>
 
           {/* Role Selection */}
@@ -838,7 +878,7 @@ function CreateFromTemplateWizard({
 }: {
   isOpen: boolean
   onClose: () => void
-  onSubmit: (templateId: string, params: Record<string, unknown>) => void
+  onSubmit: (templateId: string, params: Record<string, unknown>, displayName?: string) => void
 }) {
   const [step, setStep] = useState<WizardStep>('select')
   const [templates, setTemplates] = useState<TemplateSummary[]>([])
@@ -859,6 +899,7 @@ function CreateFromTemplateWizard({
 
   // Params state
   const [params, setParams] = useState<Record<string, unknown>>({})
+  const [displayName, setDisplayName] = useState('')
 
   // Preview state
   const [previewFiles, setPreviewFiles] = useState<Array<{
@@ -876,6 +917,7 @@ function CreateFromTemplateWizard({
       setSelectedTemplateId(null)
       setTemplateInfo(null)
       setParams({})
+      setDisplayName('')
       setPreviewFiles([])
       setError(null)
     }
@@ -944,7 +986,7 @@ function CreateFromTemplateWizard({
     if (!selectedTemplateId) return
 
     setLoading(true)
-    agentsApi.previewFromTemplate({ templateId: selectedTemplateId, params })
+    agentsApi.previewFromTemplate({ templateId: selectedTemplateId, params, displayName: displayName || undefined })
       .then((res) => {
         setPreviewFiles(res.data.files)
         setStep('preview')
@@ -959,7 +1001,7 @@ function CreateFromTemplateWizard({
 
   function handleConfirm() {
     if (!selectedTemplateId) return
-    onSubmit(selectedTemplateId, params)
+    onSubmit(selectedTemplateId, params, displayName || undefined)
   }
 
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId)
@@ -1062,6 +1104,22 @@ function CreateFromTemplateWizard({
 
           {!loading && step === 'params' && templateInfo && (
             <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-fg-1">
+                  Display Name (optional)
+                </label>
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder={selectedTemplate?.name || 'agent-worker'}
+                  className="w-full px-3 py-2 bg-bg-2 border border-bd-0 rounded-[var(--radius-md)] text-sm text-fg-0 placeholder:text-fg-3"
+                />
+                <p className="text-xs text-fg-2">
+                  Slug preview: {buildAgentSlugPreview(displayName || selectedTemplate?.name || '', selectedTemplate?.role || '')}
+                </p>
+              </div>
+
               {templateInfo.paramsSchema?.properties ? (
                 Object.entries(templateInfo.paramsSchema.properties).map(([key, prop]) => {
                   const isRequired = templateInfo.paramsSchema?.required?.includes(key)
@@ -1191,6 +1249,7 @@ function AgentDetail({
   onProvision: () => void
   onTest: () => void
   onEdit: (patch: {
+    displayName?: string
     role?: string
     station?: string
     wipLimit?: number
@@ -1202,7 +1261,7 @@ function AgentDetail({
   onAvatarUpload: (file: File) => void
   onAvatarReset: () => void
   onDuplicateSkills: (skillIds: string[]) => void
-  onEditFile: (fileName: string) => void
+  onEditFile: (filePath: string, fileName?: string) => void
 }) {
   const toneMap: Record<string, StatusTone> = {
     active: 'success',
@@ -1213,6 +1272,7 @@ function AgentDetail({
 
   const { stations, stationsById } = useStations()
 
+  const [editDisplayName, setEditDisplayName] = useState(agent.displayName)
   const [editRole, setEditRole] = useState(agent.role)
   const [editStation, setEditStation] = useState(agent.station)
   const [editWipLimit, setEditWipLimit] = useState<number>(agent.wipLimit)
@@ -1234,6 +1294,7 @@ function AgentDetail({
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
+    setEditDisplayName(agent.displayName)
     setEditRole(agent.role)
     setEditStation(agent.station)
     setEditWipLimit(agent.wipLimit)
@@ -1270,7 +1331,12 @@ function AgentDetail({
   }
 
   // Agent file names
-  const agentFiles = [`${agent.name}.soul.md`, `${agent.name}.md`]
+  const agentSlug = agent.slug || slugifyDisplayName(agent.displayName)
+  const agentFiles: Array<{ label: string; path: string }> = [
+    { label: 'SOUL.md', path: `/agents/${agentSlug}/SOUL.md` },
+    { label: 'HEARTBEAT.md', path: `/agents/${agentSlug}/HEARTBEAT.md` },
+    { label: `${agentSlug}.md`, path: `/agents/${agentSlug}.md` },
+  ]
   const agentStationLabel = stationsById[agent.station]?.name ?? agent.station
   const editStationLabel = stationsById[editStation]?.name ?? editStation
   const sortedStations = [...stations].sort((a, b) => (a.sortOrder - b.sortOrder) || a.name.localeCompare(b.name))
@@ -1279,7 +1345,7 @@ function AgentDetail({
     <div className="space-y-6">
       {/* Avatar Section */}
       <div className="flex items-center gap-4">
-        <AgentAvatar agentId={agent.id} name={agent.name} size="xl" />
+        <AgentAvatar agentId={agent.id} name={agent.displayName} size="xl" />
         <div className="space-y-2">
           <div className="flex gap-2">
             <input
@@ -1343,12 +1409,12 @@ function AgentDetail({
         <div className="flex flex-wrap gap-2">
           {agentFiles.map((fileName) => (
             <button
-              key={fileName}
-              onClick={() => onEditFile(fileName)}
+              key={fileName.path}
+              onClick={() => onEditFile(fileName.path, fileName.label)}
               className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-[var(--radius-md)] bg-bg-3 text-fg-1 hover:bg-bg-3/80 border border-bd-0 transition-colors"
             >
               <FileText className="w-3.5 h-3.5 text-fg-2" />
-              {fileName}
+              {fileName.label}
             </button>
           ))}
         </div>
@@ -1390,7 +1456,7 @@ function AgentDetail({
         isOpen={showSkillSelector}
         onClose={() => setShowSkillSelector(false)}
         agentId={agent.id}
-        agentName={agent.name}
+        agentName={agent.displayName}
         onSelectSkills={(skillIds) => {
           setShowSkillSelector(false)
           onDuplicateSkills(skillIds)
@@ -1447,6 +1513,14 @@ function AgentDetail({
       {/* Metadata */}
       <PageSection title="Details">
         <dl className="grid grid-cols-2 gap-2 text-sm">
+          <dt className="text-fg-2">Display Name</dt>
+          <dd className="text-fg-1">{agent.displayName}</dd>
+          <dt className="text-fg-2">Slug (immutable)</dt>
+          <dd className="text-fg-1 font-mono text-xs truncate">{agent.slug}</dd>
+          <dt className="text-fg-2">Runtime ID (immutable)</dt>
+          <dd className="text-fg-1 font-mono text-xs truncate">{agent.runtimeAgentId}</dd>
+          <dt className="text-fg-2">Name Source</dt>
+          <dd className="text-fg-1 text-xs uppercase">{agent.nameSource}</dd>
           <dt className="text-fg-2">WIP Limit</dt>
           <dd className="text-fg-1 font-mono">{agent.wipLimit}</dd>
           <dt className="text-fg-2">Session Key</dt>
@@ -1463,6 +1537,16 @@ function AgentDetail({
       {/* Edit */}
       <PageSection title="Edit Configuration" description="Requires typed confirmation">
         <div className="space-y-3">
+          <div className="space-y-1">
+            <label className="text-xs text-fg-2">Display Name</label>
+            <input
+              value={editDisplayName}
+              onChange={(e) => setEditDisplayName(e.target.value)}
+              className="w-full px-2 py-1.5 bg-bg-2 border border-bd-0 rounded-[var(--radius-md)] text-sm text-fg-0"
+            />
+            <p className="text-[11px] text-fg-3">Rename is safe. Slug/runtime identity remain unchanged.</p>
+          </div>
+
           {/* Model Selection */}
           <div className="space-y-2">
             <label className="text-xs text-fg-2">AI Model</label>
@@ -1713,6 +1797,7 @@ function AgentDetail({
           <div className="pt-2">
             <button
               onClick={() => onEdit({
+                displayName: editDisplayName.trim(),
                 role: editRole,
                 station: editStation,
                 wipLimit: editWipLimit,

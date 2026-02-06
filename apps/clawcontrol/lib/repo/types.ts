@@ -9,6 +9,11 @@
 // WORK ORDERS
 // ============================================================================
 
+export type OwnerType = 'user' | 'agent' | 'system'
+export type ActorType = 'user' | 'agent' | 'system'
+export type AgentKind = 'worker' | 'manager' | 'ceo' | 'guard'
+export type AgentNameSource = 'system' | 'openclaw' | 'user'
+
 export interface WorkOrderDTO {
   id: string
   code: string
@@ -16,7 +21,10 @@ export interface WorkOrderDTO {
   goalMd: string
   state: 'planned' | 'active' | 'blocked' | 'review' | 'shipped' | 'cancelled'
   priority: 'P0' | 'P1' | 'P2' | 'P3'
-  owner: string
+  owner: string // legacy compatibility label
+  ownerType: OwnerType
+  ownerAgentId: string | null
+  ownerLabel: string
   tags: string[]
   routingTemplate: string
   blockedReason: string | null
@@ -33,6 +41,8 @@ export interface WorkOrderFilters {
   state?: string | string[]
   priority?: string | string[]
   owner?: string
+  ownerType?: OwnerType
+  ownerAgentId?: string
 }
 
 // ============================================================================
@@ -71,7 +81,13 @@ export interface OperationFilters {
 
 export interface AgentDTO {
   id: string
-  name: string
+  name: string // legacy alias of displayName
+  displayName: string
+  slug: string
+  runtimeAgentId: string
+  kind: AgentKind
+  dispatchEligible: boolean
+  nameSource: AgentNameSource
   role: string
   station: string
   status: 'idle' | 'active' | 'blocked' | 'error'
@@ -138,6 +154,9 @@ export interface ActivityDTO {
   ts: Date
   type: string
   actor: string
+  actorType: ActorType
+  actorAgentId: string | null
+  actorLabel: string
   entityType: string
   entityId: string
   summary: string

@@ -7,11 +7,13 @@ import {
   previewTemplateRender,
 } from '@/lib/templates'
 import { generateAgentName, generateSessionKey, AGENT_ROLE_MAP } from '@/lib/workspace'
+import { buildUniqueSlug, slugifyDisplayName } from '@/lib/agent-identity'
 import type { StationId } from '@clawcontrol/core'
 
 interface CreateFromTemplateInput {
   templateId: string
   params: Record<string, unknown>
+  displayName?: string
   typedConfirmText: string
 }
 
@@ -86,13 +88,32 @@ export async function POST(request: NextRequest) {
 
   const repos = getRepos()
 
-  // Generate agent name and session key
+  // Generate display name, immutable slug, and session key
   const role = template.config?.role || template.role
-  const agentName = generateAgentName(role)
+  const agentDisplayName = String(input.displayName ?? generateAgentName(role)).trim()
+  const existingAgents = await repos.agents.list()
+  const agentSlug = buildUniqueSlug(
+    slugifyDisplayName(agentDisplayName),
+    existingAgents.map((agent) => agent.slug)
+  )
+
+  const duplicateByName = await repos.agents.getByName(agentDisplayName)
+  if (duplicateByName) {
+    return NextResponse.json(
+      { error: `Agent with display name "${agentDisplayName}" already exists` },
+      { status: 409 }
+    )
+  }
+
   const sessionKeyPattern = template.config?.sessionKeyPattern
   const sessionKey = sessionKeyPattern
-    ? renderTemplate(sessionKeyPattern, { ...params, agentName })
-    : generateSessionKey(agentName)
+    ? renderTemplate(sessionKeyPattern, {
+        ...params,
+        agentName: agentDisplayName, // legacy alias
+        agentDisplayName,
+        agentSlug,
+      })
+    : generateSessionKey(agentSlug)
 
   // Determine station from role
   const roleMapping = AGENT_ROLE_MAP[role.toLowerCase()]
@@ -102,7 +123,9 @@ export async function POST(request: NextRequest) {
   const mergedParams = {
     ...template.config?.defaults,
     ...params,
-    agentName,
+    agentName: agentDisplayName, // legacy alias for templates
+    agentDisplayName,
+    agentSlug,
     sessionKey,
   }
 
@@ -114,14 +137,14 @@ export async function POST(request: NextRequest) {
     workOrderId: 'system',
     kind: 'manual',
     commandName: 'agent.create_from_template',
-    commandArgs: { templateId, agentName, params: mergedParams },
+    commandArgs: { templateId, agentDisplayName, agentSlug, params: mergedParams },
   })
 
   try {
     // Log to receipt
     await repos.receipts.append(receipt.id, {
       stream: 'stdout',
-      chunk: `Creating agent ${agentName} from template ${template.name}...\n`,
+      chunk: `Creating agent ${agentDisplayName} (${agentSlug}) from template ${template.name}...\n`,
     })
 
     // Build capabilities object based on template role
@@ -134,7 +157,11 @@ export async function POST(request: NextRequest) {
 
     // Create the agent record
     const agent = await repos.agents.create({
-      name: agentName,
+      name: agentDisplayName,
+      displayName: agentDisplayName,
+      slug: agentSlug,
+      runtimeAgentId: agentSlug,
+      nameSource: input.displayName ? 'user' : 'system',
       role,
       station,
       sessionKey,
@@ -161,11 +188,12 @@ export async function POST(request: NextRequest) {
       actor: 'user',
       entityType: 'agent',
       entityId: agent.id,
-      summary: `Created agent ${agentName} from template ${template.name}`,
+      summary: `Created agent ${agentDisplayName} from template ${template.name}`,
       payloadJson: {
         templateId,
         templateName: template.name,
-        agentName,
+        agentDisplayName,
+        agentSlug,
         role,
         filesGenerated: renderedFiles.length,
       },
@@ -177,7 +205,8 @@ export async function POST(request: NextRequest) {
       durationMs: 0,
       parsedJson: {
         agentId: agent.id,
-        agentName,
+        agentDisplayName,
+        agentSlug,
         templateId,
         filesGenerated: renderedFiles.length,
       },
@@ -185,6 +214,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       data: agent,
+      agentDisplayName,
+      agentSlug,
       files: renderedFiles.map((f) => ({
         source: f.source,
         destination: f.destination,

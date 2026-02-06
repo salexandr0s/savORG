@@ -7,13 +7,14 @@
 
 import type { StationId } from '@clawcontrol/core'
 import { encodeWorkspaceId, readWorkspaceFileById, writeWorkspaceFileById, ensureWorkspaceRootExists } from './fs/workspace-fs'
+import { slugifyDisplayName } from './agent-identity'
 
 // ============================================================================
 // AGENT NAME GENERATION
 // ============================================================================
 
 /**
- * Standard agent role prefixes
+ * Standard role suffixes for auto-generated names.
  */
 export const AGENT_ROLE_MAP: Record<string, { prefix: string; station: StationId; description: string }> = {
   spec: { prefix: 'SPEC', station: 'spec', description: 'Specification & requirements' },
@@ -28,20 +29,23 @@ export const AGENT_ROLE_MAP: Record<string, { prefix: string; station: StationId
 
 /**
  * Generate an agent name from role
- * Example: role="build" -> "clawBUILD"
+ * Example: role="build" -> "agent-build"
  */
 export function generateAgentName(role: string): string {
   const mapped = AGENT_ROLE_MAP[role.toLowerCase()]
-  if (mapped) {
-    return `claw${mapped.prefix}`
-  }
-  // Fallback: capitalize first letter of each word
-  const normalized = role.toUpperCase().replace(/[^A-Z0-9]/g, '')
-  return `claw${normalized}`
+  const base = mapped?.prefix ?? role
+  const normalized = base
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  const suffix = normalized || 'worker'
+
+  return `agent-${suffix}`
 }
 
 /**
- * Derive session key from agent name
+ * Generate a local session key for workspace-created agents.
+ * This key is internal to clawcontrol and not tied to OpenClaw's `agent:<id>:<id>` convention.
  */
 export function generateSessionKey(agentName: string): string {
   const normalized = agentName.toLowerCase().replace(/[^a-z0-9]/g, '_')
@@ -54,7 +58,8 @@ export function generateSessionKey(agentName: string): string {
 // ============================================================================
 
 export interface AgentTemplateInput {
-  name: string
+  displayName: string
+  slug: string
   role: string
   purpose: string
   capabilities: string[]
@@ -67,10 +72,10 @@ export interface AgentTemplateInput {
 export function generateSoulContent(input: AgentTemplateInput): string {
   const capabilitiesList = input.capabilities.map(c => `- ${c}`).join('\n')
 
-  return `# ${input.name} Soul
+  return `# ${input.displayName} Soul
 
 ## Identity
-You are ${input.name}, a clawcontrol agent with the role of **${input.role}**.
+You are ${input.displayName}, a clawcontrol agent with the role of **${input.role}**.
 
 ## Purpose
 ${input.purpose}
@@ -109,9 +114,9 @@ You operate primarily at the **${input.station}** station.
  * Generate the overlay.md content for an agent
  */
 export function generateOverlayContent(input: AgentTemplateInput): string {
-  return `# ${input.name} Overlay
+  return `# ${input.displayName} Overlay
 
-## Agent: ${input.name}
+## Agent: ${input.displayName}
 Role: ${input.role}
 Station: ${input.station}
 
@@ -139,7 +144,7 @@ Station: ${input.station}
  * Generate a HEARTBEAT.md template for an agent.
  */
 export function generateHeartbeatContent(input: AgentTemplateInput): string {
-  return `# HEARTBEAT.md — ${input.name}
+  return `# HEARTBEAT.md — ${input.displayName}
 
 ## Checks
 - Blockers for current operations.
@@ -157,7 +162,8 @@ export function generateHeartbeatContent(input: AgentTemplateInput): string {
  */
 export function generateAgentsMdSection(input: AgentTemplateInput): string {
   return `
-### ${input.name}
+### ${input.displayName}
+- **Slug:** ${input.slug}
 - **Role:** ${input.role}
 - **Station:** ${input.station}
 - **Purpose:** ${input.purpose}
@@ -170,7 +176,9 @@ export function generateAgentsMdSection(input: AgentTemplateInput): string {
 // ============================================================================
 
 export interface CreateAgentFilesInput {
-  name: string
+  name?: string // legacy alias for displayName
+  displayName?: string
+  slug?: string
   role: string
   purpose: string
   capabilities: string[]
@@ -192,8 +200,12 @@ export interface CreateAgentFilesResult {
  * Create all workspace files for a new agent
  */
 export async function createAgentFiles(input: CreateAgentFilesInput): Promise<CreateAgentFilesResult> {
+  const displayName = (input.displayName ?? input.name ?? '').trim() || 'Unnamed Agent'
+  const slug = slugifyDisplayName(input.slug ?? displayName)
+
   const templateInput: AgentTemplateInput = {
-    name: input.name,
+    displayName,
+    slug,
     role: input.role,
     purpose: input.purpose,
     capabilities: input.capabilities,
@@ -203,7 +215,7 @@ export async function createAgentFiles(input: CreateAgentFilesInput): Promise<Cr
   await ensureWorkspaceRootExists()
 
   const soulContent = generateSoulContent(templateInput)
-  const soulId = encodeWorkspaceId(`/agents/${input.name}/SOUL.md`)
+  const soulId = encodeWorkspaceId(`/agents/${slug}/SOUL.md`)
 
   try {
     await writeWorkspaceFileById(soulId, soulContent)
@@ -216,7 +228,7 @@ export async function createAgentFiles(input: CreateAgentFilesInput): Promise<Cr
   }
 
   const heartbeatContent = generateHeartbeatContent(templateInput)
-  const heartbeatId = encodeWorkspaceId(`/agents/${input.name}/HEARTBEAT.md`)
+  const heartbeatId = encodeWorkspaceId(`/agents/${slug}/HEARTBEAT.md`)
 
   try {
     await writeWorkspaceFileById(heartbeatId, heartbeatContent)
@@ -229,7 +241,7 @@ export async function createAgentFiles(input: CreateAgentFilesInput): Promise<Cr
   }
 
   const overlayContent = generateOverlayContent(templateInput)
-  const overlayId = encodeWorkspaceId(`/agents/${input.name}.md`)
+  const overlayId = encodeWorkspaceId(`/agents/${slug}.md`)
 
   try {
     await writeWorkspaceFileById(overlayId, overlayContent)

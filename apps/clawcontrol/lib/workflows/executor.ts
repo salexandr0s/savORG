@@ -4,6 +4,8 @@ import type { Prisma } from '@prisma/client'
 import { prisma } from '../db'
 import { spawnAgentSession } from '../openclaw/sessions'
 import { WORKFLOWS } from './definitions'
+import { extractAgentIdFromSessionKey } from '../agent-identity'
+import { resolveWorkflowStageAgent } from '../services/agent-resolution'
 
 export type WorkflowNextAction = 'continue' | 'loop' | 'escalate' | 'complete'
 
@@ -14,6 +16,7 @@ export interface ExecutionContext {
   operationId: string
   iterationCount: number
   initialContext: Record<string, unknown>
+  currentAgentId?: string | null
 }
 
 export interface StageResult {
@@ -26,6 +29,7 @@ export interface StageResult {
 export interface AdvanceWorkflowTxResult {
   nextAction: WorkflowNextAction
   nextOperationId?: string
+  nextAgentId?: string
   nextAgentName?: string
   nextStageIndex?: number
   escalationMessage?: string
@@ -33,28 +37,36 @@ export interface AdvanceWorkflowTxResult {
 
 /**
  * Spawns an agent session with the required session key convention:
- * `agent:<name>:wo:<workOrderId>:op:<operationId>`
+ * `agent:<runtimeAgentId>:wo:<workOrderId>:op:<operationId>`
  */
 export async function dispatchToAgent(input: {
-  agentName: string
+  agentId: string
   workOrderId: string
   operationId: string
   task: string
   context?: Record<string, unknown>
 }): Promise<{ sessionKey: string; sessionId: string | null }> {
-  const agent = await prisma.agent.findFirst({
-    where: {
-      OR: [
-        { name: input.agentName },
-        { sessionKey: { startsWith: `agent:${input.agentName}:` } },
-      ],
+  const agent = await prisma.agent.findUnique({
+    where: { id: input.agentId },
+    select: {
+      id: true,
+      slug: true,
+      runtimeAgentId: true,
+      sessionKey: true,
+      model: true,
+      status: true,
     },
   })
   if (!agent) {
-    throw new Error(`Agent not found: ${input.agentName}`)
+    throw new Error(`Agent not found: ${input.agentId}`)
   }
 
-  const runtimeAgentId = extractAgentIdFromSessionKey(agent.sessionKey) ?? input.agentName
+  const runtimeAgentId =
+    agent.runtimeAgentId?.trim() ||
+    extractAgentIdFromSessionKey(agent.sessionKey) ||
+    agent.slug?.trim() ||
+    agent.id
+
   const sessionKey = `agent:${runtimeAgentId}:wo:${input.workOrderId}:op:${input.operationId}`
 
   const result = await spawnAgentSession({
@@ -76,27 +88,14 @@ export async function dispatchToAgent(input: {
   return result
 }
 
-export function mapAgentToStation(agentName: string): string {
-  const normalized = agentName.toLowerCase().replace(/\s+/g, '')
-
-  if (normalized.includes('guard')) return 'screen'
-  if (normalized.includes('ceo')) return 'strategic'
-  if (normalized.includes('manager')) return 'orchestration'
-  if (normalized.includes('research') || normalized.includes('plan') || normalized.includes('spec')) {
-    return 'spec'
+export function mapAgentToStation(agent: { station?: string | null } | string): string {
+  if (typeof agent === 'string') {
+    const normalized = agent.trim().toLowerCase()
+    return normalized || 'build'
   }
-  if (normalized.includes('ops') || normalized.includes('infra')) return 'ops'
-  if (normalized.includes('review') || normalized.includes('qa') || normalized.includes('security')) {
-    return 'qa'
-  }
-  if (normalized.includes('ui') || normalized.includes('build')) return 'build'
-  return 'build'
-}
 
-function extractAgentIdFromSessionKey(sessionKey: string): string | null {
-  const parts = sessionKey.split(':')
-  if (parts[0] !== 'agent' || !parts[1]) return null
-  return parts[1]
+  const station = (agent.station ?? '').trim().toLowerCase()
+  return station || 'build'
 }
 
 export function evaluateCondition(condition: string, context: Record<string, unknown>): boolean {
@@ -126,6 +125,10 @@ export async function advanceWorkflowTx(
   if (!currentStage) {
     throw new Error(`Workflow stage out of range: ${ctx.workflowId} idx=${ctx.currentStageIndex}`)
   }
+
+  const actorAgentId = ctx.currentAgentId ?? null
+  const actor = actorAgentId ? `agent:${actorAgentId}` : 'system'
+  const actorType = actorAgentId ? 'agent' : 'system'
 
   // Handle veto
   if (result.status === 'vetoed' && currentStage.canVeto) {
@@ -162,7 +165,9 @@ export async function advanceWorkflowTx(
     await tx.activity.create({
       data: {
         type: 'escalation.security_veto',
-        actor: `agent:${currentStage.agent}`,
+        actor,
+        actorType,
+        actorAgentId,
         entityType: 'operation',
         entityId: ctx.operationId,
         summary: 'Escalated to CEO: security_veto',
@@ -215,7 +220,9 @@ export async function advanceWorkflowTx(
       await tx.activity.create({
         data: {
           type: 'escalation.iteration_cap_exceeded',
-          actor: `agent:${currentStage.agent}`,
+          actor,
+          actorType,
+          actorAgentId,
           entityType: 'operation',
           entityId: ctx.operationId,
           summary: 'Escalated to CEO: iteration_cap_exceeded',
@@ -239,19 +246,23 @@ export async function advanceWorkflowTx(
 
     const nextIteration = ctx.iterationCount + 1
     const loopTarget = currentStage.loopTarget
+    const loopTargetAgent = await resolveWorkflowStageAgent(tx, loopTarget)
+    if (!loopTargetAgent) {
+      throw new Error(`No available agent for workflow stage: ${loopTarget}`)
+    }
 
     const newOp = await tx.operation.create({
       data: {
         workOrderId: ctx.workOrderId,
-        station: mapAgentToStation(loopTarget),
-        title: `[Rework] ${loopTarget} (iteration ${nextIteration})`,
+        station: mapAgentToStation({ station: loopTargetAgent.station }),
+        title: `[Rework] ${loopTargetAgent.displayName} (iteration ${nextIteration})`,
         notes: result.feedback ?? null,
         status: 'todo',
         workflowId: ctx.workflowId,
         workflowStageIndex: targetIndex,
         iterationCount: nextIteration,
         loopTargetOpId: ctx.operationId,
-        assigneeAgentIds: JSON.stringify([loopTarget]),
+        assigneeAgentIds: JSON.stringify([loopTargetAgent.id]),
       },
     })
 
@@ -264,13 +275,18 @@ export async function advanceWorkflowTx(
       data: {
         type: 'workflow.loop',
         actor: 'system',
+        actorType: 'system',
+        actorAgentId: null,
         entityType: 'operation',
         entityId: newOp.id,
-        summary: `Looped back to ${loopTarget} (iteration ${nextIteration})`,
+        summary: `Looped back to ${loopTargetAgent.displayName} (iteration ${nextIteration})`,
         payloadJson: JSON.stringify({
           workflowId: ctx.workflowId,
           fromStageIndex: ctx.currentStageIndex,
           toStageIndex: targetIndex,
+          stageRef: loopTarget,
+          agentId: loopTargetAgent.id,
+          agentName: loopTargetAgent.displayName,
           feedback: result.feedback ?? null,
           previousOpId: ctx.operationId,
         }),
@@ -280,7 +296,8 @@ export async function advanceWorkflowTx(
     return {
       nextAction: 'loop',
       nextOperationId: newOp.id,
-      nextAgentName: loopTarget,
+      nextAgentId: loopTargetAgent.id,
+      nextAgentName: loopTargetAgent.displayName,
       nextStageIndex: targetIndex,
     }
   }
@@ -296,13 +313,15 @@ export async function advanceWorkflowTx(
           data: {
             type: 'workflow.stage_skipped',
             actor: 'system',
+            actorType: 'system',
+            actorAgentId: null,
             entityType: 'work_order',
             entityId: ctx.workOrderId,
             summary: `Skipped optional stage: ${s.agent} (${s.condition})`,
             payloadJson: JSON.stringify({
               workflowId: ctx.workflowId,
               stageIndex: nextIndex,
-              agent: s.agent,
+              stageRef: s.agent,
               condition: s.condition,
             }),
           },
@@ -328,6 +347,8 @@ export async function advanceWorkflowTx(
       data: {
         type: 'work_order.shipped',
         actor: 'system',
+        actorType: 'system',
+        actorAgentId: null,
         entityType: 'work_order',
         entityId: ctx.workOrderId,
         summary: 'Work order completed all workflow stages',
@@ -341,16 +362,21 @@ export async function advanceWorkflowTx(
   }
 
   const nextStage = workflow.stages[nextIndex]
+  const nextStageAgent = await resolveWorkflowStageAgent(tx, nextStage.agent)
+  if (!nextStageAgent) {
+    throw new Error(`No available agent for workflow stage: ${nextStage.agent}`)
+  }
+
   const newOp = await tx.operation.create({
     data: {
       workOrderId: ctx.workOrderId,
-      station: mapAgentToStation(nextStage.agent),
-      title: `${nextStage.agent} — Stage ${nextIndex + 1}/${workflow.stages.length}`,
+      station: mapAgentToStation({ station: nextStageAgent.station }),
+      title: `${nextStageAgent.displayName} — Stage ${nextIndex + 1}/${workflow.stages.length}`,
       status: 'todo',
       workflowId: ctx.workflowId,
       workflowStageIndex: nextIndex,
       iterationCount: ctx.iterationCount,
-      assigneeAgentIds: JSON.stringify([nextStage.agent]),
+      assigneeAgentIds: JSON.stringify([nextStageAgent.id]),
     },
   })
 
@@ -363,13 +389,18 @@ export async function advanceWorkflowTx(
     data: {
       type: 'workflow.advanced',
       actor: 'system',
+      actorType: 'system',
+      actorAgentId: null,
       entityType: 'operation',
       entityId: newOp.id,
-      summary: `Advanced to stage ${nextIndex + 1}/${workflow.stages.length} (${nextStage.agent})`,
+      summary: `Advanced to stage ${nextIndex + 1}/${workflow.stages.length} (${nextStageAgent.displayName})`,
       payloadJson: JSON.stringify({
         workflowId: ctx.workflowId,
         fromStageIndex: ctx.currentStageIndex,
         toStageIndex: nextIndex,
+        stageRef: nextStage.agent,
+        agentId: nextStageAgent.id,
+        agentName: nextStageAgent.displayName,
       }),
     },
   })
@@ -377,7 +408,8 @@ export async function advanceWorkflowTx(
   return {
     nextAction: 'continue',
     nextOperationId: newOp.id,
-    nextAgentName: nextStage.agent,
+    nextAgentId: nextStageAgent.id,
+    nextAgentName: nextStageAgent.displayName,
     nextStageIndex: nextIndex,
   }
 }
@@ -404,19 +436,15 @@ export function buildEscalationMessage(
     '',
     `**Work Order:** ${ctx.workOrderId}`,
     `**Workflow:** ${ctx.workflowId} → Stage ${ctx.currentStageIndex + 1}/${totalStages || '?'}`,
-    `**Agent:** ${stageLabel}`,
+    `**Stage:** ${stageLabel}`,
     `**Iterations:** ${ctx.iterationCount}/${maxIterations ?? 'N/A'}`,
     '',
     '### Feedback',
     result.feedback ?? 'No feedback provided',
     '',
-    '### What happened',
+    '### Manager Summary',
     whatHappened,
     '',
-    '### Action needed',
-    'Reply with one of:',
-    '- `APPROVE` — Override and continue',
-    '- `REJECT` — Cancel this work order',
-    '- `MODIFY` — Provide new instructions',
+    'Decision needed: approve rework scope, override veto, or cancel.',
   ].join('\n')
 }

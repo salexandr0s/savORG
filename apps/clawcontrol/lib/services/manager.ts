@@ -11,8 +11,11 @@ import {
   type StageResult,
 } from '../workflows/executor'
 import { sendToSession } from '../openclaw/sessions'
+import { resolveCeoSessionKey, resolveWorkflowStageAgent } from './agent-resolution'
+import { buildOpenClawSessionKey } from '../agent-identity'
 
-const CEO_SESSION_KEY = 'agent:clawcontrolceo:main'
+const MANAGER_ACTIVITY_ACTOR = 'system:manager'
+const DEFAULT_CEO_SESSION_KEY = buildOpenClawSessionKey('main')
 
 function safeJsonStringify(value: unknown): string {
   try {
@@ -30,6 +33,21 @@ function inferArtifactType(pathOrUrl: string): string {
   }
   if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) return 'link'
   return 'file'
+}
+
+function parseAssignees(raw: string): string[] {
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((value): value is string => typeof value === 'string' && value.length > 0)
+  } catch {
+    return []
+  }
+}
+
+async function getCeoSessionKey(): Promise<string> {
+  const resolved = await resolveCeoSessionKey(prisma)
+  return resolved ?? DEFAULT_CEO_SESSION_KEY
 }
 
 async function loadInitialContext(
@@ -59,11 +77,33 @@ async function loadInitialContext(
   return {}
 }
 
+function parseStageAgentContext(result: StageResult): {
+  agentId: string | null
+  agentName: string | null
+  runtimeAgentId: string | null
+} {
+  const output = result.output
+  if (!output || typeof output !== 'object') {
+    return { agentId: null, agentName: null, runtimeAgentId: null }
+  }
+
+  const maybe = output as Record<string, unknown>
+  const context = maybe.context && typeof maybe.context === 'object'
+    ? maybe.context as Record<string, unknown>
+    : maybe
+
+  const agentId = typeof context.agentId === 'string' ? context.agentId : null
+  const agentName = typeof context.agentName === 'string' ? context.agentName : null
+  const runtimeAgentId = typeof context.runtimeAgentId === 'string' ? context.runtimeAgentId : null
+
+  return { agentId, agentName, runtimeAgentId }
+}
+
 export async function initiateWorkflow(
   workOrderId: string,
   workflowId: string,
   initialContext: Record<string, unknown> = {}
-): Promise<{ operationId: string; agentName: string; sessionKey: string | null }> {
+): Promise<{ operationId: string; agentId: string; agentName: string; sessionKey: string | null }> {
   const workflow = WORKFLOWS[workflowId]
   if (!workflow) throw new Error(`Unknown workflow: ${workflowId}`)
 
@@ -86,6 +126,10 @@ export async function initiateWorkflow(
   }
 
   const firstStage = workflow.stages[startIndex]
+  const firstStageAgent = await resolveWorkflowStageAgent(prisma, firstStage.agent)
+  if (!firstStageAgent) {
+    throw new Error(`No available agent for workflow stage: ${firstStage.agent}`)
+  }
 
   const { operationId } = await prisma.$transaction(async (tx) => {
     // Ensure work order exists and update workflow metadata
@@ -105,14 +149,18 @@ export async function initiateWorkflow(
     await tx.activity.create({
       data: {
         type: 'workflow.started',
-        actor: 'agent:clawcontrolmanager',
+        actor: MANAGER_ACTIVITY_ACTOR,
+        actorType: 'system',
+        actorAgentId: null,
         entityType: 'work_order',
         entityId: workOrderId,
         summary: `Started workflow: ${workflowId}`,
         payloadJson: JSON.stringify({
           workflowId,
           startIndex,
-          firstAgent: firstStage.agent,
+          firstStage: firstStage.agent,
+          firstAgentId: firstStageAgent.id,
+          firstAgentName: firstStageAgent.displayName,
           initialContext,
         }),
       },
@@ -121,13 +169,13 @@ export async function initiateWorkflow(
     const op = await tx.operation.create({
       data: {
         workOrderId,
-        station: mapAgentToStation(firstStage.agent),
-        title: `${firstStage.agent} — Stage ${startIndex + 1}/${workflow.stages.length}`,
+        station: mapAgentToStation({ station: firstStageAgent.station }),
+        title: `${firstStageAgent.displayName} — Stage ${startIndex + 1}/${workflow.stages.length}`,
         status: 'todo',
         workflowId,
         workflowStageIndex: startIndex,
         iterationCount: 0,
-        assigneeAgentIds: JSON.stringify([firstStage.agent]),
+        assigneeAgentIds: JSON.stringify([firstStageAgent.id]),
       },
     })
 
@@ -139,7 +187,7 @@ export async function initiateWorkflow(
 
   try {
     const spawned = await dispatchToAgent({
-      agentName: firstStage.agent,
+      agentId: firstStageAgent.id,
       workOrderId,
       operationId,
       task: workOrder.goalMd ?? '',
@@ -149,6 +197,9 @@ export async function initiateWorkflow(
         workflowId,
         stageIndex: startIndex,
         initialContext,
+        agentId: firstStageAgent.id,
+        agentName: firstStageAgent.displayName,
+        runtimeAgentId: firstStageAgent.runtimeAgentId,
       },
     })
 
@@ -160,21 +211,30 @@ export async function initiateWorkflow(
     await prisma.activity.create({
       data: {
         type: 'workflow.dispatched',
-        actor: 'agent:clawcontrolmanager',
+        actor: MANAGER_ACTIVITY_ACTOR,
+        actorType: 'system',
+        actorAgentId: null,
         entityType: 'operation',
         entityId: operationId,
-        summary: `Dispatched ${firstStage.agent} for stage ${startIndex + 1}`,
+        summary: `Dispatched ${firstStageAgent.displayName} for stage ${startIndex + 1}`,
         payloadJson: JSON.stringify({
           workflowId,
           stageIndex: startIndex,
-          agent: firstStage.agent,
+          stageRef: firstStage.agent,
+          agentId: firstStageAgent.id,
+          agentName: firstStageAgent.displayName,
           sessionKey: spawned.sessionKey,
           sessionId: spawned.sessionId,
         }),
       },
     })
 
-    return { operationId, agentName: firstStage.agent, sessionKey: spawned.sessionKey }
+    return {
+      operationId,
+      agentId: firstStageAgent.id,
+      agentName: firstStageAgent.displayName,
+      sessionKey: spawned.sessionKey,
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Dispatch failed'
 
@@ -186,20 +246,29 @@ export async function initiateWorkflow(
     await prisma.activity.create({
       data: {
         type: 'workflow.dispatch_failed',
-        actor: 'agent:clawcontrolmanager',
+        actor: MANAGER_ACTIVITY_ACTOR,
+        actorType: 'system',
+        actorAgentId: null,
         entityType: 'operation',
         entityId: operationId,
-        summary: `Dispatch failed for ${firstStage.agent}`,
+        summary: `Dispatch failed for ${firstStageAgent.displayName}`,
         payloadJson: JSON.stringify({
           workflowId,
           stageIndex: startIndex,
-          agent: firstStage.agent,
+          stageRef: firstStage.agent,
+          agentId: firstStageAgent.id,
+          agentName: firstStageAgent.displayName,
           error: message,
         }),
       },
     })
 
-    return { operationId, agentName: firstStage.agent, sessionKey: null }
+    return {
+      operationId,
+      agentId: firstStageAgent.id,
+      agentName: firstStageAgent.displayName,
+      sessionKey: null,
+    }
   }
 }
 
@@ -225,7 +294,37 @@ export async function handleAgentCompletion(operationId: string, result: StageRe
 
     const stageIndex = operation.workflowStageIndex
     const stage = workflow.stages[stageIndex]
-    const agentName = stage?.agent ?? 'unknown'
+    const stageRef = stage?.agent ?? 'unknown'
+    const assignees = parseAssignees(operation.assigneeAgentIds)
+    const parsedContext = parseStageAgentContext(result)
+    const currentAgentId = assignees[0] ?? parsedContext.agentId
+
+    const currentAgent = currentAgentId
+      ? await tx.agent.findUnique({
+          where: { id: currentAgentId },
+          select: {
+            id: true,
+            name: true,
+            displayName: true,
+            runtimeAgentId: true,
+            slug: true,
+          },
+        })
+      : null
+
+    const currentAgentName =
+      currentAgent?.displayName?.trim() ||
+      currentAgent?.name ||
+      parsedContext.agentName ||
+      currentAgentId ||
+      stageRef
+
+    const runtimeAgentId =
+      currentAgent?.runtimeAgentId?.trim() ||
+      currentAgent?.slug?.trim() ||
+      parsedContext.runtimeAgentId ||
+      currentAgentId ||
+      stageRef
 
     const success = result.status === 'approved' || result.status === 'completed'
 
@@ -244,10 +343,14 @@ export async function handleAgentCompletion(operationId: string, result: StageRe
         workOrderId,
         operationId,
         kind: 'agent_run',
-        commandName: `agent:${agentName}`,
+        commandName: `agent:${runtimeAgentId}`,
         commandArgsJson: JSON.stringify({
           workflowId,
           stageIndex,
+          stageRef,
+          agentId: currentAgentId,
+          agentName: currentAgentName,
+          runtimeAgentId,
           iterationCount: operation.iterationCount,
           status: result.status,
         }),
@@ -277,7 +380,8 @@ export async function handleAgentCompletion(operationId: string, result: StageRe
             type: inferArtifactType(artifact),
             title: artifact,
             pathOrUrl: artifact,
-            createdBy: agentName,
+            createdBy: currentAgentName,
+            createdByAgentId: currentAgentId,
           },
         })
       }
@@ -294,6 +398,7 @@ export async function handleAgentCompletion(operationId: string, result: StageRe
         operationId,
         iterationCount: operation.iterationCount,
         initialContext,
+        currentAgentId,
       },
       result
     )
@@ -310,12 +415,15 @@ export async function handleAgentCompletion(operationId: string, result: StageRe
 
   if (advance.nextAction === 'escalate' && advance.escalationMessage) {
     try {
-      await sendToSession(CEO_SESSION_KEY, advance.escalationMessage)
+      const ceoSessionKey = await getCeoSessionKey()
+      await sendToSession(ceoSessionKey, advance.escalationMessage)
     } catch (err) {
       await prisma.activity.create({
         data: {
           type: 'manager.notify_ceo_failed',
-          actor: 'agent:clawcontrolmanager',
+          actor: MANAGER_ACTIVITY_ACTOR,
+          actorType: 'system',
+          actorAgentId: null,
           entityType: 'work_order',
           entityId: advance.workOrderId,
           summary: 'Failed to notify CEO (escalation)',
@@ -339,12 +447,15 @@ export async function handleAgentCompletion(operationId: string, result: StageRe
     ].join('\n')
 
     try {
-      await sendToSession(CEO_SESSION_KEY, message)
+      const ceoSessionKey = await getCeoSessionKey()
+      await sendToSession(ceoSessionKey, message)
     } catch (err) {
       await prisma.activity.create({
         data: {
           type: 'manager.notify_ceo_failed',
-          actor: 'agent:clawcontrolmanager',
+          actor: MANAGER_ACTIVITY_ACTOR,
+          actorType: 'system',
+          actorAgentId: null,
           entityType: 'work_order',
           entityId: advance.workOrderId,
           summary: 'Failed to notify CEO (completion)',
@@ -359,7 +470,9 @@ export async function handleAgentCompletion(operationId: string, result: StageRe
     await prisma.activity.create({
       data: {
         type: 'manager.notify_ceo',
-        actor: 'agent:clawcontrolmanager',
+        actor: MANAGER_ACTIVITY_ACTOR,
+        actorType: 'system',
+        actorAgentId: null,
         entityType: 'work_order',
         entityId: advance.workOrderId,
         summary: 'Notified CEO: completed',
@@ -375,7 +488,7 @@ export async function handleAgentCompletion(operationId: string, result: StageRe
   if (
     (advance.nextAction === 'continue' || advance.nextAction === 'loop') &&
     advance.nextOperationId &&
-    advance.nextAgentName
+    advance.nextAgentId
   ) {
     const nextOp = await prisma.operation.findUnique({
       where: { id: advance.nextOperationId },
@@ -390,7 +503,7 @@ export async function handleAgentCompletion(operationId: string, result: StageRe
 
     try {
       const spawned = await dispatchToAgent({
-        agentName: advance.nextAgentName,
+        agentId: advance.nextAgentId,
         workOrderId: nextOp.workOrderId,
         operationId: nextOp.id,
         task,
@@ -400,6 +513,8 @@ export async function handleAgentCompletion(operationId: string, result: StageRe
           workflowId: nextOp.workflowId,
           stageIndex: nextOp.workflowStageIndex,
           iterationCount: nextOp.iterationCount,
+          agentId: advance.nextAgentId,
+          agentName: advance.nextAgentName ?? undefined,
         },
       })
 
@@ -411,14 +526,17 @@ export async function handleAgentCompletion(operationId: string, result: StageRe
       await prisma.activity.create({
         data: {
           type: 'workflow.dispatched',
-          actor: 'agent:clawcontrolmanager',
+          actor: MANAGER_ACTIVITY_ACTOR,
+          actorType: 'system',
+          actorAgentId: null,
           entityType: 'operation',
           entityId: nextOp.id,
-          summary: `Dispatched ${advance.nextAgentName} for stage ${Number(nextOp.workflowStageIndex) + 1}`,
+          summary: `Dispatched ${advance.nextAgentName ?? advance.nextAgentId} for stage ${Number(nextOp.workflowStageIndex) + 1}`,
           payloadJson: JSON.stringify({
             workflowId: advance.workflowId,
             stageIndex: nextOp.workflowStageIndex,
-            agent: advance.nextAgentName,
+            agentId: advance.nextAgentId,
+            agentName: advance.nextAgentName ?? null,
             sessionKey: spawned.sessionKey,
             sessionId: spawned.sessionId,
           }),
@@ -435,14 +553,17 @@ export async function handleAgentCompletion(operationId: string, result: StageRe
       await prisma.activity.create({
         data: {
           type: 'workflow.dispatch_failed',
-          actor: 'agent:clawcontrolmanager',
+          actor: MANAGER_ACTIVITY_ACTOR,
+          actorType: 'system',
+          actorAgentId: null,
           entityType: 'operation',
           entityId: nextOp.id,
-          summary: `Dispatch failed for ${advance.nextAgentName}`,
+          summary: `Dispatch failed for ${advance.nextAgentName ?? advance.nextAgentId}`,
           payloadJson: JSON.stringify({
             workflowId: advance.workflowId,
             stageIndex: nextOp.workflowStageIndex,
-            agent: advance.nextAgentName,
+            agentId: advance.nextAgentId,
+            agentName: advance.nextAgentName ?? null,
             error: message,
           }),
         },
@@ -450,4 +571,3 @@ export async function handleAgentCompletion(operationId: string, result: StageRe
     }
   }
 }
-

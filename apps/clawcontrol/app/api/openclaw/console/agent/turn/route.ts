@@ -4,6 +4,7 @@ import { getRepos } from '@/lib/repo'
 import { enforceTypedConfirm } from '@/lib/with-governor'
 import { getConsoleClient, checkGatewayAvailability } from '@/lib/openclaw/console-client'
 import { getRequestActor } from '@/lib/request-actor'
+import { extractAgentIdFromSessionKey } from '@/lib/agent-identity'
 
 // ============================================================================
 // TYPES
@@ -88,7 +89,15 @@ export async function POST(request: NextRequest) {
 
   // Verify agent exists in our database
   const agent = await prisma.agent.findFirst({
-    where: { name: agentId },
+    where: {
+      OR: [
+        { id: agentId },
+        { runtimeAgentId: agentId },
+        { slug: agentId },
+        { name: agentId },
+        { displayName: agentId },
+      ],
+    },
   })
 
   if (!agent) {
@@ -97,6 +106,13 @@ export async function POST(request: NextRequest) {
       { status: 404 }
     )
   }
+
+  const runtimeAgentId =
+    agent.runtimeAgentId?.trim() ||
+    extractAgentIdFromSessionKey(agent.sessionKey) ||
+    agent.slug?.trim() ||
+    agent.id
+  const agentLabel = agent.displayName || agent.name || runtimeAgentId
 
   // Check gateway availability (fail-closed for writes)
   const availability = await checkGatewayAvailability()
@@ -140,6 +156,8 @@ export async function POST(request: NextRequest) {
     commandName: 'console.agent.turn',
     commandArgs: {
       agentId,
+      resolvedAgentId: agent.id,
+      runtimeAgentId,
       sessionKey,
       messagePreview: message.slice(0, 100),
     },
@@ -150,10 +168,11 @@ export async function POST(request: NextRequest) {
     type: 'openclaw.agent.turn',
     actor: actor || 'operator:unknown',
     entityType: 'agent',
-    entityId: agentId,
-    summary: `Spawned turn for ${agentId}`,
+    entityId: agent.id,
+    summary: `Spawned turn for ${agentLabel}`,
     payloadJson: {
       receiptId: receipt.id,
+      runtimeAgentId,
       sessionKey,
       messageLength: message.length,
     },
@@ -168,7 +187,7 @@ export async function POST(request: NextRequest) {
       let fullResponse = ''
 
       try {
-        for await (const chunk of client.sendToAgent(agentId, message)) {
+        for await (const chunk of client.sendToAgent(runtimeAgentId, message)) {
           fullResponse += chunk
 
           // Send SSE event
@@ -196,12 +215,15 @@ export async function POST(request: NextRequest) {
         // Create completion activity
         await repos.activities.create({
           type: 'openclaw.agent.turn.complete',
-          actor: `agent:${agentId}`,
+          actor: `agent:${agent.id}`,
+          actorType: 'agent',
+          actorAgentId: agent.id,
           entityType: 'agent',
-          entityId: agentId,
-          summary: `Turn completed for ${agentId} (${fullResponse.length} chars)`,
+          entityId: agent.id,
+          summary: `Turn completed for ${agentLabel} (${fullResponse.length} chars)`,
           payloadJson: {
             receiptId: receipt.id,
+            runtimeAgentId,
             responseLength: fullResponse.length,
             durationMs,
           },

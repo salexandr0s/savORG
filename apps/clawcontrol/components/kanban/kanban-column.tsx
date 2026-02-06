@@ -22,7 +22,7 @@ interface KanbanColumnProps {
   workOrders: WorkOrderWithOpsDTO[]
   agents: AgentDTO[]
   onCardClick: (wo: WorkOrderWithOpsDTO) => void
-  onAssignToAgent: (id: string, agentName: string) => Promise<void>
+  onAssignToAgent: (id: string, agentId: string) => Promise<void>
   assigningWorkOrderId?: string | null
   dropIndicator?: DropIndicator
   /** Whether this column can accept the currently dragged item */

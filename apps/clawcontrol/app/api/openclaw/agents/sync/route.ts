@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getRepos } from '@/lib/repo'
 import { prisma } from '@/lib/db'
 import { runCommand } from '@clawcontrol/adapters-openclaw'
+import { buildOpenClawSessionKey, inferDefaultAgentWipLimit, slugifyDisplayName } from '@/lib/agent-identity'
 
 type OpenClawAgentConfig = {
   id: string
@@ -17,10 +18,7 @@ function inferDisplayName(agentId: string, cfg: OpenClawAgentConfig): string {
 }
 
 function inferSessionKey(agentId: string): string {
-  // Matches OpenClaw session key convention for agent stores.
-  // main is special because it's typically agent:main:main
-  if (agentId === 'main') return 'agent:main:main'
-  return `agent:${agentId}:${agentId}`
+  return buildOpenClawSessionKey(agentId)
 }
 
 async function getDefaultStationId(): Promise<string> {
@@ -96,16 +94,32 @@ export async function POST() {
     if (!existing) {
       await repos.agents.create({
         name,
+        displayName: name,
+        slug: slugifyDisplayName(name),
+        runtimeAgentId: a.id,
+        kind: 'worker',
+        dispatchEligible: true,
+        nameSource: 'openclaw',
         role: 'agent',
         station: defaultStationId,
         sessionKey,
         capabilities: { [defaultStationId]: true },
-        wipLimit: a.id === 'clawbuild' ? 3 : 2,
+        wipLimit: inferDefaultAgentWipLimit({
+          id: a.id,
+          name,
+          station: defaultStationId,
+        }),
       })
       created++
     } else {
       await repos.agents.update(existing.id, {
-        name,
+        ...(existing.nameSource === 'user'
+          ? {}
+          : {
+              displayName: name,
+              nameSource: 'openclaw',
+            }),
+        runtimeAgentId: a.id,
       })
       updated++
     }

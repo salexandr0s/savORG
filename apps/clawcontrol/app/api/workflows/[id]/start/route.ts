@@ -39,6 +39,7 @@ export async function POST(
     workflowId,
     workOrderId,
     operationId: started.operationId,
+    agentId: started.agentId,
     agentName: started.agentName,
     sessionKey: started.sessionKey,
   })

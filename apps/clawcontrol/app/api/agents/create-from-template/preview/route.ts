@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getTemplateById, previewTemplateRender, renderTemplate } from '@/lib/templates'
 import { generateAgentName, generateSessionKey } from '@/lib/workspace'
+import { buildUniqueSlug, slugifyDisplayName } from '@/lib/agent-identity'
+import { getRepos } from '@/lib/repo'
 
 interface CreateFromTemplatePreviewInput {
   templateId: string
   params: Record<string, unknown>
+  displayName?: string
 }
 
 /**
@@ -63,16 +66,29 @@ export async function POST(request: NextRequest) {
 
   try {
     const role = template.config?.role || template.role
-    const agentName = generateAgentName(role)
+    const agentDisplayName = String(input.displayName ?? generateAgentName(role)).trim()
+    const repos = getRepos()
+    const existingAgents = await repos.agents.list()
+    const agentSlug = buildUniqueSlug(
+      slugifyDisplayName(agentDisplayName),
+      existingAgents.map((agent) => agent.slug)
+    )
     const sessionKeyPattern = template.config?.sessionKeyPattern
     const sessionKey = sessionKeyPattern
-      ? renderTemplate(sessionKeyPattern, { ...params, agentName })
-      : generateSessionKey(agentName)
+      ? renderTemplate(sessionKeyPattern, {
+          ...params,
+          agentName: agentDisplayName, // legacy alias
+          agentDisplayName,
+          agentSlug,
+        })
+      : generateSessionKey(agentSlug)
 
     const mergedParams = {
       ...template.config?.defaults,
       ...params,
-      agentName,
+      agentName: agentDisplayName, // legacy alias
+      agentDisplayName,
+      agentSlug,
       sessionKey,
     }
 
@@ -86,7 +102,9 @@ export async function POST(request: NextRequest) {
           version: template.version,
           role: template.role,
         },
-        agentName,
+        agentDisplayName,
+        agentSlug,
+        agentName: agentDisplayName, // legacy alias
         sessionKey,
         files: renderedFiles.map((f) => ({
           source: f.source,
@@ -104,4 +122,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-

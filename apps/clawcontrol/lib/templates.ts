@@ -383,7 +383,7 @@ export async function createTemplateScaffold(templateId: string, name: string, r
     description: `Template for ${name} agents`,
     version: '1.0.0',
     role: role as AgentTemplateConfig['role'],
-    namingPattern: `claw${role}`,
+    namingPattern: `agent-${role.toLowerCase()}`,
     sessionKeyPattern: `agent:${templateId}:main`,
     paramsSchema: {
       type: 'object',
@@ -398,8 +398,8 @@ export async function createTemplateScaffold(templateId: string, name: string, r
     render: {
       engine: 'mustache',
       targets: [
-        { source: 'SOUL.md', destination: 'workspace/agents/{{agentName}}.soul.md' },
-        { source: 'overlay.md', destination: 'workspace/agents/{{agentName}}.md' },
+        { source: 'SOUL.md', destination: 'workspace/agents/{{agentSlug}}/SOUL.md' },
+        { source: 'overlay.md', destination: 'workspace/agents/{{agentSlug}}.md' },
       ],
     },
     defaults: {},
@@ -503,8 +503,8 @@ export async function previewTemplateRender(
 
   // Get render targets (or defaults)
   const targets = config.render?.targets || [
-    { source: 'SOUL.md', destination: 'workspace/agents/{{agentName}}.soul.md' },
-    { source: 'overlay.md', destination: 'workspace/agents/{{agentName}}.md' },
+    { source: 'SOUL.md', destination: 'workspace/agents/{{agentSlug}}/SOUL.md' },
+    { source: 'overlay.md', destination: 'workspace/agents/{{agentSlug}}.md' },
   ]
 
   for (const target of targets) {

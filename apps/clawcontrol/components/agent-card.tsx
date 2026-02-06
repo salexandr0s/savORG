@@ -17,7 +17,7 @@ interface AgentCardProps {
   onClick?: () => void
   onProvision?: () => void
   onTest?: () => void
-  onEditFile?: (fileName: string) => void
+  onEditFile?: (filePath: string, fileName?: string) => void
 }
 
 const STATUS_TONES: Record<string, StatusTone> = {
@@ -74,7 +74,7 @@ export function AgentCard({
       <div className="flex items-start gap-3 mb-3">
         <AgentAvatar
           agentId={agent.id}
-          name={agent.name}
+          name={agent.displayName}
           size="xl"
           showStatus
           status={agent.status}
@@ -83,7 +83,7 @@ export function AgentCard({
           <div className="flex items-center gap-2 mb-1">
             <div className="flex items-center gap-2 min-w-0">
               <StationIcon stationId={agent.station} />
-              <h3 className="text-sm font-semibold text-fg-0 truncate">{agent.name}</h3>
+              <h3 className="text-sm font-semibold text-fg-0 truncate">{agent.displayName}</h3>
             </div>
             <StatusPill tone={STATUS_TONES[agent.status]} label={agent.status} />
           </div>
@@ -160,7 +160,7 @@ export function AgentCard({
           <button
             onClick={(e) => {
               e.stopPropagation()
-              onEditFile?.(`${agent.name}.soul.md`)
+              onEditFile?.(`/agents/${agent.slug || agent.id}/SOUL.md`, 'SOUL.md')
             }}
             className="flex items-center gap-1 px-2 py-1 text-[10px] bg-bg-3 hover:bg-bd-1 rounded text-fg-2 transition-colors"
           >
@@ -170,7 +170,7 @@ export function AgentCard({
           <button
             onClick={(e) => {
               e.stopPropagation()
-              onEditFile?.(`${agent.name}.md`)
+              onEditFile?.(`/agents/${agent.slug || agent.id}.md`, `${agent.slug || agent.id}.md`)
             }}
             className="flex items-center gap-1 px-2 py-1 text-[10px] bg-bg-3 hover:bg-bd-1 rounded text-fg-2 transition-colors"
           >

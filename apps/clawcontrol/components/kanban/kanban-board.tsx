@@ -40,7 +40,7 @@ interface KanbanBoardProps {
     newState: WorkOrderState,
     typedConfirmText?: string
   ) => Promise<void>
-  onAssignToAgent: (id: string, agentName: string) => Promise<void>
+  onAssignToAgent: (id: string, agentId: string) => Promise<void>
 }
 
 export function KanbanBoard({

@@ -124,7 +124,13 @@ function deriveSessionId(sessionKey: string): string {
  * Session keys often contain the agent name.
  */
 function extractAgentId(sessionKey: string): string {
-  // Common patterns: "agentName:...", "clawBUILD:...", etc.
+  // Canonical pattern: "agent:<runtimeAgentId>:..."
+  const parts = sessionKey.split(':')
+  if (parts[0] === 'agent' && parts[1]) {
+    return parts[1]
+  }
+
+  // Fallback for legacy/non-canonical formats.
   const colonIndex = sessionKey.indexOf(':')
   if (colonIndex > 0) {
     return sessionKey.slice(0, colonIndex)

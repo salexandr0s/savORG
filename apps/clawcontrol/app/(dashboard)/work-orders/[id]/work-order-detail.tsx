@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils'
 import { useProtectedActionTrigger } from '@/components/protected-action-modal'
 import { StationIcon } from '@/components/station-icon'
 import { getValidWorkOrderTransitions, type WorkOrderState } from '@clawcontrol/core'
+import { formatOwnerLabel, ownerTextTone } from '@/lib/agent-identity'
 import {
   ArrowLeft,
   Loader2,
@@ -61,16 +62,8 @@ function parseTagsInput(input: string): string[] {
   return Array.from(new Set(normalized)).slice(0, 20)
 }
 
-function formatOwnerLabel(owner: string): string {
-  if (owner === 'clawcontrolceo') return 'clawcontrol CEO'
-  if (owner === 'user') return 'User'
-  return owner
-}
-
-function getOwnerTextClass(owner: string): string {
-  if (owner === 'clawcontrolceo') return 'text-status-progress'
-  if (owner === 'user') return 'text-fg-0'
-  return 'text-status-info'
+function getOwnerTextClass(owner: string, ownerType?: string): string {
+  return ownerTextTone(owner, ownerType) === 'user' ? 'text-fg-0' : 'text-status-progress'
 }
 
 interface WorkOrderDetailProps {
@@ -82,7 +75,7 @@ export function WorkOrderDetail({ workOrderId }: WorkOrderDetailProps) {
   const [workOrder, setWorkOrder] = useState<WorkOrderWithOpsDTO | null>(null)
   const [operations, setOperations] = useState<OperationDTO[]>([])
   const [activities, setActivities] = useState<ActivityDTO[]>([])
-  const [agentStationsByName, setAgentStationsByName] = useState<Record<string, string>>({})
+  const [agentStationsById, setAgentStationsById] = useState<Record<string, string>>({})
   const [approvals, setApprovals] = useState<ApprovalDTO[]>([])
   const [receipts, setReceipts] = useState<ReceiptDTO[]>([])
   const [tagInput, setTagInput] = useState('')
@@ -109,7 +102,7 @@ export function WorkOrderDetail({ workOrderId }: WorkOrderDetailProps) {
         setActivities(activitiesResult.data)
         setApprovals(approvalsResult.data)
         setReceipts(receiptsResult.data)
-        setAgentStationsByName(Object.fromEntries(agentsResult.data.map((a) => [a.name, a.station])))
+        setAgentStationsById(Object.fromEntries(agentsResult.data.map((a) => [a.id, a.station])))
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load work order')
       } finally {
@@ -139,7 +132,7 @@ export function WorkOrderDetail({ workOrderId }: WorkOrderDetailProps) {
       setActivities(activitiesResult.data)
       setApprovals(approvalsResult.data)
       setReceipts(receiptsResult.data)
-      setAgentStationsByName(Object.fromEntries(agentsResult.data.map((a) => [a.name, a.station])))
+      setAgentStationsById(Object.fromEntries(agentsResult.data.map((a) => [a.id, a.station])))
     } catch (err) {
       console.error('Failed to refresh data:', err)
     }
@@ -389,7 +382,7 @@ export function WorkOrderDetail({ workOrderId }: WorkOrderDetailProps) {
           <ReceiptsTab receipts={receipts} workOrderId={workOrderId} />
         )}
         {activeTab === 'activity' && (
-          <ActivityTab activities={activities} workOrderId={workOrderId} agentStationsByName={agentStationsByName} />
+          <ActivityTab activities={activities} workOrderId={workOrderId} agentStationsById={agentStationsById} />
         )}
       </div>
     </div>
@@ -457,8 +450,8 @@ function OverviewTab({
             <Clock className="w-4 h-4 text-fg-2" />
             <span className="text-xs font-medium text-fg-1">Owner</span>
           </div>
-          <div className={cn('text-lg font-semibold', getOwnerTextClass(workOrder.owner))}>
-            {formatOwnerLabel(workOrder.owner)}
+          <div className={cn('text-lg font-semibold', getOwnerTextClass(workOrder.owner, workOrder.ownerType))}>
+            {formatOwnerLabel(workOrder.owner, workOrder.ownerType, workOrder.ownerLabel)}
           </div>
           <div className="text-xs text-fg-2 mt-1">
             Created {formatRelativeTime(workOrder.createdAt)}
@@ -906,11 +899,11 @@ function OperationsTab({
 function ActivityTab({
   activities,
   workOrderId: _workOrderId,
-  agentStationsByName,
+  agentStationsById,
 }: {
   activities: ActivityDTO[]
   workOrderId: string
-  agentStationsByName: Record<string, string>
+  agentStationsById: Record<string, string>
 }) {
   const typeIcons: Record<string, typeof Activity> = {
     work_order: ClipboardList,
@@ -930,9 +923,11 @@ function ActivityTab({
             {activities.map((activity) => {
               const typeKey = activity.type.split('.')[0]
               const Icon = typeIcons[typeKey] || Activity
-              const isAgentActor = activity.actor.startsWith('agent:')
-              const actorLabel = isAgentActor ? activity.actor.replace('agent:', '') : activity.actor
-              const stationId = isAgentActor ? agentStationsByName[actorLabel] : undefined
+              const isAgentActor = activity.actorType === 'agent'
+              const actorLabel = activity.actorLabel || activity.actor
+              const stationId = isAgentActor && activity.actorAgentId
+                ? agentStationsById[activity.actorAgentId]
+                : undefined
 
               return (
                 <div
@@ -955,7 +950,7 @@ function ActivityTab({
                     <p className="text-sm text-fg-0">{activity.summary}</p>
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-xs text-fg-2">{activity.type}</span>
-                      {activity.actor !== 'system' && (
+                      {activity.actorType !== 'system' && (
                         <>
                           <span className="text-fg-3">•</span>
                           <span className="text-xs text-status-progress font-mono inline-flex items-center gap-1.5">
