@@ -98,7 +98,7 @@ export function SendForm({ onSend, disabled, placeholder }: SendFormProps) {
               ? placeholder.includes('Select a session')
                 ? 'Select a session from the list to send messages'
                 : 'Sending disabled while gateway unavailable'
-              : 'Press Ctrl+Enter to send • Requires CONFIRM'
+              : 'Press Ctrl+Enter to send'
             }
           </span>
           {!disabled && (

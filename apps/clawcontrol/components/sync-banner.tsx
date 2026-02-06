@@ -10,6 +10,15 @@ export function SyncBanner() {
 
   if (loading || !status) return null
 
+  if (!gatewayLoading && !isOnline) {
+    return (
+      <div className="mb-3 flex items-center gap-2 rounded-[var(--radius-md)] border border-status-danger bg-status-danger/10 px-3 py-2 text-xs text-status-danger">
+        <AlertTriangle className="h-4 w-4 shrink-0" />
+        <span>OpenClaw gateway is offline. Data may be stale.</span>
+      </div>
+    )
+  }
+
   const bootError = status.bootSync?.agents.error || status.bootSync?.sessions.error
 
   if (bootError) {
@@ -26,15 +35,6 @@ export function SyncBanner() {
           <RefreshCw className={syncing ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />
           {syncing ? 'Syncing...' : 'Retry'}
         </button>
-      </div>
-    )
-  }
-
-  if (!gatewayLoading && !isOnline) {
-    return (
-      <div className="mb-3 flex items-center gap-2 rounded-[var(--radius-md)] border border-status-danger bg-status-danger/10 px-3 py-2 text-xs text-status-danger">
-        <AlertTriangle className="h-4 w-4 shrink-0" />
-        <span>OpenClaw gateway is offline. Data may be stale.</span>
       </div>
     )
   }

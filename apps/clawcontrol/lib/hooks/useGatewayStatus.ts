@@ -23,9 +23,13 @@ interface UseGatewayStatusOptions {
 }
 
 async function fetchGatewayStatus(): Promise<GatewayStatusPayload | null> {
-  const res = await fetch('/api/openclaw/gateway/status', { cache: 'no-store' })
-  if (!res.ok) return null
-  return res.json()
+  try {
+    const res = await fetch('/api/openclaw/gateway/status', { cache: 'no-store' })
+    if (!res.ok) return null
+    return res.json()
+  } catch {
+    return null
+  }
 }
 
 export function useGatewayStatus(options: UseGatewayStatusOptions = {}) {
@@ -35,11 +39,22 @@ export function useGatewayStatus(options: UseGatewayStatusOptions = {}) {
   const [loading, setLoading] = useState(true)
 
   const refresh = useCallback(async () => {
-    const current = await fetchGatewayStatus()
-    if (current) {
-      setStatus(current)
+    try {
+      const current = await fetchGatewayStatus()
+      if (current) {
+        setStatus(current)
+      } else {
+        setStatus({
+          status: 'unavailable',
+          latencyMs: 0,
+          timestamp: new Date().toISOString(),
+          error: 'Failed to fetch gateway status',
+          data: null,
+        })
+      }
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [])
 
   useEffect(() => {

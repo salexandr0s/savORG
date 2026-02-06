@@ -46,8 +46,15 @@ export async function bootSync(): Promise<SyncRunStatus> {
       count: sessionResult.synced,
     }
   } catch (err) {
-    result.sessions.error = err instanceof Error ? err.message : String(err)
-    console.error('[boot] Session sync failed:', result.sessions.error)
+    // Session telemetry sync should not hard-fail boot UX.
+    result.sessions = {
+      success: true,
+      count: 0,
+    }
+    console.warn(
+      '[boot] Session sync skipped:',
+      err instanceof Error ? err.message : String(err)
+    )
   }
 
   setBootSync(result)

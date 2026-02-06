@@ -123,7 +123,7 @@ export function PromptInput({
 
       <div className="mt-2 flex items-center justify-between text-[10px] text-fg-3">
         <span>
-          Enter to send • Shift+Enter newline • Requires <span className="font-mono">CONFIRM</span>
+          Enter to send • Shift+Enter newline
         </span>
         {showCharCount && (
           <span className="font-mono text-fg-3/70">

@@ -166,29 +166,28 @@ export function ChatPanel({
       )}
 
       {/* Messages area */}
-      <ChatContainer className="flex-1 min-h-0" contentClassName={showCenteredState ? 'min-h-full' : undefined}>
+      <ChatContainer
+        className="flex-1 min-h-0"
+        contentClassName={showCenteredState ? 'min-h-full grid place-items-center' : undefined}
+      >
         {noSession ? (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <Terminal className="w-12 h-12 text-fg-3 mx-auto mb-3" />
-              <p className="text-fg-2">Select a session to send messages</p>
-              <p className="text-xs text-fg-3 mt-2 max-w-[220px]">
-                Choose a session from the list on the left to start sending messages.
-              </p>
-            </div>
+          <div className="text-center">
+            <Terminal className="w-12 h-12 text-fg-3 mx-auto mb-3" />
+            <p className="text-fg-2">Select a session to send messages</p>
+            <p className="text-xs text-fg-3 mt-2 max-w-[220px]">
+              Choose a session from the list on the left to start sending messages.
+            </p>
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <Terminal className="w-8 h-8 text-fg-3 mx-auto mb-2" />
-              <p className="text-sm text-fg-2">No messages yet</p>
-              <p className="text-xs text-fg-3 mt-1">
-                Send a message to this session
-              </p>
-              <p className="text-[10px] text-fg-3/70 mt-2 max-w-[200px]">
-                Messages are sent via WebSocket and injected into the session context.
-              </p>
-            </div>
+          <div className="text-center">
+            <Terminal className="w-8 h-8 text-fg-3 mx-auto mb-2" />
+            <p className="text-sm text-fg-2">No messages yet</p>
+            <p className="text-xs text-fg-3 mt-1">
+              Send a message to this session
+            </p>
+            <p className="text-[10px] text-fg-3/70 mt-2 max-w-[200px]">
+              Messages are sent via WebSocket and injected into the session context.
+            </p>
           </div>
         ) : (
           messages.map((message) => {
