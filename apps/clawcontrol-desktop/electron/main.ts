@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { ensurePackagedDatabaseSchema } from './schema-bootstrap'
 import { getAssetPath, isDev } from './utils'
 
 let mainWindow: BrowserWindow | null = null
@@ -196,7 +197,7 @@ function getPackagedServerDir(): string {
   return path.join(process.resourcesPath, 'server')
 }
 
-function spawnServer(): ChildProcess {
+async function spawnServer(): Promise<ChildProcess> {
   if (app.isPackaged) {
     const serverDir = getPackagedServerDir()
     const entryCandidates = [
@@ -212,7 +213,9 @@ function spawnServer(): ChildProcess {
 
     const cwd = path.dirname(entry)
     const workspaceRoot = path.join(app.getPath('userData'), 'workspace')
+    const databasePath = path.join(app.getPath('userData'), 'clawcontrol.db')
     fs.mkdirSync(workspaceRoot, { recursive: true })
+    await ensurePackagedDatabaseSchema(serverDir, databasePath)
 
     const proc = spawn(process.execPath, [entry], {
       cwd,
@@ -227,7 +230,7 @@ function spawnServer(): ChildProcess {
         PORT: String(SERVER_PORT),
         OPENCLAW_WORKSPACE: workspaceRoot,
         CLAWCONTROL_WORKSPACE_ROOT: workspaceRoot,
-        DATABASE_URL: `file:${path.join(app.getPath('userData'), 'clawcontrol.db')}`,
+        DATABASE_URL: `file:${databasePath}`,
       },
     })
 
@@ -331,7 +334,7 @@ async function startApp(): Promise<void> {
     const loadingWindow = createLoadingWindow()
 
     try {
-      serverProcess = spawnServer()
+      serverProcess = await spawnServer()
       didSpawnServer = true
     } catch (err) {
       loadingWindow.close()

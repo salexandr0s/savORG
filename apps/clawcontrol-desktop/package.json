@@ -1,6 +1,6 @@
 {
   "name": "clawcontrol-desktop",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "ClawControl Desktop - Local-first multi-agent orchestration platform",
   "author": "ClawControl",
   "private": true,
@@ -45,6 +45,13 @@
       {
         "from": "../clawcontrol/public",
         "to": "server/apps/clawcontrol/public",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../clawcontrol/prisma/migrations",
+        "to": "server/apps/clawcontrol/prisma/migrations",
         "filter": [
           "**/*"
         ]

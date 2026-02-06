@@ -30,6 +30,9 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npm run build:mac --workspace=clawcontrol-desktop
 
+      - name: Smoke test packaged runtime
+        run: node apps/clawcontrol-desktop/scripts/verify-packaged-runtime.mjs
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -62,17 +65,10 @@ jobs:
           body: |
             ## Installation
 
-            ### Desktop App (Electron, requires backend)
+            ### Desktop App (Electron, self-contained)
             1. Download the macOS artifact from this release (DMG/ZIP)
             2. Install it (drag to Applications if prompted)
-            3. **Important**: The desktop app requires the backend to be running:
-               ```bash
-               git clone https://github.com/${{ github.repository }}.git
-               cd clawcontrol
-               npm install && npm run db:migrate && npm run build --workspace=clawcontrol
-               npm run start --workspace=clawcontrol
-               ```
-            4. Open ClawControl (first time: right-click → Open to bypass Gatekeeper)
+            3. Open ClawControl (first time: right-click → Open to bypass Gatekeeper)
 
             ### Web Only (no Xcode required)
             ```bash
