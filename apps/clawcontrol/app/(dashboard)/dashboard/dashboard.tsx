@@ -26,6 +26,8 @@ import {
   CheckSquare,
   LayoutDashboard,
   RefreshCw,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react'
 
 // ============================================================================
@@ -233,6 +235,7 @@ export function Dashboard({
   const [usageBreakdown, setUsageBreakdown] = useState<UsageBreakdownApi['data'] | null>(null)
   const [usageLoading, setUsageLoading] = useState(true)
   const [usageSyncing, setUsageSyncing] = useState(false)
+  const [showDailyTable, setShowDailyTable] = useState(false)
 
   useEffect(() => {
     const loadUsage = async () => {
@@ -397,7 +400,25 @@ export function Dashboard({
               </div>
 
               <div>
-                <div className="text-xs text-fg-2 mb-2">Daily usage (tokens)</div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs text-fg-2">Daily usage (tokens)</div>
+                  <button
+                    onClick={() => setShowDailyTable((prev) => !prev)}
+                    className="inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded border border-bd-0 bg-bg-3 text-fg-2 hover:text-fg-1"
+                  >
+                    {showDailyTable ? (
+                      <>
+                        <ChevronUp className="w-3 h-3" />
+                        Hide table
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="w-3 h-3" />
+                        Show table
+                      </>
+                    )}
+                  </button>
+                </div>
                 {usageSeries.length === 0 ? (
                   <div className="text-xs text-fg-3">No usage data yet.</div>
                 ) : (
@@ -412,28 +433,48 @@ export function Dashboard({
                         return (
                           <div
                             key={point.bucketStart}
-                            className="flex-1 bg-status-info rounded-sm hover:opacity-90 transition-opacity"
-                            style={{ height: `${heightPct}%` }}
-                            title={`${new Date(point.bucketStart).toLocaleDateString()} · ${formatCompactNumber(point.totalTokens)} tokens · ${formatUsdFromMicros(point.totalCostMicros)}`}
-                          />
+                            className="relative flex-1 group/bar"
+                          >
+                            <div
+                              className="w-full bg-status-info rounded-sm hover:opacity-90 transition-opacity"
+                              style={{ height: `${heightPct}%` }}
+                            />
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-10 hidden group-hover/bar:block pointer-events-none">
+                              <div className="rounded border border-bd-0 bg-bg-2 px-2 py-1 shadow-lg min-w-[140px]">
+                                <div className="text-[10px] text-fg-2">
+                                  {new Date(point.bucketStart).toLocaleDateString()}
+                                </div>
+                                <div className="text-[11px] text-fg-1 font-mono">
+                                  Tokens: {formatCompactNumber(point.totalTokens)}
+                                </div>
+                                <div className="text-[11px] text-fg-1 font-mono">
+                                  Cost: {formatUsdFromMicros(point.totalCostMicros)}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
                         )
                       })}
                     </div>
 
-                    <div className="rounded border border-bd-0 overflow-hidden">
-                      <div className="grid grid-cols-[120px_1fr_120px] px-3 py-1.5 text-[11px] text-fg-2 bg-bg-3">
-                        <span>Date</span>
-                        <span>Tokens</span>
-                        <span className="text-right">Cost</span>
-                      </div>
-                      {dailyRows.map((row) => (
-                        <div key={`day-${row.bucketStart}`} className="grid grid-cols-[120px_1fr_120px] px-3 py-1.5 text-xs border-t border-bd-0/60">
-                          <span className="text-fg-2">{new Date(row.bucketStart).toLocaleDateString()}</span>
-                          <span className="text-fg-1 font-mono">{formatCompactNumber(row.totalTokens)}</span>
-                          <span className="text-fg-2 font-mono text-right">{formatUsdFromMicros(row.totalCostMicros)}</span>
+                    {showDailyTable && (
+                      <div className="rounded border border-bd-0 overflow-hidden">
+                        <div className="grid grid-cols-[120px_1fr_120px] px-3 py-1.5 text-[11px] text-fg-2 bg-bg-3 border-b border-bd-0">
+                          <span>Date</span>
+                          <span>Tokens</span>
+                          <span className="text-right">Cost</span>
                         </div>
-                      ))}
-                    </div>
+                        <div className="divide-y divide-bd-0">
+                          {dailyRows.map((row) => (
+                            <div key={`day-${row.bucketStart}`} className="grid grid-cols-[120px_1fr_120px] px-3 py-1.5 text-xs">
+                              <span className="text-fg-2">{new Date(row.bucketStart).toLocaleDateString()}</span>
+                              <span className="text-fg-1 font-mono">{formatCompactNumber(row.totalTokens)}</span>
+                              <span className="text-fg-2 font-mono text-right">{formatUsdFromMicros(row.totalCostMicros)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
