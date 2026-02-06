@@ -1,0 +1,13 @@
+{{AGENT_ID}}:
+  name: "{{ROLE_CAPITALIZED}}"
+  role: "{{ROLE}}"
+  emoji: "{{EMOJI}}"
+  model_tier: "{{MODEL_TIER}}"
+  system_prompt: "./agents/{{ROLE}}.md"
+  soul_file: "./agents/{{ROLE}}/SOUL.md"
+  heartbeat_file: "./agents/{{ROLE}}/HEARTBEAT.md"
+  permissions:
+{{PERMISSIONS_BLOCK}}
+  receives_from:
+{{RECEIVES_FROM_BLOCK}}
+  reports_to: "{{REPORTS_TO}}"

@@ -1,5 +1,5 @@
 # ============================================================================
-# CLAWCONTROL — Multi-Agent System Configuration
+# {{PREFIX_UPPER}} — Multi-Agent System Configuration
 # ============================================================================
 # Owner: Alexandros
 # Platform: OpenClaw Gateway
@@ -7,10 +7,10 @@
 # ============================================================================
 
 system:
-  name: "clawcontrol"
+  name: "{{SYSTEM_SLUG}}"
   version: "1.0.0"
   description: "Multi-agent orchestration system for VitaGrowth and personal projects"
-  owner: "Alexandros"
+  owner: "{{OWNER}}"
   platform: "openclaw"
 
 # ============================================================================
@@ -22,7 +22,7 @@ defaults:
   retry_attempts: 2
   timeout_seconds: 120
   iteration_cap: 2              # max review loops before escalating
-  escalation_target: "clawcontrolceo"
+  escalation_target: "{{PREFIX}}ceo"
 
 # ============================================================================
 # MODEL REGISTRY
@@ -77,7 +77,7 @@ agents:
   # --------------------------------------------------------------------------
   # LAYER 0 — INPUT SCREENING (runs on EVERY external message)
   # --------------------------------------------------------------------------
-  clawcontrolguard:
+  {{PREFIX}}guard:
     name: "Guard"
     role: "input_screener"
     description: >
@@ -101,7 +101,7 @@ agents:
       can_delegate: false
     receives_from:
       - "external_input"
-    reports_to: "clawcontrolmanager"
+    reports_to: "{{PREFIX}}manager"
     triggers:
       - type: "every_external_message"
         priority: 0              # runs FIRST before anything else
@@ -109,7 +109,7 @@ agents:
       enabled: true
       storage: "./quarantine/"
       alert_on_quarantine: true
-      alert_target: "clawcontrolceo"
+      alert_target: "{{PREFIX}}ceo"
     escalation:
       suspicious_threshold: 0.6
       escalation_model: "claude-sonnet-4-5"
@@ -117,7 +117,7 @@ agents:
   # --------------------------------------------------------------------------
   # LAYER 1 — STRATEGIC (user-facing)
   # --------------------------------------------------------------------------
-  clawcontrolceo:
+  {{PREFIX}}ceo:
     name: "CEO"
     role: "strategic_interface"
     description: >
@@ -137,15 +137,15 @@ agents:
       can_delegate: true
     receives_from:
       - "alexandros"
-      - "clawcontrolmanager"
+      - "{{PREFIX}}manager"
     reports_to: "alexandros"
     delegates_to:
-      - "clawcontrolmanager"
+      - "{{PREFIX}}manager"
 
   # --------------------------------------------------------------------------
   # LAYER 2 — ORCHESTRATION
   # --------------------------------------------------------------------------
-  clawcontrolmanager:
+  {{PREFIX}}manager:
     name: "Manager"
     role: "orchestrator"
     description: >
@@ -164,19 +164,19 @@ agents:
       can_send_messages: false
       can_delegate: true
     receives_from:
-      - "clawcontrolceo"
-      - "clawcontrolguard"
-    reports_to: "clawcontrolceo"
+      - "{{PREFIX}}ceo"
+      - "{{PREFIX}}guard"
+    reports_to: "{{PREFIX}}ceo"
     delegates_to:
-      - "clawcontrolresearch"
-      - "clawcontrolplan"
-      - "clawcontrolplanreview"
-      - "clawcontrolbuild"
-      - "clawcontrolbuildreview"
-      - "clawcontrolui"
-      - "clawcontroluireview"
-      - "clawcontrolops"
-      - "clawcontrolsecurity"
+      - "{{PREFIX}}research"
+      - "{{PREFIX}}plan"
+      - "{{PREFIX}}planreview"
+      - "{{PREFIX}}build"
+      - "{{PREFIX}}buildreview"
+      - "{{PREFIX}}ui"
+      - "{{PREFIX}}uireview"
+      - "{{PREFIX}}ops"
+      - "{{PREFIX}}security"
     state_tracking:
       enabled: true
       track_fields:
@@ -190,7 +190,7 @@ agents:
   # LAYER 3 — WORKERS
   # --------------------------------------------------------------------------
 
-  clawcontrolresearch:
+  {{PREFIX}}research:
     name: "Research"
     role: "researcher"
     description: "Deep research — APIs, prior art, docs. Read-only."
@@ -207,10 +207,10 @@ agents:
       can_delegate: false
       can_web_search: true
       can_read_files: true
-    receives_from: ["clawcontrolmanager"]
-    reports_to: "clawcontrolmanager"
+    receives_from: ["{{PREFIX}}manager"]
+    reports_to: "{{PREFIX}}manager"
 
-  clawcontrolplan:
+  {{PREFIX}}plan:
     name: "Plan"
     role: "planner"
     description: "Writes structured implementation plans. Never code."
@@ -225,10 +225,10 @@ agents:
       can_modify_files: false
       can_send_messages: false
       can_delegate: false
-    receives_from: ["clawcontrolmanager"]
-    reports_to: "clawcontrolmanager"
+    receives_from: ["{{PREFIX}}manager"]
+    reports_to: "{{PREFIX}}manager"
 
-  clawcontrolplanreview:
+  {{PREFIX}}planreview:
     name: "PlanReview"
     role: "plan_reviewer"
     description: "Challenges plans. Finds gaps, edge cases, scope creep."
@@ -243,11 +243,11 @@ agents:
       can_modify_files: false
       can_send_messages: false
       can_delegate: false
-    receives_from: ["clawcontrolmanager"]
-    reports_to: "clawcontrolmanager"
+    receives_from: ["{{PREFIX}}manager"]
+    reports_to: "{{PREFIX}}manager"
     actions: ["approve", "reject_with_feedback", "request_research"]
 
-  clawcontrolbuild:
+  {{PREFIX}}build:
     name: "Build"
     role: "builder"
     description: "Implements code/configs per approved plans only."
@@ -262,12 +262,12 @@ agents:
       can_modify_files: true
       can_send_messages: false
       can_delegate: false
-    receives_from: ["clawcontrolmanager"]
-    reports_to: "clawcontrolmanager"
+    receives_from: ["{{PREFIX}}manager"]
+    reports_to: "{{PREFIX}}manager"
     constraints:
       requires_approved_plan: true
 
-  clawcontrolbuildreview:
+  {{PREFIX}}buildreview:
     name: "BuildReview"
     role: "build_reviewer"
     description: "QA builds. Review + run allowlisted tests/linters."
@@ -282,15 +282,15 @@ agents:
       can_modify_files: false    # never edit source
       can_send_messages: false
       can_delegate: false
-    receives_from: ["clawcontrolmanager"]
-    reports_to: "clawcontrolmanager"
+    receives_from: ["{{PREFIX}}manager"]
+    reports_to: "{{PREFIX}}manager"
     actions: ["approve", "reject_with_feedback"]
     exec_allowlist:
       - "npm test"
       - "npm run typecheck"
       - "npm run lint"
 
-  clawcontrolui:
+  {{PREFIX}}ui:
     name: "UI"
     role: "ui_builder"
     description: "Frontend implementation. ui-skills constraints enforced."
@@ -305,13 +305,13 @@ agents:
       can_modify_files: true
       can_send_messages: false
       can_delegate: false
-    receives_from: ["clawcontrolmanager"]
-    reports_to: "clawcontrolmanager"
+    receives_from: ["{{PREFIX}}manager"]
+    reports_to: "{{PREFIX}}manager"
     constraints:
       requires_approved_plan: true
       ui_skills_enforced: true
 
-  clawcontroluireview:
+  {{PREFIX}}uireview:
     name: "UIReview"
     role: "ui_reviewer"
     description: "Reviews UI against a11y, responsive, and motion checklist."
@@ -326,11 +326,11 @@ agents:
       can_modify_files: false
       can_send_messages: false
       can_delegate: false
-    receives_from: ["clawcontrolmanager"]
-    reports_to: "clawcontrolmanager"
+    receives_from: ["{{PREFIX}}manager"]
+    reports_to: "{{PREFIX}}manager"
     actions: ["approve", "reject_with_feedback"]
 
-  clawcontrolops:
+  {{PREFIX}}ops:
     name: "Ops"
     role: "operations"
     description: "Infra, deploy, crons, monitoring. Needs approved plan."
@@ -345,12 +345,12 @@ agents:
       can_modify_files: true
       can_send_messages: false
       can_delegate: false
-    receives_from: ["clawcontrolmanager"]
-    reports_to: "clawcontrolmanager"
+    receives_from: ["{{PREFIX}}manager"]
+    reports_to: "{{PREFIX}}manager"
     constraints:
       requires_approved_plan: true
 
-  clawcontrolsecurity:
+  {{PREFIX}}security:
     name: "Security"
     role: "security_auditor"
     description: "Security audits. Has VETO power on any build."
@@ -366,8 +366,8 @@ agents:
       can_send_messages: false
       can_delegate: false
       can_veto: true
-    receives_from: ["clawcontrolmanager"]
-    reports_to: "clawcontrolmanager"
+    receives_from: ["{{PREFIX}}manager"]
+    reports_to: "{{PREFIX}}manager"
     actions: ["approve", "veto_with_findings", "flag_warning"]
 
 # ============================================================================
@@ -378,115 +378,115 @@ workflows:
   feature_request:
     description: "Standard feature implementation"
     stages:
-      - agent: "clawcontrolresearch"
+      - agent: "{{PREFIX}}research"
         condition: "unknowns_exist"
         optional: true
-      - agent: "clawcontrolplan"
-      - agent: "clawcontrolplanreview"
-        loop_target: "clawcontrolplan"
+      - agent: "{{PREFIX}}plan"
+      - agent: "{{PREFIX}}planreview"
+        loop_target: "{{PREFIX}}plan"
         max_iterations: 2
-      - agent: "clawcontrolbuild"
-      - agent: "clawcontrolbuildreview"
-        loop_target: "clawcontrolbuild"
+      - agent: "{{PREFIX}}build"
+      - agent: "{{PREFIX}}buildreview"
+        loop_target: "{{PREFIX}}build"
         max_iterations: 2
-      - agent: "clawcontrolsecurity"
-        loop_target: "clawcontrolbuild"
+      - agent: "{{PREFIX}}security"
+        loop_target: "{{PREFIX}}build"
         max_iterations: 1
         can_veto: true
-      - agent: "clawcontrolops"
+      - agent: "{{PREFIX}}ops"
         condition: "deployment_needed"
         optional: true
 
   ui_feature:
     description: "UI/frontend feature"
     stages:
-      - agent: "clawcontrolresearch"
+      - agent: "{{PREFIX}}research"
         condition: "unknowns_exist"
         optional: true
-      - agent: "clawcontrolplan"
-      - agent: "clawcontrolplanreview"
-        loop_target: "clawcontrolplan"
+      - agent: "{{PREFIX}}plan"
+      - agent: "{{PREFIX}}planreview"
+        loop_target: "{{PREFIX}}plan"
         max_iterations: 2
-      - agent: "clawcontrolui"
-      - agent: "clawcontroluireview"
-        loop_target: "clawcontrolui"
+      - agent: "{{PREFIX}}ui"
+      - agent: "{{PREFIX}}uireview"
+        loop_target: "{{PREFIX}}ui"
         max_iterations: 2
-      - agent: "clawcontrolsecurity"
-        loop_target: "clawcontrolui"
+      - agent: "{{PREFIX}}security"
+        loop_target: "{{PREFIX}}ui"
         max_iterations: 1
         can_veto: true
-      - agent: "clawcontrolops"
+      - agent: "{{PREFIX}}ops"
         condition: "deployment_needed"
         optional: true
 
   full_stack_feature:
     description: "Feature with backend + UI"
     stages:
-      - agent: "clawcontrolresearch"
+      - agent: "{{PREFIX}}research"
         condition: "unknowns_exist"
         optional: true
-      - agent: "clawcontrolplan"
-      - agent: "clawcontrolplanreview"
-        loop_target: "clawcontrolplan"
+      - agent: "{{PREFIX}}plan"
+      - agent: "{{PREFIX}}planreview"
+        loop_target: "{{PREFIX}}plan"
         max_iterations: 2
-      - agent: "clawcontrolbuild"
-      - agent: "clawcontrolbuildreview"
-        loop_target: "clawcontrolbuild"
+      - agent: "{{PREFIX}}build"
+      - agent: "{{PREFIX}}buildreview"
+        loop_target: "{{PREFIX}}build"
         max_iterations: 2
-      - agent: "clawcontrolui"
-      - agent: "clawcontroluireview"
-        loop_target: "clawcontrolui"
+      - agent: "{{PREFIX}}ui"
+      - agent: "{{PREFIX}}uireview"
+        loop_target: "{{PREFIX}}ui"
         max_iterations: 2
-      - agent: "clawcontrolsecurity"
+      - agent: "{{PREFIX}}security"
         can_veto: true
-      - agent: "clawcontrolops"
+      - agent: "{{PREFIX}}ops"
         condition: "deployment_needed"
         optional: true
 
   research_only:
     description: "Pure research / question answering"
     stages:
-      - agent: "clawcontrolresearch"
+      - agent: "{{PREFIX}}research"
 
   security_audit:
     description: "Standalone security audit"
     stages:
-      - agent: "clawcontrolsecurity"
-      - agent: "clawcontrolbuildreview"
+      - agent: "{{PREFIX}}security"
+      - agent: "{{PREFIX}}buildreview"
         condition: "code_review_needed"
         optional: true
 
   ops_task:
     description: "Infrastructure / ops changes"
     stages:
-      - agent: "clawcontrolplan"
-      - agent: "clawcontrolplanreview"
-        loop_target: "clawcontrolplan"
+      - agent: "{{PREFIX}}plan"
+      - agent: "{{PREFIX}}planreview"
+        loop_target: "{{PREFIX}}plan"
         max_iterations: 2
-      - agent: "clawcontrolops"
-      - agent: "clawcontrolsecurity"
+      - agent: "{{PREFIX}}ops"
+      - agent: "{{PREFIX}}security"
         can_veto: true
 
   bug_fix:
     description: "Bug fix — abbreviated workflow"
     stages:
-      - agent: "clawcontrolresearch"
+      - agent: "{{PREFIX}}research"
         condition: "unknowns_exist"
         optional: true
-      - agent: "clawcontrolbuild"
-      - agent: "clawcontrolbuildreview"
-        loop_target: "clawcontrolbuild"
+      - agent: "{{PREFIX}}build"
+      - agent: "{{PREFIX}}buildreview"
+        loop_target: "{{PREFIX}}build"
         max_iterations: 2
-      - agent: "clawcontrolsecurity"
+      - agent: "{{PREFIX}}security"
         condition: "security_relevant"
         optional: true
 
   hotfix:
     description: "Emergency hotfix — minimal gates"
     stages:
-      - agent: "clawcontrolbuild"
-      - agent: "clawcontrolsecurity"
-      - agent: "clawcontrolops"
+      - agent: "{{PREFIX}}build"
+      - agent: "{{PREFIX}}security"
+      - agent: "{{PREFIX}}ops"
 
 # ============================================================================
 # INPUT PIPELINE
@@ -495,16 +495,16 @@ input_pipeline:
   external:
     description: "Emails, webhooks, API calls from unknown senders"
     flow:
-      - agent: "clawcontrolguard"
+      - agent: "{{PREFIX}}guard"
         action: "screen"
-      - on_clean: "clawcontrolmanager"
-      - on_suspicious: "quarantine + alert clawcontrolceo"
-      - on_malicious: "quarantine + block + alert clawcontrolceo"
+      - on_clean: "{{PREFIX}}manager"
+      - on_suspicious: "quarantine + alert {{PREFIX}}ceo"
+      - on_malicious: "quarantine + block + alert {{PREFIX}}ceo"
 
   internal:
     description: "Messages from Alexandros via OpenClaw"
     flow:
-      - agent: "clawcontrolceo"
+      - agent: "{{PREFIX}}ceo"
 
 # ============================================================================
 # ESCALATION RULES

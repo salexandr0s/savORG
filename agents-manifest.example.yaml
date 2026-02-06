@@ -1,0 +1,15 @@
+prefix: "acme"
+owner: "John Doe"
+
+roles:
+  build:
+    emoji: "🔨"
+    model_tier: "tier_1_reasoning"
+  security:
+    enabled: true
+  guard:
+    enabled: false
+
+heartbeat:
+  global:
+    - "Check deployment pipeline status"

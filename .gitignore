@@ -73,3 +73,13 @@ agents/
 AGENTS.md
 SOUL.md
 docs/
+
+# Keep template system sources tracked
+!templates/
+!templates/**
+!scripts/init-agents.sh
+!scripts/init-agents.js
+!agents-manifest.example.yaml
+!docs/
+docs/**
+!docs/agent-templates.md

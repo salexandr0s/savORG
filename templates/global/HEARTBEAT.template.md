@@ -6,4 +6,4 @@ Otherwise reply exactly `HEARTBEAT_OK`.
 Quiet hours: 23:00–08:00 Europe/Zurich. Only report urgent items.
 
 ## Custom Checks
-- None.
+{{GLOBAL_HEARTBEAT_CHECKS}}

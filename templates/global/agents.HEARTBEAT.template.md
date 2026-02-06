@@ -1,4 +1,4 @@
-# HEARTBEAT.md — Default
+# HEARTBEAT.md — Agent Default
 
 If an agent-specific `agents/<agent>/HEARTBEAT.md` exists, follow it.
 Otherwise reply exactly `HEARTBEAT_OK`.
@@ -6,4 +6,4 @@ Otherwise reply exactly `HEARTBEAT_OK`.
 Quiet hours: 23:00–08:00 Europe/Zurich. Only report urgent items.
 
 ## Custom Checks
-- None.
+{{GLOBAL_HEARTBEAT_CHECKS}}

@@ -15,6 +15,7 @@
     "lint": "turbo lint",
     "test": "turbo test",
     "typecheck": "turbo typecheck --concurrency=1",
+    "init:agents": "bash ./scripts/init-agents.sh",
     "db:migrate": "npm run db:migrate --workspace=clawcontrol",
     "db:push": "npm run db:push --workspace=clawcontrol",
     "db:studio": "npm run db:studio --workspace=clawcontrol",
