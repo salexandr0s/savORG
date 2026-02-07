@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo, type CSSProperties } from 'react'
 import { PageHeader, PageSection, EmptyState } from '@clawcontrol/ui'
 import { CanonicalTable, type Column } from '@/components/ui/canonical-table'
 import { StatusPill } from '@/components/ui/status-pill'
@@ -9,13 +9,8 @@ import { AvailabilityBadge } from '@/components/availability-badge'
 import { getModelShortName } from '@/lib/models'
 import {
   addUtcDays,
-  addUtcMonths,
-  addUtcYears,
   estimateRunsForUtcDate,
   estimateRunsInUtcRange,
-  listUtcDaysInRange,
-  monthGridCells,
-  rangeForCalendarView,
   startOfUtcDay,
   type CalendarView,
   type CronCalendarJob,
@@ -34,6 +29,7 @@ import {
   Search,
   Save,
   CalendarDays,
+  List,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react'
@@ -159,6 +155,55 @@ type DayBucket = {
     job: CronJobRow
     runs: number
   }>
+}
+
+type CalendarMode = 'list' | 'calendar'
+
+type TimelineEvent = {
+  key: string
+  job: CronJobRow
+  runs: number
+  minuteOfDay: number
+}
+
+type LaidOutTimelineEvent = TimelineEvent & {
+  lane: number
+  laneCount: number
+  clusterId: number
+  topPercent: number
+  heightPercent: number
+}
+
+type TimelineOverflowBadge = {
+  key: string
+  clusterId: number
+  hiddenCount: number
+  topPercent: number
+  primaryJobId: string
+}
+
+type TimelineRenderData = {
+  visibleEvents: LaidOutTimelineEvent[]
+  overflowBadges: TimelineOverflowBadge[]
+}
+
+const TIMELINE_HEIGHT_PX = 1280
+const TIMELINE_WEEK_MIN_WIDTH_PX = 1080
+const TIMELINE_DAY_MIN_WIDTH_PX = 700
+const TIMELINE_EVENT_MIN_HEIGHT_PERCENT = 1.2
+const TIMELINE_WEEK_MAX_COLUMNS = 3
+const TIMELINE_DAY_MAX_COLUMNS = 4
+
+const TIMELINE_EVENT_CHROME: CSSProperties = {
+  borderColor: 'rgb(59 130 246 / 0.46)',
+  background: 'linear-gradient(135deg, rgb(59 130 246 / 0.26) 0%, rgb(37 99 235 / 0.14) 100%)',
+  boxShadow: '0 8px 18px rgb(2 12 24 / 0.42)',
+}
+
+const TIMELINE_OVERFLOW_CHROME: CSSProperties = {
+  borderColor: 'rgb(71 85 105 / 0.62)',
+  background: 'linear-gradient(135deg, rgb(30 41 59 / 0.9) 0%, rgb(15 23 42 / 0.82) 100%)',
+  boxShadow: '0 8px 16px rgb(2 6 23 / 0.45)',
 }
 
 function formatDurationShort(ms: number): string {
@@ -335,10 +380,6 @@ function toCalendarJob(job: CronJobRow): CronCalendarJob {
   }
 }
 
-function utcDayKey(date: Date): string {
-  return date.toISOString().slice(0, 10)
-}
-
 function formatTokenCount(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return '—'
   if (value === 0) return '0'
@@ -354,8 +395,8 @@ function formatUsdMicros(value: number | null): string {
   return Intl.NumberFormat(undefined, {
     style: 'currency',
     currency: 'USD',
-    minimumFractionDigits: value / 1_000_000 >= 1 ? 2 : 4,
-    maximumFractionDigits: 4,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(value / 1_000_000)
 }
 
@@ -387,12 +428,407 @@ function isSameLocalDay(a: Date, b: Date): boolean {
   )
 }
 
-function formatLocalTime(value: Date | null | undefined): string {
-  if (!value) return '—'
-  return value.toLocaleTimeString(undefined, {
+function formatMinuteLabel(day: Date, minuteOfDay: number): string {
+  const safeMinute = Math.max(0, Math.min(1439, Math.round(minuteOfDay)))
+  const hours = Math.floor(safeMinute / 60)
+  const minutes = safeMinute % 60
+  return new Date(
+    day.getFullYear(),
+    day.getMonth(),
+    day.getDate(),
+    hours,
+    minutes
+  ).toLocaleTimeString(undefined, {
     hour: 'numeric',
     minute: '2-digit',
   })
+}
+
+function startOfLocalDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
+}
+
+function endOfLocalDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999)
+}
+
+function addLocalDays(date: Date, delta: number): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + delta)
+}
+
+function addLocalMonths(date: Date, delta: number): Date {
+  return new Date(date.getFullYear(), date.getMonth() + delta, 1)
+}
+
+function addLocalYears(date: Date, delta: number): Date {
+  return new Date(date.getFullYear() + delta, date.getMonth(), 1)
+}
+
+function startOfLocalWeek(date: Date): Date {
+  const day = startOfLocalDay(date)
+  return addLocalDays(day, -day.getDay())
+}
+
+function rangeForLocalCalendarView(anchor: Date, view: CalendarView): { start: Date; end: Date } {
+  if (view === 'day') {
+    const start = startOfLocalDay(anchor)
+    return { start, end: endOfLocalDay(start) }
+  }
+
+  if (view === 'week') {
+    const start = startOfLocalWeek(anchor)
+    return { start, end: endOfLocalDay(addLocalDays(start, 6)) }
+  }
+
+  if (view === 'month') {
+    const start = new Date(anchor.getFullYear(), anchor.getMonth(), 1)
+    const end = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0, 23, 59, 59, 999)
+    return { start, end }
+  }
+
+  const start = new Date(anchor.getFullYear(), 0, 1)
+  const end = new Date(anchor.getFullYear(), 11, 31, 23, 59, 59, 999)
+  return { start, end }
+}
+
+function listLocalDaysInRange(start: Date, end: Date): Date[] {
+  const out: Date[] = []
+  let cursor = startOfLocalDay(start)
+  const endDay = startOfLocalDay(end)
+  while (cursor.getTime() <= endDay.getTime()) {
+    out.push(cursor)
+    cursor = addLocalDays(cursor, 1)
+  }
+  return out
+}
+
+function localDayKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function localDayToUtcDay(date: Date): Date {
+  return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+}
+
+function monthGridCellsLocal(anchorMonth: Date): Array<{ date: Date | null; inMonth: boolean }> {
+  const start = new Date(anchorMonth.getFullYear(), anchorMonth.getMonth(), 1)
+  const end = new Date(anchorMonth.getFullYear(), anchorMonth.getMonth() + 1, 0)
+  const leading = start.getDay()
+  const total = end.getDate()
+
+  const cells: Array<{ date: Date | null; inMonth: boolean }> = []
+  for (let i = 0; i < leading; i++) cells.push({ date: null, inMonth: false })
+  for (let day = 1; day <= total; day++) {
+    cells.push({
+      date: new Date(anchorMonth.getFullYear(), anchorMonth.getMonth(), day),
+      inMonth: true,
+    })
+  }
+  while (cells.length % 7 !== 0) cells.push({ date: null, inMonth: false })
+  return cells
+}
+
+type ParsedUiCronField = {
+  any: boolean
+  values: number[]
+}
+
+type ParsedUiCronExpr = {
+  minute: ParsedUiCronField
+  hour: ParsedUiCronField
+  dayOfMonth: ParsedUiCronField
+  month: ParsedUiCronField
+  dayOfWeek: ParsedUiCronField
+}
+
+function rangeValues(start: number, end: number, step: number): number[] {
+  const values: number[] = []
+  for (let value = start; value <= end; value += step) values.push(value)
+  return values
+}
+
+function normalizeCronValue(value: number, normalizeDow: boolean): number {
+  if (!normalizeDow) return value
+  return value === 7 ? 0 : value
+}
+
+function parseUiCronField(rawField: string, min: number, max: number, normalizeDow = false): ParsedUiCronField | null {
+  const field = rawField.trim()
+  if (!field) return null
+
+  if (field === '*') {
+    return { any: true, values: rangeValues(min, max, 1) }
+  }
+
+  const values = new Set<number>()
+  const segments = field.split(',').map((segment) => segment.trim()).filter(Boolean)
+  if (segments.length === 0) return null
+
+  for (const segment of segments) {
+    const [base, stepRaw] = segment.split('/')
+    const step = stepRaw ? Number(stepRaw) : 1
+    if (!Number.isInteger(step) || step <= 0) return null
+
+    if (base === '*') {
+      for (const value of rangeValues(min, max, step)) {
+        values.add(normalizeCronValue(value, normalizeDow))
+      }
+      continue
+    }
+
+    const rangeMatch = base.match(/^(\d+)-(\d+)$/)
+    if (rangeMatch) {
+      const start = Number(rangeMatch[1])
+      const end = Number(rangeMatch[2])
+      if (!Number.isInteger(start) || !Number.isInteger(end) || start > end) return null
+      if (start < min || end > max) return null
+      for (const value of rangeValues(start, end, step)) {
+        values.add(normalizeCronValue(value, normalizeDow))
+      }
+      continue
+    }
+
+    const value = Number(base)
+    if (!Number.isInteger(value)) return null
+    if (value < min || value > max) return null
+    values.add(normalizeCronValue(value, normalizeDow))
+  }
+
+  const ordered = Array.from(values).sort((a, b) => a - b)
+  if (ordered.length === 0) return null
+  return { any: false, values: ordered }
+}
+
+function parseUiCronExpression(expr: string | undefined): ParsedUiCronExpr | null {
+  if (!expr || !expr.trim()) return null
+  const parts = expr.trim().replace(/\s+/g, ' ').split(' ')
+  if (parts.length !== 5) return null
+
+  const minute = parseUiCronField(parts[0], 0, 59)
+  const hour = parseUiCronField(parts[1], 0, 23)
+  const dayOfMonth = parseUiCronField(parts[2], 1, 31)
+  const month = parseUiCronField(parts[3], 1, 12)
+  const dayOfWeek = parseUiCronField(parts[4], 0, 7, true)
+  if (!minute || !hour || !dayOfMonth || !month || !dayOfWeek) return null
+
+  return { minute, hour, dayOfMonth, month, dayOfWeek }
+}
+
+function matchesCronField(field: ParsedUiCronField, value: number): boolean {
+  if (field.any) return true
+  return field.values.includes(value)
+}
+
+function minuteOfDayForLocalTimestamp(ms: number): number {
+  const date = new Date(ms)
+  return date.getHours() * 60 + date.getMinutes()
+}
+
+function representativeMinuteForLocalDay(job: CronJobRow, day: Date, nowMs: number): number | null {
+  const schedule = job.raw.schedule
+  const startMs = startOfLocalDay(day).getTime()
+  const endMs = endOfLocalDay(day).getTime()
+  const isToday = isSameLocalDay(day, new Date(nowMs))
+
+  if (schedule.kind === 'at') {
+    const atMs =
+      typeof schedule.atMs === 'number'
+        ? schedule.atMs
+        : (job.raw.state?.nextRunAtMs ?? job.raw.state?.lastRunAtMs ?? null)
+    if (atMs === null || atMs < startMs || atMs > endMs) return null
+    return minuteOfDayForLocalTimestamp(atMs)
+  }
+
+  if (schedule.kind === 'every' && typeof schedule.everyMs === 'number' && schedule.everyMs > 0) {
+    const intervalMs = schedule.everyMs
+    const refMs =
+      job.raw.state?.nextRunAtMs
+      ?? (typeof job.raw.state?.lastRunAtMs === 'number' ? job.raw.state.lastRunAtMs + intervalMs : startMs)
+
+    const targetMs = isToday ? Math.max(startMs, nowMs) : startMs
+    const multiplier = Math.ceil((targetMs - refMs) / intervalMs)
+    let runMs = refMs + multiplier * intervalMs
+
+    if (runMs > endMs) {
+      const firstMultiplier = Math.ceil((startMs - refMs) / intervalMs)
+      runMs = refMs + firstMultiplier * intervalMs
+    }
+
+    if (runMs < startMs || runMs > endMs) return null
+    return minuteOfDayForLocalTimestamp(runMs)
+  }
+
+  if (schedule.kind === 'cron') {
+    const parsed = parseUiCronExpression(schedule.expr)
+    if (!parsed) return null
+
+    const month = day.getMonth() + 1
+    const dayOfMonth = day.getDate()
+    const dayOfWeek = day.getDay()
+
+    if (!matchesCronField(parsed.month, month)) return null
+
+    const domMatch = matchesCronField(parsed.dayOfMonth, dayOfMonth)
+    const dowMatch = matchesCronField(parsed.dayOfWeek, dayOfWeek)
+    const dayMatches =
+      parsed.dayOfMonth.any && parsed.dayOfWeek.any
+        ? true
+        : parsed.dayOfMonth.any
+          ? dowMatch
+        : parsed.dayOfWeek.any
+            ? domMatch
+            : (domMatch || dowMatch)
+    if (!dayMatches) return null
+
+    const values: number[] = []
+    for (const hour of parsed.hour.values) {
+      for (const minute of parsed.minute.values) {
+        values.push(hour * 60 + minute)
+      }
+    }
+    if (values.length === 0) return null
+
+    const sorted = values.sort((a, b) => a - b)
+    if (!isToday) return sorted[0]
+
+    const nowMinute = new Date(nowMs).getHours() * 60 + new Date(nowMs).getMinutes()
+    const upcoming = sorted.find((minute) => minute >= nowMinute)
+    return upcoming ?? sorted[sorted.length - 1]
+  }
+
+  return null
+}
+
+function buildTimelineEventsForLocalDay(day: Date, dayJobs: DayBucket['jobs'], nowMs: number): TimelineEvent[] {
+  const events: TimelineEvent[] = []
+  const dayKey = localDayKey(day)
+
+  for (const { job, runs } of dayJobs) {
+    if (runs <= 0) continue
+
+    let minuteOfDay = representativeMinuteForLocalDay(job, day, nowMs)
+    if (minuteOfDay === null && job.nextRunAt && isSameLocalDay(job.nextRunAt, day)) {
+      minuteOfDay = job.nextRunAt.getHours() * 60 + job.nextRunAt.getMinutes()
+    }
+    if (minuteOfDay === null) {
+      minuteOfDay = 9 * 60
+    }
+
+    events.push({
+      key: `${job.id}:${dayKey}:${minuteOfDay}`,
+      job,
+      runs,
+      minuteOfDay,
+    })
+  }
+
+  return events.sort((a, b) => {
+    if (a.minuteOfDay !== b.minuteOfDay) return a.minuteOfDay - b.minuteOfDay
+    if (a.runs !== b.runs) return b.runs - a.runs
+    return a.job.name.localeCompare(b.job.name)
+  })
+}
+
+function layoutTimelineEvents(
+  events: TimelineEvent[],
+  eventDurationMinutes = 12
+): LaidOutTimelineEvent[] {
+  if (events.length === 0) return []
+
+  type ActiveEvent = { endMinute: number; lane: number; index: number }
+  type WorkingEvent = {
+    event: TimelineEvent
+    startMinute: number
+    endMinute: number
+    lane: number
+    clusterId: number
+  }
+
+  const sorted = [...events].sort((a, b) => a.minuteOfDay - b.minuteOfDay || a.job.name.localeCompare(b.job.name))
+  const working: WorkingEvent[] = []
+  const active: ActiveEvent[] = []
+  const clusterLaneCount = new Map<number, number>()
+  let clusterId = -1
+
+  for (const event of sorted) {
+    const startMinute = Math.max(0, Math.min(1439, event.minuteOfDay))
+    const endMinute = Math.min(1440, startMinute + Math.max(15, eventDurationMinutes))
+
+    for (let i = active.length - 1; i >= 0; i--) {
+      if (active[i].endMinute <= startMinute) active.splice(i, 1)
+    }
+
+    if (active.length === 0) clusterId += 1
+
+    const usedLanes = new Set(active.map((item) => item.lane))
+    let lane = 0
+    while (usedLanes.has(lane)) lane += 1
+
+    const index = working.push({
+      event,
+      startMinute,
+      endMinute,
+      lane,
+      clusterId,
+    }) - 1
+
+    active.push({ endMinute, lane, index })
+    const laneCount = Math.max(clusterLaneCount.get(clusterId) ?? 0, lane + 1)
+    clusterLaneCount.set(clusterId, laneCount)
+  }
+
+  return working.map((item) => {
+    const laneCount = Math.max(1, clusterLaneCount.get(item.clusterId) ?? 1)
+    return {
+      ...item.event,
+      lane: item.lane,
+      laneCount,
+      clusterId: item.clusterId,
+      topPercent: (item.startMinute / 1440) * 100,
+      heightPercent: Math.max((item.endMinute - item.startMinute) / 1440 * 100, TIMELINE_EVENT_MIN_HEIGHT_PERCENT),
+    }
+  })
+}
+
+function timelineEventDurationForCount(eventCount: number): number {
+  if (eventCount >= 48) return 8
+  if (eventCount >= 32) return 10
+  if (eventCount >= 20) return 12
+  if (eventCount >= 10) return 14
+  return 18
+}
+
+function buildTimelineRenderData(events: LaidOutTimelineEvent[], maxColumns: number): TimelineRenderData {
+  const visibleEvents: LaidOutTimelineEvent[] = []
+  const overflowByCluster = new Map<number, TimelineOverflowBadge>()
+
+  for (const event of events) {
+    if (event.lane < maxColumns) {
+      visibleEvents.push(event)
+      continue
+    }
+
+    const existing = overflowByCluster.get(event.clusterId)
+    if (existing) {
+      existing.hiddenCount += 1
+      if (event.topPercent < existing.topPercent) {
+        existing.topPercent = event.topPercent
+        existing.primaryJobId = event.job.id
+      }
+      continue
+    }
+
+    overflowByCluster.set(event.clusterId, {
+      key: `overflow:${event.key}`,
+      clusterId: event.clusterId,
+      hiddenCount: 1,
+      topPercent: event.topPercent,
+      primaryJobId: event.job.id,
+    })
+  }
+
+  const overflowBadges = [...overflowByCluster.values()].sort((a, b) => a.topPercent - b.topPercent)
+  return { visibleEvents, overflowBadges }
 }
 
 function buildAgentTokenMap(agents: AgentModelRow[]): Map<string, AgentModelRow> {
@@ -417,107 +853,18 @@ function buildAgentTokenMap(agents: AgentModelRow[]): Map<string, AgentModelRow>
   return map
 }
 
-const cronColumns: Column<CronJobRow>[] = [
-  {
-    key: 'status',
-    header: '',
-    width: '24px',
-    render: (row) => (
-      <span className={cn(
-        'w-2 h-2 rounded-full inline-block',
-        row.enabled ? 'bg-status-success' : 'bg-fg-3'
-      )} />
-    ),
-  },
-  {
-    key: 'name',
-    header: 'Job',
-    width: '200px',
-    render: (row) => <span className="text-fg-0 font-medium">{row.name}</span>,
-  },
-  {
-    key: 'schedule',
-    header: 'Schedule',
-    width: '140px',
-    render: (row) => <span className="text-fg-1">{row.schedule}</span>,
-  },
-  {
-    key: 'lastStatus',
-    header: 'Status',
-    width: '80px',
-    render: (row) => {
-      if (!row.lastStatus) return <span className="text-fg-3">—</span>
-      const toneMap: Record<string, StatusTone> = {
-        success: 'success',
-        failed: 'danger',
-        running: 'progress',
-      }
-      return <StatusPill tone={toneMap[row.lastStatus] ?? 'muted'} label={row.lastStatus} />
-    },
-  },
-  {
-    key: 'nextRunAt',
-    header: 'Next',
-    width: '80px',
-    align: 'right',
-    render: (row) => (
-      <span className="text-fg-2 text-sm">
-        {row.nextRunAt ? formatRelativeTime(row.nextRunAt) : '—'}
-      </span>
-    ),
-  },
-]
-
-const cronHealthColumns: Column<CronHealthJob>[] = [
-  {
-    key: 'name',
-    header: 'Job',
-    render: (row) => <span className="text-fg-0">{row.name}</span>,
-  },
-  {
-    key: 'successRatePct',
-    header: 'Success',
-    width: '90px',
-    align: 'right',
-    render: (row) => <span className="font-mono text-fg-1">{row.successRatePct.toFixed(1)}%</span>,
-  },
-  {
-    key: 'failureCount',
-    header: 'Fails',
-    width: '70px',
-    align: 'right',
-    render: (row) => (
-      <span className={cn('font-mono', row.failureCount > 0 ? 'text-status-danger' : 'text-fg-2')}>
-        {row.failureCount}
-      </span>
-    ),
-  },
-  {
-    key: 'flakinessScore',
-    header: 'Flaky',
-    width: '80px',
-    align: 'right',
-    render: (row) => (
-      <span className={cn('font-mono', row.isFlaky ? 'text-status-warning' : 'text-fg-2')}>
-        {(row.flakinessScore * 100).toFixed(0)}%
-      </span>
-    ),
-  },
-  {
-    key: 'lastFailureReason',
-    header: 'Last failure reason',
-    render: (row) => <span className="text-xs text-fg-2">{row.lastFailureReason || '—'}</span>,
-  },
-]
+function formatPercent(value: number | null | undefined, digits = 1): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—'
+  return `${value.toFixed(digits)}%`
+}
 
 export function CronClient() {
   const [availability, setAvailability] = useState<OpenClawResponse<unknown> | null>(null)
   const [cronJobs, setCronJobs] = useState<CronJobRow[]>([])
   const [healthReport, setHealthReport] = useState<CronHealthReport | null>(null)
-  const [healthSort, setHealthSort] = useState<'failures' | 'success' | 'flaky'>('failures')
+  const [calendarMode, setCalendarMode] = useState<CalendarMode>('list')
   const [calendarView, setCalendarView] = useState<CalendarView>('month')
-  const [calendarAnchor, setCalendarAnchor] = useState<Date>(() => startOfUtcDay(new Date()))
-  const [selectedCalendarDay, setSelectedCalendarDay] = useState<string | null>(null)
+  const [calendarAnchor, setCalendarAnchor] = useState<Date>(() => startOfLocalDay(new Date()))
   const [searchText, setSearchText] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -529,6 +876,128 @@ export function CronClient() {
   const [defaultModelId, setDefaultModelId] = useState<string | null>(null)
   const [nowMs, setNowMs] = useState(() => Date.now())
   const selectedJob = selectedId ? cronJobs.find((c) => c.id === selectedId) : undefined
+
+  const healthByJobKey = useMemo(() => {
+    const map = new Map<string, CronHealthJob>()
+    for (const row of healthReport?.jobs ?? []) {
+      if (row.id) map.set(`id:${row.id}`, row)
+      if (row.name?.trim()) map.set(`name:${row.name.trim().toLowerCase()}`, row)
+    }
+    return map
+  }, [healthReport?.jobs])
+
+  const healthForJob = useCallback((job: CronJobRow): CronHealthJob | null => {
+    const byId = healthByJobKey.get(`id:${job.id}`)
+    if (byId) return byId
+    return healthByJobKey.get(`name:${job.name.trim().toLowerCase()}`) ?? null
+  }, [healthByJobKey])
+
+  const selectedHealth = useMemo(
+    () => (selectedJob ? healthForJob(selectedJob) : null),
+    [healthForJob, selectedJob]
+  )
+
+  const cronColumns = useMemo<Column<CronJobRow>[]>(() => [
+    {
+      key: 'status',
+      header: '',
+      width: '24px',
+      render: (row) => (
+        <span className={cn(
+          'w-2 h-2 rounded-full inline-block',
+          row.enabled ? 'bg-status-success' : 'bg-fg-3'
+        )} />
+      ),
+    },
+    {
+      key: 'name',
+      header: 'Job',
+      width: '220px',
+      render: (row) => (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation()
+            setSelectedId(row.id)
+          }}
+          className="text-fg-0 font-medium hover:text-status-info hover:underline underline-offset-2 text-left"
+        >
+          {row.name}
+        </button>
+      ),
+    },
+    {
+      key: 'schedule',
+      header: 'Schedule',
+      width: '170px',
+      render: (row) => <span className="text-fg-1">{row.schedule}</span>,
+    },
+    {
+      key: 'healthSuccess',
+      header: 'Success',
+      width: '80px',
+      align: 'right',
+      render: (row) => {
+        const health = healthForJob(row)
+        return <span className="font-mono text-fg-1">{formatPercent(health?.successRatePct)}</span>
+      },
+    },
+    {
+      key: 'healthFailures',
+      header: 'Fails',
+      width: '70px',
+      align: 'right',
+      render: (row) => {
+        const health = healthForJob(row)
+        if (!health) return <span className="font-mono text-fg-2">—</span>
+        return (
+          <span className={cn('font-mono', health.failureCount > 0 ? 'text-status-danger' : 'text-fg-2')}>
+            {health.failureCount}
+          </span>
+        )
+      },
+    },
+    {
+      key: 'healthFlaky',
+      header: 'Flaky',
+      width: '80px',
+      align: 'right',
+      render: (row) => {
+        const health = healthForJob(row)
+        if (!health) return <span className="font-mono text-fg-2">—</span>
+        return (
+          <span className={cn('font-mono', health.isFlaky ? 'text-status-warning' : 'text-fg-2')}>
+            {formatPercent(health.flakinessScore * 100, 0)}
+          </span>
+        )
+      },
+    },
+    {
+      key: 'lastStatus',
+      header: 'Status',
+      width: '90px',
+      render: (row) => {
+        if (!row.lastStatus) return <span className="text-fg-3">—</span>
+        const toneMap: Record<string, StatusTone> = {
+          success: 'success',
+          failed: 'danger',
+          running: 'progress',
+        }
+        return <StatusPill tone={toneMap[row.lastStatus] ?? 'muted'} label={row.lastStatus} />
+      },
+    },
+    {
+      key: 'nextRunAt',
+      header: 'Next',
+      width: '80px',
+      align: 'right',
+      render: (row) => (
+        <span className="text-fg-2 text-sm">
+          {row.nextRunAt ? formatRelativeTime(row.nextRunAt) : '—'}
+        </span>
+      ),
+    },
+  ], [healthForJob])
   const userTimeZone = useMemo(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local',
     []
@@ -560,45 +1029,32 @@ export function CronClient() {
     })
   }, [cronJobs, searchText])
 
-  const sortedHealthJobs = useMemo(() => {
-    const rows = [...(healthReport?.jobs ?? [])]
-    if (healthSort === 'success') {
-      rows.sort((a, b) => b.successRatePct - a.successRatePct)
-      return rows
-    }
-    if (healthSort === 'flaky') {
-      rows.sort((a, b) => b.flakinessScore - a.flakinessScore)
-      return rows
-    }
-    rows.sort((a, b) => b.failureCount - a.failureCount)
-    return rows
-  }, [healthReport?.jobs, healthSort])
-
   const calendarJobs = useMemo(
     () => filteredCronJobs.map((job) => ({ row: job, schedule: toCalendarJob(job) })),
     [filteredCronJobs]
   )
 
   const calendarRange = useMemo(
-    () => rangeForCalendarView(calendarAnchor, calendarView),
+    () => rangeForLocalCalendarView(calendarAnchor, calendarView),
     [calendarAnchor, calendarView]
   )
 
   const dayBuckets = useMemo<DayBucket[]>(() => {
-    const days = listUtcDaysInRange(calendarRange.start, calendarRange.end)
+    const days = listLocalDaysInRange(calendarRange.start, calendarRange.end)
 
     return days.map((day) => {
+      const utcDay = localDayToUtcDay(day)
       const jobs = calendarJobs
         .map(({ row, schedule }) => ({
           job: row,
-          runs: estimateRunsForUtcDate(schedule, day),
+          runs: estimateRunsForUtcDate(schedule, utcDay),
         }))
         .filter((item) => item.runs > 0)
         .sort((a, b) => b.runs - a.runs || a.job.name.localeCompare(b.job.name))
 
       return {
         day,
-        dayKey: utcDayKey(day),
+        dayKey: localDayKey(day),
         totalRuns: jobs.reduce((sum, item) => sum + item.runs, 0),
         jobs,
       }
@@ -611,25 +1067,41 @@ export function CronClient() {
     return out
   }, [dayBuckets])
 
+  const timelineEventsByDayKey = useMemo(() => {
+    const out = new Map<string, LaidOutTimelineEvent[]>()
+    for (const bucket of dayBuckets) {
+      const timelineEvents = buildTimelineEventsForLocalDay(bucket.day, bucket.jobs, nowMs)
+      out.set(
+        bucket.dayKey,
+        layoutTimelineEvents(timelineEvents, timelineEventDurationForCount(timelineEvents.length))
+      )
+    }
+    return out
+  }, [dayBuckets, nowMs])
+
   const yearBuckets = useMemo(() => {
     if (calendarView !== 'year') return []
 
-    const year = calendarAnchor.getUTCFullYear()
+    const year = calendarAnchor.getFullYear()
     return Array.from({ length: 12 }, (_, monthIndex) => {
-      const start = new Date(Date.UTC(year, monthIndex, 1))
-      const end = new Date(Date.UTC(year, monthIndex + 1, 0, 23, 59, 59, 999))
+      const start = new Date(year, monthIndex, 1)
+      const end = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999)
+      const monthDays = listLocalDaysInRange(start, end)
 
       const jobs = calendarJobs
         .map(({ row, schedule }) => ({
           job: row,
-          runs: estimateRunsInUtcRange(schedule, start, end),
+          runs: monthDays.reduce(
+            (sum, day) => sum + estimateRunsForUtcDate(schedule, localDayToUtcDay(day)),
+            0
+          ),
         }))
         .filter((item) => item.runs > 0)
         .sort((a, b) => b.runs - a.runs || a.job.name.localeCompare(b.job.name))
 
       return {
         monthIndex,
-        monthLabel: start.toLocaleDateString(undefined, { month: 'short', timeZone: 'UTC' }),
+        monthLabel: start.toLocaleDateString(undefined, { month: 'short' }),
         start,
         totalRuns: jobs.reduce((sum, item) => sum + item.runs, 0),
         jobs,
@@ -882,16 +1354,6 @@ export function CronClient() {
     return () => clearInterval(interval)
   }, [])
 
-  useEffect(() => {
-    if (calendarView === 'year') {
-      setSelectedCalendarDay(null)
-      return
-    }
-
-    if (selectedCalendarDay && dayBucketsByKey.has(selectedCalendarDay)) return
-    setSelectedCalendarDay(dayBuckets[0]?.dayKey ?? null)
-  }, [calendarView, dayBuckets, dayBucketsByKey, selectedCalendarDay])
-
   const handleJobCreated = async () => {
     await refreshJobs()
     setCreateModalOpen(false)
@@ -902,7 +1364,6 @@ export function CronClient() {
     setSelectedId(undefined)
   }
 
-  const selectedDayBucket = selectedCalendarDay ? dayBucketsByKey.get(selectedCalendarDay) : null
   const nowLocalLabel = useMemo(
     () =>
       new Date(nowMs).toLocaleString(undefined, {
@@ -919,34 +1380,49 @@ export function CronClient() {
         month: 'long',
         day: 'numeric',
         year: 'numeric',
-        timeZone: 'UTC',
       })
     }
 
     if (calendarView === 'week') {
-      const end = addUtcDays(rangeForCalendarView(calendarAnchor, 'week').start, 6)
-      return `${rangeForCalendarView(calendarAnchor, 'week').start.toLocaleDateString(undefined, {
+      const weekStart = startOfLocalWeek(calendarAnchor)
+      const end = addLocalDays(weekStart, 6)
+      return `${weekStart.toLocaleDateString(undefined, {
         month: 'short',
         day: 'numeric',
-        timeZone: 'UTC',
-      })} – ${end.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}`
+      })} – ${end.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
     }
 
     if (calendarView === 'month') {
-      return calendarAnchor.toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' })
+      return calendarAnchor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
     }
 
-    return calendarAnchor.toLocaleDateString(undefined, { year: 'numeric', timeZone: 'UTC' })
+    return calendarAnchor.toLocaleDateString(undefined, { year: 'numeric' })
   }, [calendarAnchor, calendarView])
 
   const shiftCalendar = useCallback((delta: number) => {
     setCalendarAnchor((prev) => {
-      if (calendarView === 'day') return addUtcDays(prev, delta)
-      if (calendarView === 'week') return addUtcDays(prev, delta * 7)
-      if (calendarView === 'month') return addUtcMonths(prev, delta)
-      return addUtcYears(prev, delta)
+      if (calendarView === 'day') return addLocalDays(prev, delta)
+      if (calendarView === 'week') return addLocalDays(prev, delta * 7)
+      if (calendarView === 'month') return addLocalMonths(prev, delta)
+      return addLocalYears(prev, delta)
     })
   }, [calendarView])
+
+  const monthCells = useMemo(() => {
+    if (calendarView !== 'month') return []
+    return monthGridCellsLocal(new Date(calendarAnchor.getFullYear(), calendarAnchor.getMonth(), 1))
+  }, [calendarAnchor, calendarView])
+
+  const dayViewDate = useMemo(
+    () => (calendarView === 'day' ? startOfLocalDay(calendarAnchor) : null),
+    [calendarAnchor, calendarView]
+  )
+
+  const weekViewDays = useMemo(() => {
+    if (calendarView !== 'week') return []
+    const weekStart = startOfLocalWeek(calendarAnchor)
+    return listLocalDaysInRange(weekStart, addLocalDays(weekStart, 6))
+  }, [calendarAnchor, calendarView])
 
   return (
     <>
@@ -973,6 +1449,29 @@ export function CronClient() {
           }
           actions={
             <>
+              <div className="flex items-center bg-bg-3 border border-bd-0 rounded-[var(--radius-md)] overflow-hidden">
+                <button
+                  onClick={() => setCalendarMode('list')}
+                  className={cn(
+                    'px-2 py-1.5 text-xs flex items-center gap-1.5',
+                    calendarMode === 'list' ? 'bg-bg-2 text-fg-0' : 'text-fg-2'
+                  )}
+                >
+                  <List className="w-3.5 h-3.5" />
+                  List
+                </button>
+                <button
+                  onClick={() => setCalendarMode('calendar')}
+                  className={cn(
+                    'px-2 py-1.5 text-xs flex items-center gap-1.5',
+                    calendarMode === 'calendar' ? 'bg-bg-2 text-fg-0' : 'text-fg-2'
+                  )}
+                >
+                  <CalendarDays className="w-3.5 h-3.5" />
+                  Calendar
+                </button>
+              </div>
+
               <button
                 onClick={refreshJobs}
                 disabled={isLoading}
@@ -1009,36 +1508,12 @@ export function CronClient() {
         </div>
 
         {healthReport && (
-          <>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <HealthCard label="Avg success" value={`${healthReport.summary.avgSuccessRatePct.toFixed(1)}%`} />
-              <HealthCard label="Failures (7d)" value={String(healthReport.summary.totalFailures)} />
-              <HealthCard label="Jobs w/ failures" value={String(healthReport.summary.jobsWithFailures)} />
-              <HealthCard label="Flaky jobs" value={String(healthReport.summary.flakyJobs)} />
-            </div>
-
-            <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-bd-0 overflow-hidden">
-              <div className="px-4 py-3 border-b border-bd-0 flex items-center justify-between">
-                <h2 className="text-sm font-medium text-fg-0">Reliability</h2>
-                <select
-                  value={healthSort}
-                  onChange={(e) => setHealthSort(e.target.value as 'failures' | 'success' | 'flaky')}
-                  className="text-xs px-2 py-1 bg-bg-3 border border-bd-0 rounded text-fg-1"
-                >
-                  <option value="failures">Sort: failures</option>
-                  <option value="success">Sort: success</option>
-                  <option value="flaky">Sort: flaky</option>
-                </select>
-              </div>
-              <CanonicalTable
-                columns={cronHealthColumns}
-                rows={sortedHealthJobs}
-                rowKey={(row) => row.id}
-                density="compact"
-                emptyState="No cron health data"
-              />
-            </div>
-          </>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <HealthCard label="Avg success" value={`${healthReport.summary.avgSuccessRatePct.toFixed(1)}%`} />
+            <HealthCard label="Failures (7d)" value={String(healthReport.summary.totalFailures)} />
+            <HealthCard label="Jobs w/ failures" value={String(healthReport.summary.jobsWithFailures)} />
+            <HealthCard label="Flaky jobs" value={String(healthReport.summary.flakyJobs)} />
+          </div>
         )}
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1064,231 +1539,399 @@ export function CronClient() {
           </div>
         )}
 
-        <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-bd-0 overflow-hidden">
-          <CanonicalTable
-            columns={cronColumns}
-            rows={filteredCronJobs}
-            rowKey={(row) => row.id}
-            onRowClick={(row) => setSelectedId(row.id)}
-            selectedKey={selectedId}
-            density="compact"
-            emptyState={
-              <EmptyState
-                icon={<Clock className="w-8 h-8" />}
-                title={searchText.trim() ? 'No matching jobs' : 'No scheduled jobs'}
-                description={searchText.trim() ? 'Try a different search term.' : 'Sync with OpenClaw to import jobs.'}
-              />
-            }
-          />
-        </div>
-
-        <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-bd-0 overflow-hidden p-4 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <CalendarDays className="w-4 h-4 text-fg-1" />
-              <h2 className="text-sm font-medium text-fg-0">Schedule Calendar</h2>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center bg-bg-3 border border-bd-0 rounded-[var(--radius-md)] overflow-hidden">
-                {(['day', 'week', 'month', 'year'] as const).map((view) => (
-                  <button
-                    key={view}
-                    onClick={() => setCalendarView(view)}
-                    className={cn(
-                      'px-2 py-1.5 text-xs capitalize',
-                      calendarView === view ? 'bg-bg-2 text-fg-0' : 'text-fg-2 hover:text-fg-1'
-                    )}
-                  >
-                    {view}
-                  </button>
-                ))}
+        {calendarMode === 'list' ? (
+          <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-bd-0 overflow-hidden">
+            <CanonicalTable
+              columns={cronColumns}
+              rows={filteredCronJobs}
+              rowKey={(row) => row.id}
+              onRowClick={(row) => setSelectedId(row.id)}
+              selectedKey={selectedId}
+              density="compact"
+              emptyState={
+                <EmptyState
+                  icon={<Clock className="w-8 h-8" />}
+                  title={searchText.trim() ? 'No matching jobs' : 'No scheduled jobs'}
+                  description={searchText.trim() ? 'Try a different search term.' : 'Sync with OpenClaw to import jobs.'}
+                />
+              }
+            />
+          </div>
+        ) : (
+          <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-bd-0 overflow-hidden p-4 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <CalendarDays className="w-4 h-4 text-fg-1" />
+                <h2 className="text-sm font-medium text-fg-0">Schedule Calendar</h2>
               </div>
 
-              <button
-                onClick={() => setCalendarAnchor(startOfUtcDay(new Date()))}
-                className="px-2.5 py-1.5 text-xs bg-bg-3 border border-bd-0 rounded-[var(--radius-md)] text-fg-1 hover:text-fg-0"
-              >
-                Today
-              </button>
-
-              <button
-                onClick={() => shiftCalendar(-1)}
-                className="p-1.5 rounded hover:bg-bg-3 text-fg-2"
-                aria-label="Previous"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => shiftCalendar(1)}
-                className="p-1.5 rounded hover:bg-bg-3 text-fg-2"
-                aria-label="Next"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          <div className="text-xs text-fg-2 space-y-1">
-            <div>
-              {calendarLabel} ({userTimeZone}). Counts include enabled jobs that match each day.
-            </div>
-            {(calendarView === 'day' || calendarView === 'week') && (
-              <div>Now: {nowLocalLabel}</div>
-            )}
-          </div>
-
-          {calendarView === 'year' ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2">
-              {yearBuckets.map((bucket) => (
-                <button
-                  key={bucket.monthIndex}
-                  onClick={() => {
-                    setCalendarView('month')
-                    setCalendarAnchor(new Date(Date.UTC(calendarAnchor.getUTCFullYear(), bucket.monthIndex, 1)))
-                  }}
-                  className={cn(
-                    'rounded-[var(--radius-md)] border p-3 text-left transition-colors',
-                    bucket.totalRuns > 0
-                      ? 'border-status-info/40 bg-status-info/10 hover:bg-status-info/20'
-                      : 'border-bd-0 bg-bg-3/40 hover:bg-bg-3/60'
-                  )}
-                >
-                  <div className="text-xs text-fg-1">{bucket.monthLabel}</div>
-                  <div className="mt-1 text-lg font-semibold text-fg-0">{bucket.totalRuns}</div>
-                  <div className="text-[11px] text-fg-2">scheduled runs</div>
-                  <div className="mt-2 text-[11px] text-fg-2 truncate">
-                    {bucket.jobs[0] ? `${bucket.jobs[0].job.name} (${bucket.jobs[0].runs})` : 'No scheduled jobs'}
-                  </div>
-                </button>
-              ))}
-            </div>
-          ) : calendarView === 'month' ? (
-            <div className="space-y-2">
-              <div className="grid grid-cols-7 gap-2 text-xs text-fg-2">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label) => (
-                  <div key={label} className="text-center">{label}</div>
-                ))}
-              </div>
-
-              <div className="grid grid-cols-7 gap-2">
-                {monthGridCells(new Date(Date.UTC(calendarAnchor.getUTCFullYear(), calendarAnchor.getUTCMonth(), 1))).map((cell, idx) => {
-                  if (!cell.date) {
-                    return <div key={`empty-${idx}`} className="h-24 rounded border border-bd-0/40 bg-bg-3/30" />
-                  }
-
-                  const key = utcDayKey(cell.date)
-                  const bucket = dayBucketsByKey.get(key)
-                  const selected = selectedCalendarDay === key
-
-                  return (
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center bg-bg-3 border border-bd-0 rounded-[var(--radius-md)] overflow-hidden">
+                  {(['day', 'week', 'month', 'year'] as const).map((view) => (
                     <button
-                      key={key}
-                      onClick={() => setSelectedCalendarDay(key)}
+                      key={view}
+                      onClick={() => setCalendarView(view)}
                       className={cn(
-                        'h-24 rounded border text-left p-2 transition-colors',
-                        selected && 'ring-1 ring-status-info/60',
-                        bucket && bucket.totalRuns > 0
-                          ? 'border-status-info/40 bg-status-info/10 hover:bg-status-info/20'
-                          : 'border-bd-0 bg-bg-3/40 hover:bg-bg-3/60'
+                        'px-2 py-1.5 text-xs capitalize',
+                        calendarView === view ? 'bg-bg-2 text-fg-0' : 'text-fg-2 hover:text-fg-1'
                       )}
                     >
-                      <div className="text-xs text-fg-1">{cell.date.getUTCDate()}</div>
-                      <div className="mt-1 text-[11px] text-fg-2">{bucket?.totalRuns ?? 0} runs</div>
-                      <div className="mt-1 text-[11px] text-fg-2 truncate">
-                        {bucket?.jobs[0]?.job.name ?? '—'}
-                      </div>
+                      {view}
                     </button>
-                  )
-                })}
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => setCalendarAnchor(startOfLocalDay(new Date()))}
+                  className="px-2.5 py-1.5 text-xs bg-bg-3 border border-bd-0 rounded-[var(--radius-md)] text-fg-1 hover:text-fg-0"
+                >
+                  Today
+                </button>
+
+                <button
+                  onClick={() => shiftCalendar(-1)}
+                  className="p-1.5 rounded hover:bg-bg-3 text-fg-2"
+                  aria-label="Previous"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => shiftCalendar(1)}
+                  className="p-1.5 rounded hover:bg-bg-3 text-fg-2"
+                  aria-label="Next"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
               </div>
             </div>
-          ) : (
-            <div className={cn('grid gap-2', calendarView === 'week' ? 'grid-cols-1 md:grid-cols-7' : 'grid-cols-1')}>
-              {dayBuckets.map((bucket) => {
-                const selected = selectedCalendarDay === bucket.dayKey
-                const nextLocalRun = bucket.jobs
-                  .map((entry) => entry.job.nextRunAt)
-                  .find((runAt): runAt is Date => Boolean(runAt && isSameLocalDay(runAt, bucket.day)))
-                return (
+
+            <div className="text-xs text-fg-2">
+              {calendarLabel} ({userTimeZone}) {calendarView !== 'year' ? `• Now: ${nowLocalLabel}` : ''}
+            </div>
+
+            {calendarView === 'year' ? (
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2">
+                {yearBuckets.map((bucket) => (
                   <button
-                    key={bucket.dayKey}
-                    onClick={() => setSelectedCalendarDay(bucket.dayKey)}
+                    key={bucket.monthIndex}
+                    onClick={() => {
+                      setCalendarView('month')
+                      setCalendarAnchor(new Date(calendarAnchor.getFullYear(), bucket.monthIndex, 1))
+                    }}
                     className={cn(
-                      'rounded-[var(--radius-md)] border p-3 text-left transition-colors',
-                      selected && 'ring-1 ring-status-info/60',
+                      'rounded-[var(--radius-md)] p-3 text-left transition-colors',
                       bucket.totalRuns > 0
-                        ? 'border-status-info/40 bg-status-info/10 hover:bg-status-info/20'
-                        : 'border-bd-0 bg-bg-3/40 hover:bg-bg-3/60'
+                        ? 'bg-status-info/10 hover:bg-status-info/20'
+                        : 'bg-bg-3/40 hover:bg-bg-3/60'
                     )}
                   >
-                    <div className="text-xs text-fg-1">
-                      {bucket.day.toLocaleDateString(undefined, {
-                        weekday: calendarView === 'week' ? 'short' : 'long',
-                        month: 'short',
-                        day: 'numeric',
-                        timeZone: 'UTC',
-                      })}
-                    </div>
+                    <div className="text-xs text-fg-1">{bucket.monthLabel}</div>
                     <div className="mt-1 text-lg font-semibold text-fg-0">{bucket.totalRuns}</div>
                     <div className="text-[11px] text-fg-2">scheduled runs</div>
-                    <div className="text-[11px] text-fg-2">next: {formatLocalTime(nextLocalRun)}</div>
-                    <div className="mt-1 text-[11px] text-fg-2 truncate">
+                    <div className="mt-2 text-[11px] text-fg-2 truncate">
                       {bucket.jobs[0] ? `${bucket.jobs[0].job.name} (${bucket.jobs[0].runs})` : 'No scheduled jobs'}
                     </div>
                   </button>
-                )
-              })}
-            </div>
-          )}
-
-          {calendarView !== 'year' && selectedDayBucket && (
-            <div className="rounded-[var(--radius-md)] border border-bd-0 bg-bg-3/40">
-              <div className="px-3 py-2 border-b border-bd-0 flex items-center justify-between">
-                <div className="text-xs text-fg-1">
-                  {selectedDayBucket.day.toLocaleDateString(undefined, {
-                    weekday: 'long',
-                    month: 'long',
-                    day: 'numeric',
-                    year: 'numeric',
-                    timeZone: 'UTC',
-                  })}
-                </div>
-                <div className="text-xs text-fg-2">{selectedDayBucket.totalRuns} runs</div>
+                ))}
               </div>
+            ) : calendarView === 'month' ? (
+              <div className="space-y-2">
+                <div className="grid grid-cols-7 text-xs text-fg-2 bg-bg-3/50 rounded-[var(--radius-md)] overflow-hidden">
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label) => (
+                    <div key={label} className="py-2 text-center">{label}</div>
+                  ))}
+                </div>
 
-              {selectedDayBucket.jobs.length === 0 ? (
-                <div className="px-3 py-4 text-sm text-fg-2">No scheduled runs.</div>
-              ) : (
-                <div className="divide-y divide-bd-0/60">
-                  {selectedDayBucket.jobs.map(({ job, runs }) => {
-                    const estimate = costEstimateByJob.get(job.id)
+                <div className="grid grid-cols-7 gap-1">
+                  {monthCells.map((cell, idx) => {
+                    if (!cell.date) {
+                      return <div key={`empty-${idx}`} className="h-28 rounded-[var(--radius-md)] bg-bg-3/20" />
+                    }
+
+                    const key = localDayKey(cell.date)
+                    const bucket = dayBucketsByKey.get(key)
 
                     return (
                       <button
-                        key={job.id}
-                        onClick={() => setSelectedId(job.id)}
-                        className="w-full px-3 py-2 text-left hover:bg-bg-2/80 transition-colors"
+                        key={key}
+                        onClick={() => {
+                          setCalendarAnchor(startOfLocalDay(cell.date!))
+                          setCalendarView('day')
+                        }}
+                        className={cn(
+                          'h-28 rounded-[var(--radius-md)] p-2 text-left transition-colors',
+                          bucket && bucket.totalRuns > 0
+                            ? 'bg-status-info/10 hover:bg-status-info/20'
+                            : 'bg-bg-3/35 hover:bg-bg-3/55'
+                        )}
                       >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="text-sm text-fg-0">{job.name}</div>
-                          <div className="text-xs text-fg-2">{runs} run{runs === 1 ? '' : 's'}</div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-fg-1">{cell.date.getDate()}</span>
+                          <span className="text-[11px] text-fg-2">{bucket?.totalRuns ?? 0}</span>
                         </div>
-                        <div className="mt-1 grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px] text-fg-2">
-                          <span>Model: {estimate?.modelLabel ?? 'Unknown'}</span>
-                          <span>Next: {formatLocalTime(job.nextRunAt)}</span>
-                          <span>Tokens/run: {formatTokenCount(estimate?.tokensPerRun ?? null)}</span>
-                          <span>Cost/run: {formatUsdMicros(estimate?.costMicrosPerRun ?? null)}</span>
-                          <span className="md:col-span-2">Confidence: {estimate?.confidence ?? 'none'}</span>
+                        <div className="mt-2 text-[11px] text-fg-2">runs</div>
+                        <div className="mt-1 text-[11px] text-fg-2 truncate">
+                          {bucket?.jobs[0]?.job.name ?? '—'}
                         </div>
                       </button>
                     )
                   })}
                 </div>
-              )}
-            </div>
-          )}
-        </div>
+              </div>
+            ) : calendarView === 'week' ? (
+              <div
+                className="rounded-[var(--radius-md)] overflow-auto border border-bd-0"
+                style={{
+                  background: 'linear-gradient(180deg, rgb(28 28 28 / 0.95) 0%, rgb(12 12 12 / 0.92) 100%)',
+                }}
+              >
+                <div style={{ minWidth: `${TIMELINE_WEEK_MIN_WIDTH_PX}px` }}>
+                  <div className="grid grid-cols-[60px_repeat(7,minmax(0,1fr))]">
+                    <div className="h-12" />
+                    {weekViewDays.map((day) => {
+                      const dayKey = localDayKey(day)
+                      const bucket = dayBucketsByKey.get(dayKey)
+                      return (
+                        <button
+                          key={dayKey}
+                          onClick={() => {
+                            setCalendarAnchor(startOfLocalDay(day))
+                            setCalendarView('day')
+                          }}
+                          className="h-12 px-2 text-left border-l border-bd-0 hover:bg-bg-3 transition-colors"
+                          style={{
+                            background: 'linear-gradient(180deg, rgb(38 38 38 / 0.9) 0%, rgb(23 23 23 / 0.85) 100%)',
+                          }}
+                        >
+                          <div className="text-xs text-fg-1">{day.toLocaleDateString(undefined, { weekday: 'short' })}</div>
+                          <div className="text-[11px] text-fg-2">{day.getDate()} • {bucket?.totalRuns ?? 0}</div>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <div className="grid grid-cols-[60px_repeat(7,minmax(0,1fr))]">
+                    <div
+                      className="relative border-r border-bd-0"
+                      style={{
+                        height: `${TIMELINE_HEIGHT_PX}px`,
+                        background: 'linear-gradient(180deg, rgb(30 30 30 / 0.9) 0%, rgb(20 20 20 / 0.86) 100%)',
+                      }}
+                    >
+                      {Array.from({ length: 24 }, (_, hour) => (
+                        <div key={hour} className="absolute left-0 right-0 text-[10px] text-fg-3 px-1" style={{ top: `${(hour / 24) * 100}%` }}>
+                          {String(hour).padStart(2, '0')}:00
+                        </div>
+                      ))}
+                    </div>
+
+                    {weekViewDays.map((day) => {
+                      const dayKey = localDayKey(day)
+                      const events = timelineEventsByDayKey.get(dayKey) ?? []
+                      const renderData = buildTimelineRenderData(events, TIMELINE_WEEK_MAX_COLUMNS)
+                      const isToday = isSameLocalDay(day, new Date(nowMs))
+                      const nowMinute = new Date(nowMs).getHours() * 60 + new Date(nowMs).getMinutes()
+
+                      return (
+                        <div
+                          key={dayKey}
+                          className="relative border-l border-bd-0"
+                          style={{
+                            height: `${TIMELINE_HEIGHT_PX}px`,
+                            background: 'linear-gradient(180deg, rgb(22 22 22 / 0.9) 0%, rgb(16 16 16 / 0.82) 100%)',
+                          }}
+                        >
+                          {Array.from({ length: 24 }, (_, hour) => (
+                            <div
+                              key={hour}
+                              className="absolute left-0 right-0 h-px"
+                              style={{
+                                top: `${(hour / 24) * 100}%`,
+                                backgroundColor: 'rgb(64 64 64 / 0.5)',
+                              }}
+                            />
+                          ))}
+                          {isToday && (
+                            <div
+                              className="absolute left-0 right-0 h-[2px] z-20"
+                              style={{
+                                top: `${(nowMinute / 1440) * 100}%`,
+                                backgroundColor: 'rgb(220 38 38 / 0.85)',
+                              }}
+                            />
+                          )}
+                          {renderData.visibleEvents.map((event) => {
+                            const compact = event.heightPercent < 2.4 || event.laneCount > 2
+                            const columns = Math.min(Math.max(event.laneCount, 1), TIMELINE_WEEK_MAX_COLUMNS)
+                            const laneColumn = event.lane % columns
+                            const columnWidth = 100 / columns
+                            return (
+                              <button
+                                key={event.key}
+                                onClick={() => setSelectedId(event.job.id)}
+                                className="absolute relative rounded-[var(--radius-md)] border text-left z-10 overflow-hidden hover:brightness-110 transition-[filter]"
+                                style={{
+                                  ...TIMELINE_EVENT_CHROME,
+                                  top: `${event.topPercent}%`,
+                                  height: `${event.heightPercent}%`,
+                                  left: `calc(${laneColumn * columnWidth}% + 4px)`,
+                                  width: `calc(${columnWidth}% - 8px)`,
+                                }}
+                                title={`${event.job.name} • ${formatMinuteLabel(day, event.minuteOfDay)}`}
+                              >
+                                <span
+                                  className="absolute left-0 top-0 bottom-0 w-1"
+                                  style={{ backgroundColor: 'rgb(96 165 250 / 0.88)' }}
+                                />
+                                <div className={cn('h-full pl-2 pr-1.5 py-1', compact && 'py-0.5')}>
+                                  <div className={cn('truncate text-fg-0', compact ? 'text-[10px] leading-tight font-medium' : 'text-[11px] leading-tight font-semibold')}>
+                                    {event.job.name}
+                                  </div>
+                                  {!compact && (
+                                    <div className="text-[10px] text-fg-1 leading-tight mt-0.5">
+                                      {formatMinuteLabel(day, event.minuteOfDay)}{event.runs > 1 ? ` • ${event.runs} runs` : ''}
+                                    </div>
+                                  )}
+                                </div>
+                              </button>
+                            )
+                          })}
+                          {renderData.overflowBadges.map((badge) => (
+                            <button
+                              key={badge.key}
+                              onClick={() => setSelectedId(badge.primaryJobId)}
+                              className="absolute right-1 z-20 px-1.5 py-0.5 text-[10px] font-medium text-fg-1 border rounded-[var(--radius-sm)] hover:text-fg-0"
+                              style={{
+                                ...TIMELINE_OVERFLOW_CHROME,
+                                top: `calc(${badge.topPercent}% + 2px)`,
+                              }}
+                              title={`${badge.hiddenCount} additional overlapping jobs`}
+                            >
+                              +{badge.hiddenCount} more
+                            </button>
+                          ))}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div
+                className="rounded-[var(--radius-md)] overflow-auto border border-bd-0"
+                style={{
+                  background: 'linear-gradient(180deg, rgb(28 28 28 / 0.95) 0%, rgb(12 12 12 / 0.92) 100%)',
+                }}
+              >
+                {dayViewDate && (
+                  <div className="grid grid-cols-[60px_1fr]" style={{ minWidth: `${TIMELINE_DAY_MIN_WIDTH_PX}px` }}>
+                    <div
+                      className="relative border-r border-bd-0"
+                      style={{
+                        height: `${TIMELINE_HEIGHT_PX}px`,
+                        background: 'linear-gradient(180deg, rgb(30 30 30 / 0.9) 0%, rgb(20 20 20 / 0.86) 100%)',
+                      }}
+                    >
+                      {Array.from({ length: 24 }, (_, hour) => (
+                        <div key={hour} className="absolute left-0 right-0 text-[10px] text-fg-3 px-1" style={{ top: `${(hour / 24) * 100}%` }}>
+                          {String(hour).padStart(2, '0')}:00
+                        </div>
+                      ))}
+                    </div>
+                    <div
+                      className="relative"
+                      style={{
+                        height: `${TIMELINE_HEIGHT_PX}px`,
+                        background: 'linear-gradient(180deg, rgb(22 22 22 / 0.92) 0%, rgb(16 16 16 / 0.82) 100%)',
+                      }}
+                    >
+                      {Array.from({ length: 24 }, (_, hour) => (
+                        <div
+                          key={hour}
+                          className="absolute left-0 right-0 h-px"
+                          style={{
+                            top: `${(hour / 24) * 100}%`,
+                            backgroundColor: 'rgb(64 64 64 / 0.52)',
+                          }}
+                        />
+                      ))}
+                      {isSameLocalDay(dayViewDate, new Date(nowMs)) && (
+                        <div
+                          className="absolute left-0 right-0 h-[2px] z-20"
+                          style={{
+                            top: `${((new Date(nowMs).getHours() * 60 + new Date(nowMs).getMinutes()) / 1440) * 100}%`,
+                            backgroundColor: 'rgb(220 38 38 / 0.85)',
+                          }}
+                        />
+                      )}
+                      {(() => {
+                        const renderData = buildTimelineRenderData(
+                          timelineEventsByDayKey.get(localDayKey(dayViewDate)) ?? [],
+                          TIMELINE_DAY_MAX_COLUMNS
+                        )
+
+                        return (
+                          <>
+                            {renderData.visibleEvents.map((event) => {
+                              const compact = event.heightPercent < 2.2 || event.laneCount > 3
+                              const columns = Math.min(Math.max(event.laneCount, 1), TIMELINE_DAY_MAX_COLUMNS)
+                              const laneColumn = event.lane % columns
+                              const columnWidth = 100 / columns
+                              return (
+                                <button
+                                  key={event.key}
+                                  onClick={() => setSelectedId(event.job.id)}
+                                  className="absolute relative rounded-[var(--radius-md)] border text-left z-10 overflow-hidden hover:brightness-110 transition-[filter]"
+                                  style={{
+                                    ...TIMELINE_EVENT_CHROME,
+                                    top: `${event.topPercent}%`,
+                                    height: `${event.heightPercent}%`,
+                                    left: `calc(${laneColumn * columnWidth}% + 6px)`,
+                                    width: `calc(${columnWidth}% - 12px)`,
+                                  }}
+                                  title={`${event.job.name} • ${formatMinuteLabel(dayViewDate, event.minuteOfDay)}`}
+                                >
+                                  <span
+                                    className="absolute left-0 top-0 bottom-0 w-1"
+                                    style={{ backgroundColor: 'rgb(96 165 250 / 0.9)' }}
+                                  />
+                                  <div className={cn('h-full pl-2.5 pr-2 py-1.5', compact && 'py-0.5')}>
+                                    <div className={cn('truncate text-fg-0', compact ? 'text-[11px] leading-tight font-medium' : 'text-xs leading-tight font-semibold')}>
+                                      {event.job.name}
+                                    </div>
+                                    {!compact && (
+                                      <div className="text-[11px] text-fg-1 leading-tight mt-0.5">
+                                        {formatMinuteLabel(dayViewDate, event.minuteOfDay)}{event.runs > 1 ? ` • ${event.runs} runs` : ''}
+                                      </div>
+                                    )}
+                                  </div>
+                                </button>
+                              )
+                            })}
+                            {renderData.overflowBadges.map((badge) => (
+                              <button
+                                key={badge.key}
+                                onClick={() => setSelectedId(badge.primaryJobId)}
+                                className="absolute right-2 z-20 px-2 py-0.5 text-[11px] font-medium text-fg-1 border rounded-[var(--radius-sm)] hover:text-fg-0"
+                                style={{
+                                  ...TIMELINE_OVERFLOW_CHROME,
+                                  top: `calc(${badge.topPercent}% + 2px)`,
+                                }}
+                                title={`${badge.hiddenCount} additional overlapping jobs`}
+                              >
+                                +{badge.hiddenCount} more
+                              </button>
+                            ))}
+                          </>
+                        )
+                      })()}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Detail Drawer */}
@@ -1301,6 +1944,7 @@ export function CronClient() {
         {selectedJob && (
           <CronDetail
             job={selectedJob}
+            health={selectedHealth ?? undefined}
             estimate={costEstimateByJob.get(selectedJob.id)}
             onClose={() => setSelectedId(undefined)}
             onUpdated={refreshJobs}
@@ -1321,12 +1965,14 @@ export function CronClient() {
 
 function CronDetail({
   job,
+  health,
   estimate,
   onClose,
   onUpdated,
   onDeleted,
 }: {
   job: CronJobRow
+  health?: CronHealthJob
   estimate?: CronCostEstimate
   onClose: () => void
   onUpdated: () => void | Promise<void>
@@ -1340,6 +1986,14 @@ function CronDetail({
   const [cronValue, setCronValue] = useState('* * * * *')
   const [tzValue, setTzValue] = useState('')
   const [atValue, setAtValue] = useState('')
+
+  const purposeText = (
+    job.description
+    || job.raw.payload?.message
+    || job.raw.payload?.text
+    || ''
+  ).trim()
+  const payloadTarget = [job.raw.payload?.channel, job.raw.payload?.to].filter(Boolean).join(' / ')
 
   useEffect(() => {
     const schedule = job.raw.schedule
@@ -1498,6 +2152,27 @@ function CronDetail({
       </div>
 
       {/* Schedule */}
+      <PageSection title="Job Details">
+        <dl className="grid grid-cols-2 gap-2 text-sm">
+          <dt className="text-fg-2">What it does</dt>
+          <dd className="text-fg-1">{purposeText || 'No description provided.'}</dd>
+          <dt className="text-fg-2">Payload kind</dt>
+          <dd className="text-fg-1 font-mono text-xs">{job.raw.payload?.kind ?? '—'}</dd>
+          <dt className="text-fg-2">Payload target</dt>
+          <dd className="text-fg-1 font-mono text-xs">{payloadTarget || '—'}</dd>
+          <dt className="text-fg-2">Last failure reason</dt>
+          <dd className="text-fg-1 text-xs">
+            {health?.lastFailureReason ?? (health ? 'No recent failure reason recorded.' : 'No health data yet.')}
+          </dd>
+          <dt className="text-fg-2">Reliability (7d)</dt>
+          <dd className="text-fg-1 font-mono text-xs">
+            {health
+              ? `${formatPercent(health.successRatePct)} success • ${health.failureCount} fails • ${formatPercent(health.flakinessScore * 100, 0)} flaky`
+              : 'No health data'}
+          </dd>
+        </dl>
+      </PageSection>
+
       <PageSection title="Schedule">
         <div className="space-y-3">
           <div className="p-3 bg-bg-3 rounded-[var(--radius-md)] border border-bd-0">
