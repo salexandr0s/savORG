@@ -379,6 +379,22 @@ function modelShortLabel(modelId: string | null): string {
   return getModelShortName(modelId)
 }
 
+function isSameLocalDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear()
+    && a.getMonth() === b.getMonth()
+    && a.getDate() === b.getDate()
+  )
+}
+
+function formatLocalTime(value: Date | null | undefined): string {
+  if (!value) return '—'
+  return value.toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
 function buildAgentTokenMap(agents: AgentModelRow[]): Map<string, AgentModelRow> {
   const map = new Map<string, AgentModelRow>()
 
@@ -511,7 +527,12 @@ export function CronClient() {
   const [usageByAgent, setUsageByAgent] = useState<InsightsGroup[]>([])
   const [usageByModel, setUsageByModel] = useState<InsightsGroup[]>([])
   const [defaultModelId, setDefaultModelId] = useState<string | null>(null)
+  const [nowMs, setNowMs] = useState(() => Date.now())
   const selectedJob = selectedId ? cronJobs.find((c) => c.id === selectedId) : undefined
+  const userTimeZone = useMemo(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local',
+    []
+  )
 
   const enabledCount = cronJobs.filter((c) => c.enabled).length
   const filteredCronJobs = useMemo(() => {
@@ -857,6 +878,11 @@ export function CronClient() {
   }, [refreshJobs])
 
   useEffect(() => {
+    const interval = setInterval(() => setNowMs(Date.now()), 30_000)
+    return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
     if (calendarView === 'year') {
       setSelectedCalendarDay(null)
       return
@@ -877,6 +903,14 @@ export function CronClient() {
   }
 
   const selectedDayBucket = selectedCalendarDay ? dayBucketsByKey.get(selectedCalendarDay) : null
+  const nowLocalLabel = useMemo(
+    () =>
+      new Date(nowMs).toLocaleString(undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }),
+    [nowMs]
+  )
 
   const calendarLabel = useMemo(() => {
     if (calendarView === 'day') {
@@ -1095,8 +1129,13 @@ export function CronClient() {
             </div>
           </div>
 
-          <div className="text-xs text-fg-2">
-            {calendarLabel} (UTC). Counts include enabled jobs that match each day.
+          <div className="text-xs text-fg-2 space-y-1">
+            <div>
+              {calendarLabel} ({userTimeZone}). Counts include enabled jobs that match each day.
+            </div>
+            {(calendarView === 'day' || calendarView === 'week') && (
+              <div>Now: {nowLocalLabel}</div>
+            )}
           </div>
 
           {calendarView === 'year' ? (
@@ -1168,6 +1207,9 @@ export function CronClient() {
             <div className={cn('grid gap-2', calendarView === 'week' ? 'grid-cols-1 md:grid-cols-7' : 'grid-cols-1')}>
               {dayBuckets.map((bucket) => {
                 const selected = selectedCalendarDay === bucket.dayKey
+                const nextLocalRun = bucket.jobs
+                  .map((entry) => entry.job.nextRunAt)
+                  .find((runAt): runAt is Date => Boolean(runAt && isSameLocalDay(runAt, bucket.day)))
                 return (
                   <button
                     key={bucket.dayKey}
@@ -1190,6 +1232,7 @@ export function CronClient() {
                     </div>
                     <div className="mt-1 text-lg font-semibold text-fg-0">{bucket.totalRuns}</div>
                     <div className="text-[11px] text-fg-2">scheduled runs</div>
+                    <div className="text-[11px] text-fg-2">next: {formatLocalTime(nextLocalRun)}</div>
                     <div className="mt-1 text-[11px] text-fg-2 truncate">
                       {bucket.jobs[0] ? `${bucket.jobs[0].job.name} (${bucket.jobs[0].runs})` : 'No scheduled jobs'}
                     </div>
@@ -1233,9 +1276,10 @@ export function CronClient() {
                         </div>
                         <div className="mt-1 grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px] text-fg-2">
                           <span>Model: {estimate?.modelLabel ?? 'Unknown'}</span>
+                          <span>Next: {formatLocalTime(job.nextRunAt)}</span>
                           <span>Tokens/run: {formatTokenCount(estimate?.tokensPerRun ?? null)}</span>
                           <span>Cost/run: {formatUsdMicros(estimate?.costMicrosPerRun ?? null)}</span>
-                          <span>Confidence: {estimate?.confidence ?? 'none'}</span>
+                          <span className="md:col-span-2">Confidence: {estimate?.confidence ?? 'none'}</span>
                         </div>
                       </button>
                     )

@@ -8,7 +8,13 @@
 
 import { promises as fsp } from 'node:fs'
 import { dirname, join, basename } from 'node:path'
-import { validateWorkspacePath, getWorkspaceRoot, getAllowedSubdirs, getAllowedRootFiles } from './path-policy'
+import {
+  validateWorkspacePath,
+  getWorkspaceRoot,
+  getAllowedSubdirs,
+  getAllowedRootFiles,
+  isWorkspaceAllowlistOnly,
+} from './path-policy'
 
 export type WorkspaceEntryType = 'file' | 'folder'
 
@@ -74,8 +80,8 @@ export async function listWorkspace(path = '/', options?: { sort?: WorkspaceSort
     // Skip dotfiles by default (can revisit)
     if (ent.name.startsWith('.')) continue
 
-    // At root, only expose allowlisted folders/files.
-    if (path === '/') {
+    // In strict mode, only expose allowlisted folders/files at root.
+    if (path === '/' && isWorkspaceAllowlistOnly()) {
       if (ent.isDirectory()) {
         if (!allowedSubdirs.has(ent.name)) continue
       } else {

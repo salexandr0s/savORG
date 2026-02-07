@@ -19,29 +19,66 @@ import { resolve, join } from 'path'
 // - WORKSPACE_ROOT (legacy)
 // - Auto-detect: ../../../../.. (when clawcontrol is checked out under ~/clawd/projects/clawcontrol/apps/clawcontrol)
 // - ./workspace (fallback for demo/dev)
+function isWorkspaceMarkerPath(dir: string): boolean {
+  return (
+    existsSync(join(dir, 'AGENTS.md'))
+    || existsSync(join(dir, 'SOUL.md'))
+    || existsSync(join(dir, 'HEARTBEAT.md'))
+  )
+}
+
+function findNearestWorkspaceRoot(startDir: string, maxDepth = 10): string | null {
+  let cursor = resolve(startDir)
+
+  for (let depth = 0; depth <= maxDepth; depth++) {
+    if (isWorkspaceMarkerPath(cursor)) return cursor
+
+    const parent = resolve(cursor, '..')
+    if (parent === cursor) break
+    cursor = parent
+  }
+
+  return null
+}
+
 function pickWorkspaceRoot(): string {
-  const candidates = [
+  const envCandidates = [
     process.env.OPENCLAW_WORKSPACE,
     process.env.CLAWCONTROL_WORKSPACE_ROOT,
     process.env.WORKSPACE_ROOT,
-    resolve(process.cwd(), '../../../../..'),
-    resolve(process.cwd(), 'workspace'),
-  ].filter(Boolean) as string[]
+  ]
+    .filter((value): value is string => Boolean(value && value.trim()))
+    .map((value) => resolve(value))
 
-  for (const c of candidates) {
-    // Prefer something that looks like an OpenClaw workspace (has AGENTS.md / SOUL.md)
-    if (existsSync(join(c, 'AGENTS.md')) || existsSync(join(c, 'SOUL.md'))) return c
+  for (const candidate of envCandidates) {
+    // Env var is explicit; if path exists, trust it even without markers.
+    if (existsSync(candidate)) return candidate
   }
 
-  // Last resort: first candidate (even if it doesn't exist yet)
-  return candidates[0] ?? resolve(process.cwd(), 'workspace')
+  const discovered = findNearestWorkspaceRoot(process.cwd())
+  if (discovered) return discovered
+
+  const localWorkspace = resolve(process.cwd(), 'workspace')
+  if (existsSync(localWorkspace)) return localWorkspace
+
+  // Final fallback: current working directory (never auto-fallback to /).
+  return resolve(process.cwd())
 }
 
 const WORKSPACE_ROOT = pickWorkspaceRoot()
+const WORKSPACE_ROOT_REAL = existsSync(WORKSPACE_ROOT) ? realpathSync(WORKSPACE_ROOT) : WORKSPACE_ROOT
 
 // Allowed top-level subdirectories within workspace
 const ALLOWED_SUBDIRS = ['agents', 'overlays', 'skills', 'playbooks', 'plugins', 'agent-templates', 'memory', 'life', 'docs', 'tools', 'templates', 'canvas', 'projects'] as const
 type AllowedSubdir = (typeof ALLOWED_SUBDIRS)[number]
+
+const ENFORCE_ROOT_ALLOWLIST = process.env.CLAWCONTROL_WORKSPACE_ALLOWLIST_ONLY === '1'
+
+function isWithinRoot(candidatePath: string, rootPath: string): boolean {
+  const root = resolve(rootPath)
+  const candidate = resolve(candidatePath)
+  return candidate === root || candidate.startsWith(`${root}/`)
+}
 
 // Allowed root-level files (e.g. /MEMORY.md). These do not live under a subdir.
 const ALLOWED_ROOT_FILES = [
@@ -97,8 +134,8 @@ export function validateWorkspacePath(inputPath: string): PathValidationResult {
   // Normalize path (remove double slashes, etc.)
   const normalized = inputPath.split('/').filter(Boolean).join('/')
 
-  // Check allowlist: either an allowed root-level file, or within an allowed subdir.
-  if (normalized !== '') {
+  // Optional strict allowlist mode for high-restriction deployments.
+  if (ENFORCE_ROOT_ALLOWLIST && normalized !== '') {
     const parts = normalized.split('/')
     const top = parts[0]
 
@@ -117,7 +154,7 @@ export function validateWorkspacePath(inputPath: string): PathValidationResult {
   const fullPath = resolve(WORKSPACE_ROOT, normalized)
 
   // Verify full path is still under workspace root (defense in depth)
-  if (!fullPath.startsWith(WORKSPACE_ROOT)) {
+  if (!isWithinRoot(fullPath, WORKSPACE_ROOT)) {
     return { valid: false, error: 'Path escapes workspace root' }
   }
 
@@ -125,7 +162,7 @@ export function validateWorkspacePath(inputPath: string): PathValidationResult {
   if (existsSync(fullPath)) {
     try {
       const resolved = realpathSync(fullPath)
-      if (!resolved.startsWith(WORKSPACE_ROOT)) {
+      if (!isWithinRoot(resolved, WORKSPACE_ROOT_REAL)) {
         return { valid: false, error: 'Path escapes workspace via symlink' }
       }
       return { valid: true, resolvedPath: resolved }
@@ -140,7 +177,7 @@ export function validateWorkspacePath(inputPath: string): PathValidationResult {
   if (fullPath !== WORKSPACE_ROOT && existsSync(parentPath)) {
     try {
       const resolvedParent = realpathSync(parentPath)
-      if (!resolvedParent.startsWith(WORKSPACE_ROOT)) {
+      if (!isWithinRoot(resolvedParent, WORKSPACE_ROOT_REAL)) {
         return { valid: false, error: 'Parent path escapes workspace via symlink' }
       }
     } catch (err) {
@@ -180,6 +217,10 @@ export function getAllowedRootFiles(): readonly string[] {
   return ALLOWED_ROOT_FILES
 }
 
+export function isWorkspaceAllowlistOnly(): boolean {
+  return ENFORCE_ROOT_ALLOWLIST
+}
+
 /**
  * Simple validation (legacy compatibility with workspace.ts)
  * Use validateWorkspacePath for full validation with symlink checking
@@ -202,6 +243,8 @@ export function isValidWorkspacePath(path: string): boolean {
 
   // Must be in root, an allowed root-level file, or an allowed subdir
   if (normalized === '') return true // root
+
+  if (!ENFORCE_ROOT_ALLOWLIST) return true
 
   const parts = normalized.split('/')
   const top = parts[0]

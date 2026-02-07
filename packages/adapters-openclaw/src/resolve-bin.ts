@@ -9,13 +9,18 @@
  */
 
 import { spawn } from 'child_process'
+import { existsSync } from 'fs'
+import { homedir } from 'os'
+import { join } from 'path'
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
 
 /** The only supported CLI binary */
-export const OPENCLAW_BIN = 'openclaw'
+const DEFAULT_OPENCLAW_BIN = 'openclaw'
+let resolvedOpenClawBin = process.env.OPENCLAW_BIN?.trim() || DEFAULT_OPENCLAW_BIN
+export const OPENCLAW_BIN = DEFAULT_OPENCLAW_BIN
 
 /** Minimum supported OpenClaw version (semver) */
 export const MIN_OPENCLAW_VERSION = '0.1.0'
@@ -43,6 +48,26 @@ let cached: CliCheck | null = null
 let cacheTime = 0
 const CACHE_TTL = 60_000 // 60 seconds
 
+function openClawBinaryCandidates(): string[] {
+  const envBin = process.env.OPENCLAW_BIN?.trim()
+  const candidates = [
+    envBin,
+    resolvedOpenClawBin,
+    DEFAULT_OPENCLAW_BIN,
+    '/opt/homebrew/bin/openclaw',
+    '/usr/local/bin/openclaw',
+    '/usr/bin/openclaw',
+    join(homedir(), '.local', 'bin', 'openclaw'),
+  ].filter((value): value is string => Boolean(value))
+
+  const deduped: string[] = []
+  for (const candidate of candidates) {
+    if (!deduped.includes(candidate)) deduped.push(candidate)
+  }
+
+  return deduped
+}
+
 /**
  * Get the cached CLI check result, or null if not cached/expired
  */
@@ -59,6 +84,11 @@ export function getCachedCheck(): CliCheck | null {
 export function clearCache(): void {
   cached = null
   cacheTime = 0
+  resolvedOpenClawBin = process.env.OPENCLAW_BIN?.trim() || DEFAULT_OPENCLAW_BIN
+}
+
+export function getOpenClawBin(): string {
+  return resolvedOpenClawBin
 }
 
 // ============================================================================
@@ -104,31 +134,44 @@ function isVersionBelow(versionA: string, versionB: string): boolean {
  * Try to run openclaw --version and return the version string
  */
 async function tryOpenClaw(): Promise<string | null> {
-  return new Promise((resolve) => {
-    const child = spawn(OPENCLAW_BIN, ['--version'], {
-      timeout: 5000,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
+  const candidates = openClawBinaryCandidates()
 
-    let stdout = ''
+  for (const candidate of candidates) {
+    if (candidate.startsWith('/') && !existsSync(candidate)) continue
 
-    child.stdout?.on('data', (data) => {
-      stdout += data.toString()
-    })
+    const output = await new Promise<string | null>((resolve) => {
+      const child = spawn(candidate, ['--version'], {
+        timeout: 5000,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
 
-    child.on('error', () => {
-      resolve(null)
-    })
+      let stdout = ''
 
-    child.on('close', (code) => {
-      if (code === 0) {
-        const output = stdout.trim()
-        resolve(output || null)
-      } else {
+      child.stdout?.on('data', (data) => {
+        stdout += data.toString()
+      })
+
+      child.on('error', () => {
         resolve(null)
-      }
+      })
+
+      child.on('close', (code) => {
+        if (code === 0) {
+          const text = stdout.trim()
+          resolve(text || null)
+          return
+        }
+        resolve(null)
+      })
     })
-  })
+
+    if (output) {
+      resolvedOpenClawBin = candidate
+      return output
+    }
+  }
+
+  return null
 }
 
 /**
@@ -166,7 +209,7 @@ export async function checkOpenClaw(): Promise<CliCheck> {
     result = {
       available: false,
       version: null,
-      error: `OpenClaw CLI not found. Install from https://github.com/openclaw/openclaw and ensure 'openclaw' is on PATH.`,
+      error: `OpenClaw CLI not found. Install from https://github.com/openclaw/openclaw and ensure 'openclaw' is on PATH (or set OPENCLAW_BIN).`,
     }
   }
 

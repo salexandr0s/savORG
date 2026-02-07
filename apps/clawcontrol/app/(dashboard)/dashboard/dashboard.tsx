@@ -326,7 +326,7 @@ export function Dashboard({
   }, 0)
 
   return (
-    <div className="space-y-6 w-full">
+    <div className="flex flex-col gap-6 w-full">
       {stats.totalAgents === 0 && (
         <div className="flex items-start gap-3 p-4 rounded-[var(--radius-lg)] border border-bd-0 bg-bg-2">
           <div className="w-10 h-10 rounded-[var(--radius-md)] bg-bg-3 flex items-center justify-center shrink-0">
@@ -362,7 +362,7 @@ export function Dashboard({
         <MetricCard label="Completed" value={stats.completedToday} icon={CheckCircle} tone="muted" />
       </div>
 
-      <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-bd-0 overflow-hidden">
+      <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-bd-0 overflow-hidden order-last">
         <div className="px-4 py-3 border-b border-bd-0 flex items-center justify-between">
           <h2 className="terminal-header">Usage + Cost</h2>
           <button
@@ -433,7 +433,7 @@ export function Dashboard({
                         return (
                           <div
                             key={point.bucketStart}
-                            className="relative flex-1 group/bar"
+                            className="relative h-full flex-1 flex items-end group/bar"
                           >
                             <div
                               className="w-full bg-status-info rounded-sm hover:opacity-90 transition-opacity"

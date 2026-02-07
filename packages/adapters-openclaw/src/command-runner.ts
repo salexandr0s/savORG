@@ -10,7 +10,7 @@
 
 import { spawn, type ChildProcess } from 'child_process'
 import type { CommandOutput } from './types'
-import { checkOpenClaw, OPENCLAW_BIN } from './resolve-bin'
+import { checkOpenClaw, getOpenClawBin } from './resolve-bin'
 
 // ============================================================================
 // COMMAND ALLOWLIST
@@ -205,6 +205,7 @@ export async function* executeCommand(
 
   const spec = getCommandSpec(commandId)
   const args = spec.args as string[]
+  const openClawBin = getOpenClawBin()
   const timeout = options.timeout ?? 60000
 
   const startTime = Date.now()
@@ -214,7 +215,7 @@ export async function* executeCommand(
   let child: ChildProcess | null = null
 
   try {
-    child = spawn(OPENCLAW_BIN, args, {
+    child = spawn(openClawBin, args, {
       cwd: options.cwd,
       env: { ...process.env, ...options.env },
       timeout,
@@ -275,7 +276,7 @@ export async function* executeCommand(
 
     // Handle command not found
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      const errorOutput: CommandOutput = { type: 'stderr', chunk: `Command not found: ${OPENCLAW_BIN}\n` }
+      const errorOutput: CommandOutput = { type: 'stderr', chunk: `Command not found: ${openClawBin}\n` }
       yield errorOutput
       await options.onChunk?.(errorOutput)
 
@@ -287,7 +288,7 @@ export async function* executeCommand(
         exitCode: 127,
         durationMs,
         stdout,
-        stderr: stderr + `Command not found: ${OPENCLAW_BIN}\n`,
+        stderr: stderr + `Command not found: ${openClawBin}\n`,
         timedOut: false,
         error: 'Command not found',
       }
@@ -619,10 +620,11 @@ export async function runDynamicCommandJson<T = unknown>(
   }
 
   const timeout = options.timeout ?? 60000
+  const openClawBin = getOpenClawBin()
   const _startTime = Date.now() // Reserved for future latency tracking
 
   try {
-    const child = spawn(OPENCLAW_BIN, args, {
+    const child = spawn(openClawBin, args, {
       cwd: options.cwd,
       env: { ...process.env, ...options.env },
       timeout,
@@ -777,9 +779,10 @@ export async function runDynamicCommand(
 
   const timeout = options.timeout ?? 60000
   const start = Date.now()
+  const openClawBin = getOpenClawBin()
 
   try {
-    const child = spawn(OPENCLAW_BIN, args, {
+    const child = spawn(openClawBin, args, {
       cwd: options.cwd,
       env: { ...process.env, ...options.env },
       timeout,
