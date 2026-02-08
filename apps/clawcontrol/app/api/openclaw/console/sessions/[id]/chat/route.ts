@@ -159,7 +159,8 @@ export async function POST(
 
   const stream = new ReadableStream({
     async start(controller) {
-      let fullResponse = ''
+      let streamedResponse = ''
+      let finalResponse = ''
       let runId: string | null = null
 
       // Emit metadata event first
@@ -201,15 +202,20 @@ export async function POST(
             if (event.state === 'delta' && event.message) {
               const content = extractTextContent(event.message)
               if (content) {
-                fullResponse += content
-                const chunkEvent = JSON.stringify({ chunk: content })
-                controller.enqueue(encoder.encode(`data: ${chunkEvent}\n\n`))
+                const { chunk, next } = mergeDeltaStreamChunk(streamedResponse, content)
+                streamedResponse = next
+                finalResponse = streamedResponse
 
-                // Append to receipt
-                repos.receipts.append(receipt.id, {
-                  stream: 'stdout',
-                  chunk: content,
-                }).catch(() => {})
+                if (chunk) {
+                  const chunkEvent = JSON.stringify({ chunk })
+                  controller.enqueue(encoder.encode(`data: ${chunkEvent}\n\n`))
+
+                  // Append to receipt
+                  repos.receipts.append(receipt.id, {
+                    stream: 'stdout',
+                    chunk,
+                  }).catch(() => {})
+                }
               }
             }
 
@@ -221,8 +227,16 @@ export async function POST(
               // Extract final message if present
               if (event.message) {
                 const content = extractTextContent(event.message)
-                if (content && !fullResponse.includes(content)) {
-                  fullResponse = content
+                if (content) {
+                  finalResponse = content
+
+                  // Ensure UI receives canonical final text in case delta events were
+                  // cumulative snapshots or truncated.
+                  if (content !== streamedResponse) {
+                    streamedResponse = content
+                    const replaceEvent = JSON.stringify({ replace: content })
+                    controller.enqueue(encoder.encode(`data: ${replaceEvent}\n\n`))
+                  }
                 }
               }
 
@@ -254,8 +268,8 @@ export async function POST(
           durationMs,
           parsedJson: {
             runId,
-            response: fullResponse,
-            responseLength: fullResponse.length,
+            response: finalResponse || streamedResponse,
+            responseLength: (finalResponse || streamedResponse).length,
           },
         })
 
@@ -265,13 +279,13 @@ export async function POST(
           actor: `agent:${session.agentId}`,
           entityType: 'session',
           entityId: session.sessionKey,
-          summary: `Response from ${session.agentId} (${fullResponse.length} chars)`,
+          summary: `Response from ${session.agentId} (${(finalResponse || streamedResponse).length} chars)`,
           payloadJson: {
             receiptId: receipt.id,
             runId,
             sessionKey: session.sessionKey,
-            responseLength: fullResponse.length,
-            responsePreview: fullResponse.slice(0, 2000),
+            responseLength: (finalResponse || streamedResponse).length,
+            responsePreview: (finalResponse || streamedResponse).slice(0, 2000),
             durationMs,
             mode: 'session_chat',
           },
@@ -291,7 +305,7 @@ export async function POST(
           parsedJson: {
             runId,
             error: errorMessage,
-            partialResponse: fullResponse,
+            partialResponse: finalResponse || streamedResponse,
           },
         })
 
@@ -318,6 +332,34 @@ export async function POST(
 // Helpers
 // ============================================================================
 
+function mergeDeltaStreamChunk(
+  previousText: string,
+  incomingText: string
+): { chunk: string; next: string } {
+  if (!incomingText) return { chunk: '', next: previousText }
+  if (!previousText) return { chunk: incomingText, next: incomingText }
+  if (incomingText === previousText) return { chunk: '', next: previousText }
+
+  // Cumulative snapshot mode: incoming text is the entire assistant draft.
+  if (incomingText.startsWith(previousText)) {
+    return {
+      chunk: incomingText.slice(previousText.length),
+      next: incomingText,
+    }
+  }
+
+  // Duplicate replay of an already-streamed chunk.
+  if (previousText.endsWith(incomingText)) {
+    return { chunk: '', next: previousText }
+  }
+
+  // Incremental chunk mode: incoming text is only the new delta.
+  return {
+    chunk: incomingText,
+    next: previousText + incomingText,
+  }
+}
+
 function extractTextContent(message: unknown): string | null {
   if (!message || typeof message !== 'object') {
     return null
@@ -325,18 +367,28 @@ function extractTextContent(message: unknown): string | null {
 
   const msg = message as Record<string, unknown>
 
-  // Handle content array format
+  if (typeof msg.content === 'string') return msg.content
+  if (typeof msg.text === 'string') return msg.text
+
+  // Handle content array format (combine all text blocks)
   if (Array.isArray(msg.content)) {
+    const parts: string[] = []
     for (const item of msg.content) {
-      if (item && typeof item === 'object' && 'type' in item && item.type === 'text' && 'text' in item) {
-        return String(item.text)
+      if (typeof item === 'string') {
+        parts.push(item)
+        continue
+      }
+      if (!item || typeof item !== 'object') continue
+      const block = item as Record<string, unknown>
+      if (block.type === 'text' && typeof block.text === 'string') {
+        parts.push(block.text)
       }
     }
+    if (parts.length > 0) return parts.join('')
   }
 
-  // Handle string content
-  if (typeof msg.content === 'string') {
-    return msg.content
+  if (msg.content && typeof msg.content === 'object') {
+    return extractTextContent(msg.content)
   }
 
   return null

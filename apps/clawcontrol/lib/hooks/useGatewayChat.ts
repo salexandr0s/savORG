@@ -5,6 +5,7 @@ import { useChatStore, type ChatAttachment } from '@/lib/stores/chat-store'
 
 type SseJson =
   | { chunk: string }
+  | { replace: string }
   | { runId: string; status?: string }
   | { error: string }
   | Record<string, unknown>
@@ -147,6 +148,14 @@ export function useGatewayChat() {
 
               if ('chunk' in parsed && typeof parsed.chunk === 'string') {
                 agentResponse += parsed.chunk
+                patchMessage(agentMessageId, {
+                  content: agentResponse,
+                  streaming: true,
+                })
+              }
+
+              if ('replace' in parsed && typeof parsed.replace === 'string') {
+                agentResponse = parsed.replace
                 patchMessage(agentMessageId, {
                   content: agentResponse,
                   streaming: true,
