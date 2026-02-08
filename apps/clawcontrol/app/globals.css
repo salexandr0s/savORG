@@ -11,27 +11,43 @@
 
     /* Backgrounds - true black, no blue tint */
     --bg0: #0A0A0A;  /* App background - true black */
+    --bg0-rgb: 10 10 10;
     --bg1: #141414;  /* Panel/sidebar */
+    --bg1-rgb: 20 20 20;
     --bg2: #1C1C1C;  /* Card/elevated */
+    --bg2-rgb: 28 28 28;
     --bg3: #2A2A2A;  /* Hover/active */
+    --bg3-rgb: 42 42 42;
 
     /* Text hierarchy - neutral grey, no blue */
     --fg0: #E5E5E5;  /* Primary text - soft white */
+    --fg0-rgb: 229 229 229;
     --fg1: #A0A0A0;  /* Secondary text - grey */
+    --fg1-rgb: 160 160 160;
     --fg2: #6B6B6B;  /* Muted/caption - darker grey */
+    --fg2-rgb: 107 107 107;
     --fg3: #4A4A4A;  /* Disabled - subtle grey */
+    --fg3-rgb: 74 74 74;
 
     /* Borders - solid grey, no alpha blue tint */
     --bd0: #2A2A2A;  /* Default border */
+    --bd0-rgb: 42 42 42;
     --bd1: #404040;  /* Strong/hover border */
+    --bd1-rgb: 64 64 64;
 
     /* Status semantic colors - muted, not neon */
     --success: #22C55E;    /* OK, Complete, Shipped - muted green */
+    --success-rgb: 34 197 94;
     --warning: #CA8A04;    /* Review, Degraded - amber */
+    --warning-rgb: 202 138 4;
     --danger: #DC2626;     /* Error, Down, Blocked - red */
+    --danger-rgb: 220 38 38;
     --info: #3B82F6;       /* Info, Hint - blue */
+    --info-rgb: 59 130 246;
     --progress: #2563EB;   /* In Progress, Running - deep blue */
+    --progress-rgb: 37 99 235;
     --idle: #6B6B6B;       /* Idle, Neutral, Todo - grey */
+    --idle-rgb: 107 107 107;
 
     /* Extended status for work orders / operations */
     --status-planned: var(--idle);
@@ -90,10 +106,15 @@
   /* Ops Dim preset - lower contrast for extended viewing */
   .theme-dim {
     --fg0: #C8D0DC;
+    --fg0-rgb: 200 208 220;
     --fg1: #8A9AAD;
+    --fg1-rgb: 138 154 173;
     --fg2: #6B7A8F;
+    --fg2-rgb: 107 122 143;
     --bd0: rgba(255, 255, 255, 0.06);
+    --bd0-rgb: 34 34 34;
     --bd1: rgba(255, 255, 255, 0.10);
+    --bd1-rgb: 44 44 44;
   }
 
   /* Compact density override */

@@ -33,7 +33,7 @@ npm run build --workspace=clawcontrol
 ```
 
 ### Option C: Download Release
-1. Download the macOS desktop app artifact from [Releases](../../releases)
+1. Download the macOS desktop app artifact from [Releases](https://github.com/salexandr0s/clawcontrol/releases)
 2. Install it (DMG/ZIP instructions vary by artifact)
 3. Start the backend (required):
    ```bash
@@ -105,7 +105,8 @@ openclaw --version  # 0.1.0+ (recommended)
 
 | URL | Purpose |
 |-----|---------|
-| `/` | Dashboard overview |
+| `/` | Redirects to `/dashboard` |
+| `/dashboard` | Dashboard overview |
 | `/now` | Live activity stream |
 | `/live` | Timeline + visualizer + receipts |
 | `/work-orders` | Work order table + Kanban |
@@ -138,7 +139,9 @@ Risk levels: **ALLOW** (auto) → **CONFIRM** → **WO_CODE** → **DENY** (bloc
 ### Path Safety
 
 - No path traversal (`..` rejected)
-- Allowlist: `agents/`, `overlays/`, `skills/`, `playbooks/`, `plugins/`
+- No backslashes or null bytes in workspace paths
+- Symlink escape checks via resolved real paths
+- Optional strict root allowlist mode via `CLAWCONTROL_WORKSPACE_ALLOWLIST_ONLY=1`
 
 ### Command Allowlist
 
@@ -185,6 +188,7 @@ clawcontrol/
 | `npm run dev` | Development server (hot reload) |
 | `npm run build` | Production build |
 | `npm run start --workspace=clawcontrol` | Production server |
+| `npm run test` | Run Vitest tests |
 | `npm run typecheck` | TypeScript check |
 | `npm run db:migrate` | Apply database migrations |
 | `npm run db:studio` | Open Prisma Studio |

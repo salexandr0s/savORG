@@ -1,5 +1,7 @@
 import type { Config } from 'tailwindcss'
 
+const withOpacity = (variable: string) => `rgb(var(${variable}) / <alpha-value>)`
+
 const config: Config = {
   content: [
     './app/**/*.{ts,tsx}',
@@ -10,28 +12,29 @@ const config: Config = {
     extend: {
       colors: {
         bg: {
-          0: 'var(--bg0)',
-          1: 'var(--bg1)',
-          2: 'var(--bg2)',
-          3: 'var(--bg3)',
+          0: withOpacity('--bg0-rgb'),
+          1: withOpacity('--bg1-rgb'),
+          2: withOpacity('--bg2-rgb'),
+          3: withOpacity('--bg3-rgb'),
         },
         fg: {
-          0: 'var(--fg0)',
-          1: 'var(--fg1)',
-          2: 'var(--fg2)',
-          3: 'var(--fg3)',
+          0: withOpacity('--fg0-rgb'),
+          1: withOpacity('--fg1-rgb'),
+          2: withOpacity('--fg2-rgb'),
+          3: withOpacity('--fg3-rgb'),
         },
         bd: {
-          0: 'var(--bd0)',
-          1: 'var(--bd1)',
+          0: withOpacity('--bd0-rgb'),
+          1: withOpacity('--bd1-rgb'),
         },
         status: {
-          success: 'var(--success)',
-          warning: 'var(--warning)',
-          danger: 'var(--danger)',
-          info: 'var(--info)',
-          progress: 'var(--progress)',
-          idle: 'var(--idle)',
+          success: withOpacity('--success-rgb'),
+          warning: withOpacity('--warning-rgb'),
+          danger: withOpacity('--danger-rgb'),
+          error: withOpacity('--danger-rgb'),
+          info: withOpacity('--info-rgb'),
+          progress: withOpacity('--progress-rgb'),
+          idle: withOpacity('--idle-rgb'),
         },
       },
       fontFamily: {

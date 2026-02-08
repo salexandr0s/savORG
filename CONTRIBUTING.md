@@ -23,6 +23,9 @@ See [docs/SETUP.md](docs/SETUP.md) for detailed setup instructions.
 # Start development server
 npm run dev
 
+# Run tests
+npm run test
+
 # Run type checking
 npm run typecheck
 
@@ -116,7 +119,8 @@ if (!result.allowed) {
 File operations must validate paths:
 
 ```typescript
-if (!isValidWorkspacePath(path)) {
+const result = validateWorkspacePath(path)
+if (!result.valid) {
   return NextResponse.json({ error: 'Invalid path' }, { status: 400 })
 }
 ```
@@ -204,29 +208,26 @@ Include:
 
 ### Workspace Directories
 
-1. Add to `ALLOWED_SUBDIRS` in `apps/clawcontrol/lib/workspace.ts`
-2. Add mock data in `packages/core/src/mocks/`
+1. Update allowlisted directories in `apps/clawcontrol/lib/fs/path-policy.ts`
+2. If needed, update root-level allowlisted files in the same module
 3. Update `docs/PATH_POLICY.md`
 
 ---
 
 ## Testing
 
-### Manual Testing
+### Automated + Manual Testing
 
-Currently, testing is manual. Before submitting:
+Before submitting:
 
-1. Start dev server: `npm run dev`
-2. Navigate to affected pages
-3. Test happy path and error cases
-4. Check browser console for errors
+1. Run tests: `npm run test`
+2. Run typecheck and lint: `npm run typecheck` and `npm run lint`
+3. Start dev server: `npm run dev`
+4. Navigate to affected pages
+5. Test happy path and error cases
+6. Check browser console for errors
 
-### Future: Automated Tests
-
-We plan to add:
-- Unit tests with Vitest
-- Integration tests for API routes
-- E2E tests with Playwright
+Automated tests use Vitest (workspace-managed via Turbo).
 
 ---
 
