@@ -29,6 +29,7 @@ import {
   CalendarDays,
   List,
   ChevronLeft,
+  Search,
 } from 'lucide-react'
 
 // ============================================================================
@@ -63,6 +64,8 @@ interface CalendarDay {
   }>
 }
 
+type WorkspaceCalendarView = 'day' | 'week' | 'month' | 'year'
+
 // Protected file mapping
 const PROTECTED_FILES: Record<string, { actionKind: ActionKind; label: string }> = {
   'AGENTS.md': { actionKind: 'config.agents_md.edit', label: 'Global Agent Configuration' },
@@ -73,12 +76,100 @@ function toEntryPath(file: WorkspaceFileDTO): string {
   return file.path === '/' ? `/${file.name}` : `${file.path}/${file.name}`
 }
 
-function monthKey(date: Date): string {
-  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`
+function monthKeyFromLocalDate(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 }
 
-function addMonths(value: Date, delta: number): Date {
-  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth() + delta, 1))
+function startOfLocalDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
+}
+
+function endOfLocalDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999)
+}
+
+function addLocalDays(date: Date, delta: number): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + delta)
+}
+
+function addLocalMonths(date: Date, delta: number): Date {
+  return new Date(date.getFullYear(), date.getMonth() + delta, 1)
+}
+
+function addLocalYears(date: Date, delta: number): Date {
+  return new Date(date.getFullYear() + delta, date.getMonth(), 1)
+}
+
+function startOfLocalWeek(date: Date): Date {
+  const day = startOfLocalDay(date)
+  return addLocalDays(day, -day.getDay())
+}
+
+function listLocalDaysInRange(start: Date, end: Date): Date[] {
+  const out: Date[] = []
+  let cursor = startOfLocalDay(start)
+  const endDay = startOfLocalDay(end)
+  while (cursor.getTime() <= endDay.getTime()) {
+    out.push(cursor)
+    cursor = addLocalDays(cursor, 1)
+  }
+  return out
+}
+
+function localDayKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function rangeForLocalCalendarView(anchor: Date, view: WorkspaceCalendarView): { start: Date; end: Date } {
+  if (view === 'day') {
+    const start = startOfLocalDay(anchor)
+    return { start, end: endOfLocalDay(start) }
+  }
+
+  if (view === 'week') {
+    const start = startOfLocalWeek(anchor)
+    return { start, end: endOfLocalDay(addLocalDays(start, 6)) }
+  }
+
+  if (view === 'month') {
+    const start = new Date(anchor.getFullYear(), anchor.getMonth(), 1)
+    const end = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0, 23, 59, 59, 999)
+    return { start, end }
+  }
+
+  const start = new Date(anchor.getFullYear(), 0, 1)
+  const end = new Date(anchor.getFullYear(), 11, 31, 23, 59, 59, 999)
+  return { start, end }
+}
+
+function monthsForLocalCalendarView(anchor: Date, view: WorkspaceCalendarView): string[] {
+  const range = rangeForLocalCalendarView(anchor, view)
+  const out: string[] = []
+  let cursor = new Date(range.start.getFullYear(), range.start.getMonth(), 1)
+  const end = new Date(range.end.getFullYear(), range.end.getMonth(), 1)
+
+  while (cursor.getTime() <= end.getTime()) {
+    out.push(monthKeyFromLocalDate(cursor))
+    cursor = addLocalMonths(cursor, 1)
+  }
+
+  return out
+}
+
+function monthGridCellsLocal(anchorMonth: Date): Array<{ date: Date | null }> {
+  const start = new Date(anchorMonth.getFullYear(), anchorMonth.getMonth(), 1)
+  const end = new Date(anchorMonth.getFullYear(), anchorMonth.getMonth() + 1, 0)
+  const leading = start.getDay()
+  const total = end.getDate()
+
+  const cells: Array<{ date: Date | null }> = []
+  for (let i = 0; i < leading; i++) cells.push({ date: null })
+  for (let day = 1; day <= total; day++) {
+    cells.push({ date: new Date(anchorMonth.getFullYear(), anchorMonth.getMonth(), day) })
+  }
+
+  while (cells.length % 7 !== 0) cells.push({ date: null })
+  return cells
 }
 
 // ============================================================================
@@ -104,11 +195,14 @@ export function WorkspaceClient({ initialFiles }: Props) {
   const [isCreating, setIsCreating] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [sortBy, setSortBy] = useState<WorkspaceSort>('name')
+  const [searchQuery, setSearchQuery] = useState('')
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list')
   const [favoritesDoc, setFavoritesDoc] = useState<FavoritesDoc>({ favorites: [], recents: [] })
-  const [calendarMonth, setCalendarMonth] = useState<Date>(() => new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)))
-  const [calendarDays, setCalendarDays] = useState<CalendarDay[]>([])
+  const [calendarView, setCalendarView] = useState<WorkspaceCalendarView>('month')
+  const [calendarAnchor, setCalendarAnchor] = useState<Date>(() => startOfLocalDay(new Date()))
+  const [calendarByMonth, setCalendarByMonth] = useState<Record<string, CalendarDay[]>>({})
   const [calendarLoading, setCalendarLoading] = useState(false)
+  const [nowMs, setNowMs] = useState<number>(() => Date.now())
 
   const protectedAction = useProtectedAction({ skipTypedConfirm })
 
@@ -140,6 +234,16 @@ export function WorkspaceClient({ initialFiles }: Props) {
     return base
   }, [filesByPath, currentPath, sortBy])
 
+  const normalizedSearch = useMemo(() => searchQuery.trim().toLowerCase(), [searchQuery])
+  const filteredFiles = useMemo(() => {
+    if (!normalizedSearch) return files
+
+    return files.filter((file) => {
+      const entryPath = toEntryPath(file).toLowerCase()
+      return file.name.toLowerCase().includes(normalizedSearch) || entryPath.includes(normalizedSearch)
+    })
+  }, [files, normalizedSearch])
+
   const favoriteSet = useMemo(() => new Set(favoritesDoc.favorites), [favoritesDoc.favorites])
   const recentsByPath = useMemo(
     () => new Map(favoritesDoc.recents.map((item) => [item.path, item.touchedAt])),
@@ -147,17 +251,37 @@ export function WorkspaceClient({ initialFiles }: Props) {
   )
 
   const favoriteEntries = useMemo(
-    () => files.filter((file) => favoriteSet.has(toEntryPath(file))),
-    [files, favoriteSet]
+    () => filteredFiles.filter((file) => favoriteSet.has(toEntryPath(file))),
+    [filteredFiles, favoriteSet]
   )
 
   const recentEntries = useMemo(
-    () => files.filter((file) => recentsByPath.has(toEntryPath(file)) && !favoriteSet.has(toEntryPath(file))),
-    [files, recentsByPath, favoriteSet]
+    () => filteredFiles.filter((file) => recentsByPath.has(toEntryPath(file)) && !favoriteSet.has(toEntryPath(file))),
+    [filteredFiles, recentsByPath, favoriteSet]
   )
   const regularEntries = useMemo(
-    () => files.filter((file) => !favoriteSet.has(toEntryPath(file)) && !recentsByPath.has(toEntryPath(file))),
-    [files, favoriteSet, recentsByPath]
+    () => filteredFiles.filter((file) => !favoriteSet.has(toEntryPath(file)) && !recentsByPath.has(toEntryPath(file))),
+    [filteredFiles, favoriteSet, recentsByPath]
+  )
+  const hasFilteredEntries = filteredFiles.length > 0
+  const listSubtitle = normalizedSearch
+    ? `${filteredFiles.length} of ${files.length} items`
+    : `${files.length} items`
+  const calendarFolder = useMemo(
+    () => (currentPath.startsWith('/memory') ? currentPath : '/memory'),
+    [currentPath]
+  )
+  const requiredCalendarMonths = useMemo(
+    () => monthsForLocalCalendarView(calendarAnchor, calendarView),
+    [calendarAnchor, calendarView]
+  )
+  const hasAllRequiredCalendarMonths = useMemo(
+    () => requiredCalendarMonths.every((month) => calendarByMonth[month] !== undefined),
+    [calendarByMonth, requiredCalendarMonths]
+  )
+  const userTimeZone = useMemo(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local',
+    []
   )
 
   const breadcrumbs = currentPath
@@ -181,26 +305,55 @@ export function WorkspaceClient({ initialFiles }: Props) {
   }, [])
 
   useEffect(() => {
+    const interval = setInterval(() => setNowMs(Date.now()), 30_000)
+    return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    setCalendarByMonth({})
+  }, [calendarFolder])
+
+  useEffect(() => {
     if (viewMode !== 'calendar') return
+    const missingMonths = requiredCalendarMonths.filter((month) => calendarByMonth[month] === undefined)
+    if (missingMonths.length === 0) return
+
+    let cancelled = false
 
     const loadCalendar = async () => {
       setCalendarLoading(true)
       try {
-        const result = await workspaceCalendarApi.get({
-          month: monthKey(calendarMonth),
-          root: 'memory',
-          folder: currentPath.startsWith('/memory') ? currentPath : '/memory',
+        const responses = await Promise.all(
+          missingMonths.map((month) => workspaceCalendarApi.get({
+            month,
+            root: 'memory',
+            folder: calendarFolder,
+          }))
+        )
+        if (cancelled) return
+
+        setCalendarByMonth((prev) => {
+          const next = { ...prev }
+          missingMonths.forEach((month, idx) => {
+            next[month] = responses[idx]?.data.days ?? []
+          })
+          return next
         })
-        setCalendarDays(result.data.days)
       } catch (err) {
+        if (cancelled) return
         setError(err instanceof Error ? err.message : 'Failed to load calendar')
       } finally {
-        setCalendarLoading(false)
+        if (!cancelled) {
+          setCalendarLoading(false)
+        }
       }
     }
 
     void loadCalendar()
-  }, [calendarMonth, currentPath, viewMode])
+    return () => {
+      cancelled = true
+    }
+  }, [calendarByMonth, calendarFolder, requiredCalendarMonths, viewMode])
 
   // Handle file click - open in drawer
   const handleFileClick = useCallback(async (file: WorkspaceFileDTO) => {
@@ -327,7 +480,7 @@ export function WorkspaceClient({ initialFiles }: Props) {
 
     switch (ext) {
       case 'md':
-        return <MarkdownEditor {...commonProps} />
+        return <MarkdownEditor {...commonProps} initialMode="edit" />
       case 'yaml':
       case 'yml':
         return <YamlEditor {...commonProps} />
@@ -485,34 +638,129 @@ export function WorkspaceClient({ initialFiles }: Props) {
 
   const calendarByDay = useMemo(() => {
     const map = new Map<string, CalendarDay>()
-    for (const day of calendarDays) map.set(day.day, day)
+    for (const days of Object.values(calendarByMonth)) {
+      for (const day of days) map.set(day.day, day)
+    }
     return map
-  }, [calendarDays])
+  }, [calendarByMonth])
 
-  const calendarCells = useMemo(() => {
-    const start = new Date(Date.UTC(calendarMonth.getUTCFullYear(), calendarMonth.getUTCMonth(), 1))
-    const end = new Date(Date.UTC(calendarMonth.getUTCFullYear(), calendarMonth.getUTCMonth() + 1, 0))
-    const leading = start.getUTCDay()
-    const total = end.getUTCDate()
+  const nowLocalLabel = useMemo(
+    () =>
+      new Date(nowMs).toLocaleString(undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }),
+    [nowMs]
+  )
 
-    const cells: Array<{ date: Date | null }> = []
-    for (let i = 0; i < leading; i++) cells.push({ date: null })
-    for (let day = 1; day <= total; day++) {
-      cells.push({ date: new Date(Date.UTC(calendarMonth.getUTCFullYear(), calendarMonth.getUTCMonth(), day)) })
+  const calendarLabel = useMemo(() => {
+    if (calendarView === 'day') {
+      return calendarAnchor.toLocaleDateString(undefined, {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      })
     }
 
-    while (cells.length % 7 !== 0) cells.push({ date: null })
-    return cells
-  }, [calendarMonth])
+    if (calendarView === 'week') {
+      const weekStart = startOfLocalWeek(calendarAnchor)
+      const end = addLocalDays(weekStart, 6)
+      return `${weekStart.toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+      })} – ${end.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
+    }
+
+    if (calendarView === 'month') {
+      return calendarAnchor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+    }
+
+    return calendarAnchor.toLocaleDateString(undefined, { year: 'numeric' })
+  }, [calendarAnchor, calendarView])
+
+  const shiftCalendar = useCallback((delta: number) => {
+    setCalendarAnchor((prev) => {
+      if (calendarView === 'day') return addLocalDays(prev, delta)
+      if (calendarView === 'week') return addLocalDays(prev, delta * 7)
+      if (calendarView === 'month') return addLocalMonths(prev, delta)
+      return addLocalYears(prev, delta)
+    })
+  }, [calendarView])
+
+  const monthCells = useMemo(() => {
+    if (calendarView !== 'month') return []
+    return monthGridCellsLocal(new Date(calendarAnchor.getFullYear(), calendarAnchor.getMonth(), 1))
+  }, [calendarAnchor, calendarView])
+
+  const weekDays = useMemo(() => {
+    if (calendarView !== 'week') return []
+    const weekStart = startOfLocalWeek(calendarAnchor)
+    return listLocalDaysInRange(weekStart, addLocalDays(weekStart, 6))
+  }, [calendarAnchor, calendarView])
+
+  const selectedDayKey = useMemo(
+    () => localDayKey(startOfLocalDay(calendarAnchor)),
+    [calendarAnchor]
+  )
+  const selectedDay = useMemo(
+    () => (calendarView === 'day' ? calendarByDay.get(selectedDayKey) : undefined),
+    [calendarByDay, calendarView, selectedDayKey]
+  )
+
+  const yearBuckets = useMemo(() => {
+    if (calendarView !== 'year') return []
+    const year = calendarAnchor.getFullYear()
+
+    return Array.from({ length: 12 }, (_, monthIndex) => {
+      const month = new Date(year, monthIndex, 1)
+      const key = monthKeyFromLocalDate(month)
+      const days = calendarByMonth[key] ?? []
+      const totalFiles = days.reduce((sum, day) => sum + day.count, 0)
+      const firstFile = days.find((day) => day.files.length > 0)?.files[0] ?? null
+
+      return {
+        key,
+        monthIndex,
+        monthLabel: month.toLocaleDateString(undefined, { month: 'short' }),
+        totalFiles,
+        firstFile,
+      }
+    })
+  }, [calendarAnchor, calendarByMonth, calendarView])
+
+  const hasEntriesInActiveView = useMemo(() => {
+    if (calendarView === 'day') {
+      return (selectedDay?.count ?? 0) > 0
+    }
+    if (calendarView === 'week') {
+      return weekDays.some((day) => (calendarByDay.get(localDayKey(day))?.count ?? 0) > 0)
+    }
+    if (calendarView === 'month') {
+      return monthCells.some((cell) => (cell.date ? (calendarByDay.get(localDayKey(cell.date))?.count ?? 0) > 0 : false))
+    }
+    return yearBuckets.some((bucket) => bucket.totalFiles > 0)
+  }, [calendarByDay, calendarView, monthCells, selectedDay, weekDays, yearBuckets])
 
   return (
     <>
       <div className="w-full space-y-4">
         <PageHeader
           title="Workspace"
-          subtitle={`${files.length} items`}
+          subtitle={listSubtitle}
           actions={
             <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2 top-1/2 w-3.5 h-3.5 -translate-y-1/2 text-fg-3" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Filter files..."
+                  className="w-[220px] pl-7 pr-2 py-1.5 text-xs bg-bg-3 border border-bd-0 rounded-[var(--radius-md)] text-fg-1 placeholder:text-fg-3 focus:outline-none focus:border-bd-1"
+                />
+              </div>
+
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as WorkspaceSort)}
@@ -606,71 +854,187 @@ export function WorkspaceClient({ initialFiles }: Props) {
         <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-bd-0 overflow-hidden">
           {viewMode === 'calendar' ? (
             <div className="p-4 space-y-4">
-              <div className="flex items-center justify-between">
-                <button
-                  onClick={() => setCalendarMonth((prev) => addMonths(prev, -1))}
-                  className="p-1.5 rounded hover:bg-bg-3 text-fg-2"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <div className="text-sm font-medium text-fg-0">
-                  {calendarMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' })}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <CalendarDays className="w-4 h-4 text-fg-1" />
+                  <h2 className="text-sm font-medium text-fg-0">Workspace Calendar</h2>
                 </div>
-                <button
-                  onClick={() => setCalendarMonth((prev) => addMonths(prev, 1))}
-                  className="p-1.5 rounded hover:bg-bg-3 text-fg-2"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center bg-bg-3 border border-bd-0 rounded-[var(--radius-md)] overflow-hidden">
+                    {(['day', 'week', 'month', 'year'] as const).map((view) => (
+                      <button
+                        key={view}
+                        onClick={() => setCalendarView(view)}
+                        className={cn(
+                          'px-2 py-1.5 text-xs capitalize',
+                          calendarView === view ? 'bg-bg-2 text-fg-0' : 'text-fg-2 hover:text-fg-1'
+                        )}
+                      >
+                        {view}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={() => setCalendarAnchor(startOfLocalDay(new Date()))}
+                    className="px-2.5 py-1.5 text-xs bg-bg-3 border border-bd-0 rounded-[var(--radius-md)] text-fg-1 hover:text-fg-0"
+                  >
+                    Today
+                  </button>
+
+                  <button
+                    onClick={() => shiftCalendar(-1)}
+                    className="p-1.5 rounded hover:bg-bg-3 text-fg-2"
+                    aria-label="Previous"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => shiftCalendar(1)}
+                    className="p-1.5 rounded hover:bg-bg-3 text-fg-2"
+                    aria-label="Next"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-7 gap-2 text-xs text-fg-2">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label) => (
-                  <div key={label} className="text-center">{label}</div>
-                ))}
+              <div className="text-xs text-fg-2">
+                {calendarLabel} ({userTimeZone}) {calendarView !== 'year' ? `• Now: ${nowLocalLabel}` : ''}
               </div>
+              <div className="text-[11px] text-fg-3">Scope: {calendarFolder}</div>
 
-              {calendarLoading ? (
+              {!hasEntriesInActiveView && hasAllRequiredCalendarMonths && (
+                <div className="text-xs text-fg-3">No YYYY-MM-DD.md files found for this range.</div>
+              )}
+
+              {calendarLoading && !hasAllRequiredCalendarMonths ? (
                 <div className="flex items-center justify-center py-8 text-fg-2 text-sm">
                   <Loader2 className="w-4 h-4 animate-spin mr-2" />
                   Loading calendar…
                 </div>
-              ) : calendarDays.length === 0 ? (
-                <EmptyState
-                  icon={<CalendarDays className="w-8 h-8" />}
-                  title="No date files"
-                  description="No YYYY-MM-DD.md files found for this month."
-                />
-              ) : (
-                <div className="grid grid-cols-7 gap-2">
-                  {calendarCells.map((cell, idx) => {
-                    if (!cell.date) return <div key={`empty-${idx}`} className="h-20 rounded border border-bd-0/50 bg-bg-3/40" />
-                    const key = cell.date.toISOString().slice(0, 10)
-                    const dayData = calendarByDay.get(key)
+              ) : calendarView === 'year' ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2">
+                  {yearBuckets.map((bucket) => (
+                    <button
+                      key={bucket.key}
+                      onClick={() => {
+                        setCalendarView('month')
+                        setCalendarAnchor(new Date(calendarAnchor.getFullYear(), bucket.monthIndex, 1))
+                      }}
+                      className={cn(
+                        'rounded-[var(--radius-md)] p-3 text-left transition-colors',
+                        bucket.totalFiles > 0
+                          ? 'bg-status-info/10 hover:bg-status-info/20'
+                          : 'bg-bg-3/40 hover:bg-bg-3/60'
+                      )}
+                    >
+                      <div className="text-xs text-fg-1">{bucket.monthLabel}</div>
+                      <div className="mt-1 text-lg font-semibold text-fg-0">{bucket.totalFiles}</div>
+                      <div className="text-[11px] text-fg-2">dated files</div>
+                      <div className="mt-2 text-[11px] text-fg-2 truncate">
+                        {bucket.firstFile ? bucket.firstFile.name : 'No dated files'}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : calendarView === 'month' ? (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-7 text-xs text-fg-2 bg-bg-3/50 rounded-[var(--radius-md)] overflow-hidden">
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label) => (
+                      <div key={label} className="py-2 text-center">{label}</div>
+                    ))}
+                  </div>
 
+                  <div className="grid grid-cols-7 gap-1">
+                    {monthCells.map((cell, idx) => {
+                      if (!cell.date) {
+                        return <div key={`empty-${idx}`} className="h-24 rounded-[var(--radius-md)] bg-bg-3/20" />
+                      }
+
+                      const key = localDayKey(cell.date)
+                      const dayData = calendarByDay.get(key)
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => {
+                            setCalendarAnchor(startOfLocalDay(cell.date!))
+                            setCalendarView('day')
+                          }}
+                          className={cn(
+                            'h-24 rounded-[var(--radius-md)] p-2 text-left transition-colors',
+                            dayData && dayData.count > 0
+                              ? 'bg-status-info/10 hover:bg-status-info/20'
+                              : 'bg-bg-3/35 hover:bg-bg-3/55'
+                          )}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-fg-1">{cell.date.getDate()}</span>
+                            <span className="text-[11px] text-fg-2">{dayData?.count ?? 0}</span>
+                          </div>
+                          <div className="mt-2 text-[11px] text-fg-2">files</div>
+                          <div className="mt-1 text-[11px] text-fg-2 truncate">{dayData?.files[0]?.name ?? '—'}</div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : calendarView === 'week' ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-2">
+                  {weekDays.map((day) => {
+                    const key = localDayKey(day)
+                    const dayData = calendarByDay.get(key)
                     return (
                       <button
                         key={key}
                         onClick={() => {
-                          const first = dayData?.files[0]
-                          if (first) void handleOpenCalendarFile(first)
+                          setCalendarAnchor(startOfLocalDay(day))
+                          setCalendarView('day')
                         }}
                         className={cn(
-                          'h-20 rounded border text-left p-2 transition-colors',
-                          dayData ? 'border-status-info/40 bg-status-info/10 hover:bg-status-info/20' : 'border-bd-0 bg-bg-3/50'
+                          'rounded-[var(--radius-md)] p-3 text-left transition-colors',
+                          dayData && dayData.count > 0
+                            ? 'bg-status-info/10 hover:bg-status-info/20'
+                            : 'bg-bg-3/35 hover:bg-bg-3/55'
                         )}
                       >
-                        <div className="text-xs text-fg-1">{cell.date.getUTCDate()}</div>
-                        <div className="mt-1 text-[11px] text-fg-2">
-                          {dayData ? `${dayData.count} file${dayData.count === 1 ? '' : 's'}` : '—'}
+                        <div className="text-xs text-fg-1">
+                          {day.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                        </div>
+                        <div className="mt-1 text-lg font-semibold text-fg-0">{dayData?.count ?? 0}</div>
+                        <div className="text-[11px] text-fg-2">dated files</div>
+                        <div className="mt-2 text-[11px] text-fg-2 truncate">
+                          {dayData?.files[0]?.name ?? 'No dated files'}
                         </div>
                       </button>
                     )
                   })}
                 </div>
+              ) : (
+                <div className="rounded-[var(--radius-md)] overflow-hidden bg-bg-3/35">
+                  {selectedDay?.files.length ? (
+                    <div className="divide-y divide-bd-0">
+                      {selectedDay.files.map((file) => (
+                        <button
+                          key={file.id}
+                          onClick={() => {
+                            void handleOpenCalendarFile(file)
+                          }}
+                          className="w-full px-3 py-2 text-left hover:bg-bg-2/70 transition-colors"
+                        >
+                          <div className="text-sm text-fg-0 truncate">{file.name}</div>
+                          <div className="text-[11px] text-fg-2 truncate">{file.path}</div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="px-3 py-6 text-sm text-fg-2">No dated files for this day.</div>
+                  )}
+                </div>
               )}
             </div>
-          ) : files.length > 0 ? (
+          ) : hasFilteredEntries ? (
             <div>
               <div className="grid grid-cols-[1fr_140px_140px_110px] gap-3 px-3 py-2 border-b border-bd-0 text-[11px] text-fg-2">
                 <span>Name</span>
@@ -682,7 +1046,7 @@ export function WorkspaceClient({ initialFiles }: Props) {
               {favoriteEntries.length > 0 && (
                 <SectionHeader title="Favorites" />
               )}
-              <div className="divide-y divide-white/[0.04]">
+              <div className="divide-y divide-bd-0">
                 {favoriteEntries.map((file) => (
                   <FileRow
                     key={file.id}
@@ -700,7 +1064,7 @@ export function WorkspaceClient({ initialFiles }: Props) {
               {recentEntries.length > 0 && (
                 <SectionHeader title="Recent" />
               )}
-              <div className="divide-y divide-white/[0.04]">
+              <div className="divide-y divide-bd-0">
                 {recentEntries.map((file) => (
                   <FileRow
                     key={file.id}
@@ -718,7 +1082,7 @@ export function WorkspaceClient({ initialFiles }: Props) {
               {regularEntries.length > 0 && (favoriteEntries.length > 0 || recentEntries.length > 0) && (
                 <SectionHeader title="All Files" />
               )}
-              <div className="divide-y divide-white/[0.04]">
+              <div className="divide-y divide-bd-0">
                 {regularEntries.map((file) => (
                   <FileRow
                     key={file.id}
@@ -733,6 +1097,12 @@ export function WorkspaceClient({ initialFiles }: Props) {
                 ))}
               </div>
             </div>
+          ) : files.length > 0 && normalizedSearch ? (
+            <EmptyState
+              icon={<Search className="w-8 h-8" />}
+              title="No matching files"
+              description={`No files match "${searchQuery.trim()}" in this folder.`}
+            />
           ) : (
             <EmptyState
               icon={<FolderTree className="w-8 h-8" />}
@@ -756,7 +1126,7 @@ export function WorkspaceClient({ initialFiles }: Props) {
             ? 'Protected configuration file'
             : undefined
         }
-        width="lg"
+        width="xl"
       >
         {isLoading ? (
           <div className="flex items-center justify-center h-64">

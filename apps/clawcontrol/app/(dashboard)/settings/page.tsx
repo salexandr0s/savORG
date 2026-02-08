@@ -1,14 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useLayout, type LayoutMode } from '@/lib/layout-context'
-import { useSettings, type Theme, type Density } from '@/lib/settings-context'
+import { useState, useEffect, type ChangeEvent } from 'react'
+import { useLayout } from '@/lib/layout-context'
+import { useSettings } from '@/lib/settings-context'
 import { useSyncStatus } from '@/lib/hooks/useSyncStatus'
 import { configApi, type EnvConfigResponse } from '@/lib/http'
 import { cn } from '@/lib/utils'
+import { UserAvatar } from '@/components/ui/user-avatar'
 import {
-  Monitor,
-  Smartphone,
   Maximize2,
   Check,
   FolderOpen,
@@ -17,6 +16,8 @@ import {
   Save,
   Loader2,
   ShieldOff,
+  Upload,
+  Trash2,
 } from 'lucide-react'
 
 type OpenClawDiscoverOk = {
@@ -33,6 +34,8 @@ type OpenClawDiscoverNotFound = {
 }
 
 type OpenClawDiscoverResponse = OpenClawDiscoverOk | OpenClawDiscoverNotFound
+const USER_AVATAR_MAX_DIMENSION = 256
+const USER_AVATAR_MAX_DATA_URL_LENGTH = 1_500_000
 
 declare global {
   interface Window {
@@ -44,7 +47,14 @@ declare global {
 
 export default function SettingsPage() {
   const { mode, setMode, resolved } = useLayout()
-  const { theme, setTheme, density, setDensity, skipTypedConfirm, setSkipTypedConfirm } = useSettings()
+  const {
+    theme,
+    setTheme,
+    skipTypedConfirm,
+    setSkipTypedConfirm,
+    userAvatarDataUrl,
+    setUserAvatarDataUrl,
+  } = useSettings()
 
   // Environment config state
   const [envConfig, setEnvConfig] = useState<EnvConfigResponse | null>(null)
@@ -55,6 +65,8 @@ export default function SettingsPage() {
   const [pickingWorkspace, setPickingWorkspace] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const [avatarBusy, setAvatarBusy] = useState(false)
+  const [avatarError, setAvatarError] = useState<string | null>(null)
 
   // OpenClaw auto-discovery state
   const [discoverData, setDiscoverData] = useState<OpenClawDiscoverResponse | null>(null)
@@ -73,6 +85,18 @@ export default function SettingsPage() {
       setPickerAvailable(typeof window.clawcontrolDesktop?.pickDirectory === 'function')
     }
   }, [])
+
+  useEffect(() => {
+    if (mode !== 'auto') {
+      setMode('auto')
+    }
+  }, [mode, setMode])
+
+  useEffect(() => {
+    if (theme !== 'dark') {
+      setTheme('dark')
+    }
+  }, [theme, setTheme])
 
   async function loadEnvConfig() {
     setEnvLoading(true)
@@ -165,12 +189,100 @@ export default function SettingsPage() {
   const notFound = discoverData && discoverData.status === 'not_found' ? discoverData : null
   const lastSyncAt = syncStatus?.lastSync?.timestamp ?? null
 
+  async function handleAvatarFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    setAvatarError(null)
+    setAvatarBusy(true)
+    try {
+      if (!file.type.startsWith('image/')) {
+        throw new Error('Please select an image file')
+      }
+
+      const dataUrl = await fileToDataUrl(file)
+      const resizedDataUrl = await resizeImageDataUrl(dataUrl, USER_AVATAR_MAX_DIMENSION)
+      if (resizedDataUrl.length > USER_AVATAR_MAX_DATA_URL_LENGTH) {
+        throw new Error('Image is too large. Please pick a smaller image.')
+      }
+
+      setUserAvatarDataUrl(resizedDataUrl)
+    } catch (err) {
+      setAvatarError(err instanceof Error ? err.message : 'Failed to process image')
+    } finally {
+      setAvatarBusy(false)
+    }
+  }
+
   return (
-    <div className="max-w-2xl space-y-8">
+    <div className="w-full space-y-8">
       <div>
         <h1 className="text-lg font-semibold text-fg-0">Settings</h1>
         <p className="text-sm text-fg-2 mt-1">Configure clawcontrol preferences</p>
       </div>
+
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-sm font-medium text-fg-0">Profile</h2>
+          <p className="text-xs text-fg-2 mt-0.5">
+            Choose the avatar used for your operator messages in Console chat
+          </p>
+        </div>
+
+        <div className="p-4 rounded-[var(--radius-lg)] bg-bg-2 border border-bd-0 space-y-4">
+          <div className="flex items-center gap-3">
+            <UserAvatar avatarDataUrl={userAvatarDataUrl} size="lg" />
+            <div>
+              <p className="text-sm text-fg-1">Chat avatar</p>
+              <p className="text-xs text-fg-3 mt-0.5">Visible on your user-side chat bubbles</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label
+              className={cn(
+                'inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-[var(--radius-md)] transition-colors cursor-pointer',
+                avatarBusy
+                  ? 'bg-bg-3 text-fg-3 cursor-not-allowed'
+                  : 'bg-bg-3 text-fg-1 hover:bg-bd-1'
+              )}
+            >
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarFileChange}
+                disabled={avatarBusy}
+                className="sr-only"
+              />
+              {avatarBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+              {avatarBusy ? 'Processing...' : 'Upload Image'}
+            </label>
+
+            <button
+              type="button"
+              onClick={() => setUserAvatarDataUrl(null)}
+              disabled={!userAvatarDataUrl || avatarBusy}
+              className={cn(
+                'inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-[var(--radius-md)] transition-colors',
+                userAvatarDataUrl && !avatarBusy
+                  ? 'bg-bg-3 text-fg-1 hover:bg-bd-1'
+                  : 'bg-bg-3 text-fg-3 cursor-not-allowed'
+              )}
+            >
+              <Trash2 className="w-4 h-4" />
+              Reset
+            </button>
+          </div>
+
+          {avatarError && (
+            <div className="flex items-center gap-2 p-2 rounded bg-status-danger/10 text-status-danger text-xs">
+              <AlertCircle className="w-3 h-3 shrink-0" />
+              <span>{avatarError}</span>
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* Workspace Configuration Section */}
       <section className="space-y-4">
@@ -418,40 +530,30 @@ export default function SettingsPage() {
         <div>
           <h2 className="text-sm font-medium text-fg-0">Layout Mode</h2>
           <p className="text-xs text-fg-2 mt-0.5">
-            Choose how the interface adapts to your display
+            Layout selection is simplified to automatic mode
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <LayoutModeCard
-            mode="auto"
-            label="Auto"
-            description="Adapts based on screen aspect ratio"
-            icon={Maximize2}
-            selected={mode === 'auto'}
-            onSelect={() => setMode('auto')}
-          />
-          <LayoutModeCard
-            mode="horizontal"
-            label="Horizontal"
-            description="Optimized for wide monitors"
-            icon={Monitor}
-            selected={mode === 'horizontal'}
-            onSelect={() => setMode('horizontal')}
-          />
-          <LayoutModeCard
-            mode="vertical"
-            label="Vertical"
-            description="Optimized for portrait displays"
-            icon={Smartphone}
-            selected={mode === 'vertical'}
-            onSelect={() => setMode('vertical')}
-          />
-        </div>
+        <div className="p-4 rounded-[var(--radius-lg)] bg-bg-2 border border-bd-0 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-[var(--radius-md)] bg-bg-3">
+                <Maximize2 className="w-4 h-4 text-fg-2" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-fg-0">Auto</p>
+                <p className="text-xs text-fg-2 mt-0.5">Adapts to your current screen shape</p>
+              </div>
+            </div>
+            <span className="px-2 py-1 text-[11px] rounded-[var(--radius-md)] bg-status-info/10 text-status-info">
+              Enabled
+            </span>
+          </div>
 
-        <p className="text-xs text-fg-3">
-          Current resolved layout: <span className="font-mono text-fg-2">{resolved}</span>
-        </p>
+          <p className="text-xs text-fg-3">
+            Current resolved layout: <span className="font-mono text-fg-2">{resolved}</span>
+          </p>
+        </div>
       </section>
 
       {/* Theme Section */}
@@ -459,52 +561,18 @@ export default function SettingsPage() {
         <div>
           <h2 className="text-sm font-medium text-fg-0">Theme</h2>
           <p className="text-xs text-fg-2 mt-0.5">
-            Visual appearance settings
+            Theme selection is simplified to automatic default
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <ThemeCard
-            theme="dark"
-            label="Ops Dark"
-            description="High contrast for extended monitoring"
-            selected={theme === 'dark'}
-            onSelect={() => setTheme('dark')}
-          />
-          <ThemeCard
-            theme="dim"
-            label="Ops Dim"
-            description="Lower contrast for comfortable viewing"
-            selected={theme === 'dim'}
-            onSelect={() => setTheme('dim')}
-          />
-        </div>
-      </section>
-
-      {/* Density Section */}
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-sm font-medium text-fg-0">Display Density</h2>
-          <p className="text-xs text-fg-2 mt-0.5">
-            How compact the interface should be
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <DensityCard
-            density="compact"
-            label="Compact"
-            description="More information per screen"
-            selected={density === 'compact'}
-            onSelect={() => setDensity('compact')}
-          />
-          <DensityCard
-            density="default"
-            label="Default"
-            description="More breathing room"
-            selected={density === 'default'}
-            onSelect={() => setDensity('default')}
-          />
+        <div className="p-4 rounded-[var(--radius-lg)] bg-bg-2 border border-bd-0 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-fg-0">Auto (Ops Dark)</p>
+            <p className="text-xs text-fg-2 mt-0.5">Keeps the default monitoring theme enabled</p>
+          </div>
+          <span className="px-2 py-1 text-[11px] rounded-[var(--radius-md)] bg-status-info/10 text-status-info">
+            Enabled
+          </span>
         </div>
       </section>
 
@@ -578,112 +646,6 @@ export default function SettingsPage() {
   )
 }
 
-// ============================================================================
-// SUB-COMPONENTS
-// ============================================================================
-
-function LayoutModeCard({
-  label,
-  description,
-  icon: Icon,
-  selected,
-  onSelect,
-}: {
-  mode?: LayoutMode
-  label: string
-  description: string
-  icon: React.ComponentType<{ className?: string }>
-  selected: boolean
-  onSelect: () => void
-}) {
-  return (
-    <button
-      onClick={onSelect}
-      className={cn(
-        'flex flex-col items-start p-4 rounded-[var(--radius-lg)] border transition-all text-left',
-        selected
-          ? 'bg-bg-3 border-status-info/50 ring-1 ring-status-info/20'
-          : 'bg-bg-2 border-bd-0 hover:border-bd-1 hover:bg-bg-3/50'
-      )}
-    >
-      <div className="flex items-center justify-between w-full mb-2">
-        <Icon className={cn('w-5 h-5', selected ? 'text-status-info' : 'text-fg-2')} />
-        {selected && <Check className="w-4 h-4 text-status-info" />}
-      </div>
-      <span className={cn('text-sm font-medium', selected ? 'text-fg-0' : 'text-fg-1')}>
-        {label}
-      </span>
-      <span className="text-xs text-fg-2 mt-0.5">{description}</span>
-    </button>
-  )
-}
-
-function ThemeCard({
-  label,
-  description,
-  selected,
-  onSelect,
-}: {
-  theme?: Theme
-  label: string
-  description: string
-  selected: boolean
-  onSelect: () => void
-}) {
-  return (
-    <button
-      onClick={onSelect}
-      className={cn(
-        'flex items-center justify-between p-4 rounded-[var(--radius-lg)] border transition-all text-left',
-        selected
-          ? 'bg-bg-3 border-status-info/50 ring-1 ring-status-info/20'
-          : 'bg-bg-2 border-bd-0 hover:border-bd-1 hover:bg-bg-3/50'
-      )}
-    >
-      <div>
-        <span className={cn('text-sm font-medium', selected ? 'text-fg-0' : 'text-fg-1')}>
-          {label}
-        </span>
-        <p className="text-xs text-fg-2 mt-0.5">{description}</p>
-      </div>
-      {selected && <Check className="w-4 h-4 text-status-info shrink-0" />}
-    </button>
-  )
-}
-
-function DensityCard({
-  label,
-  description,
-  selected,
-  onSelect,
-}: {
-  density?: Density
-  label: string
-  description: string
-  selected: boolean
-  onSelect: () => void
-}) {
-  return (
-    <button
-      onClick={onSelect}
-      className={cn(
-        'flex items-center justify-between p-4 rounded-[var(--radius-lg)] border transition-all text-left',
-        selected
-          ? 'bg-bg-3 border-status-info/50 ring-1 ring-status-info/20'
-          : 'bg-bg-2 border-bd-0 hover:border-bd-1 hover:bg-bg-3/50'
-      )}
-    >
-      <div>
-        <span className={cn('text-sm font-medium', selected ? 'text-fg-0' : 'text-fg-1')}>
-          {label}
-        </span>
-        <p className="text-xs text-fg-2 mt-0.5">{description}</p>
-      </div>
-      {selected && <Check className="w-4 h-4 text-status-info shrink-0" />}
-    </button>
-  )
-}
-
 function formatRelativeTime(value: string | Date): string {
   const date = typeof value === 'string' ? new Date(value) : value
   const diffMs = Date.now() - date.getTime()
@@ -693,4 +655,47 @@ function formatRelativeTime(value: string | Date): string {
   if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`
   if (diffSeconds < 86400) return `${Math.floor(diffSeconds / 3600)}h ago`
   return `${Math.floor(diffSeconds / 86400)}d ago`
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') {
+        reject(new Error('Could not read image'))
+        return
+      }
+      resolve(reader.result)
+    }
+    reader.onerror = () => reject(new Error('Could not read image'))
+    reader.readAsDataURL(file)
+  })
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image()
+    image.onload = () => resolve(image)
+    image.onerror = () => reject(new Error('Invalid image'))
+    image.src = src
+  })
+}
+
+async function resizeImageDataUrl(dataUrl: string, maxDimension: number): Promise<string> {
+  const image = await loadImage(dataUrl)
+  const largest = Math.max(image.width, image.height)
+
+  const scale = largest > maxDimension ? maxDimension / largest : 1
+  const width = Math.max(1, Math.round(image.width * scale))
+  const height = Math.max(1, Math.round(image.height * scale))
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('Failed to process image')
+  ctx.drawImage(image, 0, 0, width, height)
+
+  const webp = canvas.toDataURL('image/webp', 0.9)
+  if (webp.startsWith('data:image/webp')) return webp
+  return canvas.toDataURL('image/png')
 }

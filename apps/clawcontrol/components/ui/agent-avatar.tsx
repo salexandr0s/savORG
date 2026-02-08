@@ -49,7 +49,7 @@ export function AgentAvatar({
 
   // Generate fallback identicon
   const fallbackSvg = generateIdenticonSvg(name, { size: pixelSize })
-  const fallbackDataUrl = `data:image/svg+xml;base64,${Buffer.from(fallbackSvg).toString('base64')}`
+  const fallbackDataUrl = `data:image/svg+xml;base64,${svgToBase64(fallbackSvg)}`
 
   const imageUrl = error ? fallbackDataUrl : `/api/agents/${agentId}/avatar`
 
@@ -71,6 +71,13 @@ export function AgentAvatar({
       />
     </div>
   )
+}
+
+function svgToBase64(svg: string): string {
+  if (typeof window !== 'undefined' && typeof window.btoa === 'function') {
+    return window.btoa(svg)
+  }
+  return Buffer.from(svg).toString('base64')
 }
 
 /**

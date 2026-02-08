@@ -5,6 +5,8 @@ import Image from 'next/image'
 import { Bot, Terminal, User, CircleDot, PencilLine, Search, Play, CheckCircle2, FolderOpen, ChevronDown, ChevronRight } from 'lucide-react'
 import { motion, useReducedMotion } from 'motion/react'
 import { cn } from '@/lib/utils'
+import { AgentAvatar } from '@/components/ui/agent-avatar'
+import { UserAvatar } from '@/components/ui/user-avatar'
 import { CopyButton } from './code-block/copy-button'
 import { Markdown } from './markdown'
 
@@ -25,6 +27,11 @@ export interface MessageProps {
   streaming?: boolean
   error?: string
   className?: string
+  operatorAvatarDataUrl?: string | null
+  agentAvatar?: {
+    agentId: string
+    name: string
+  } | null
 }
 
 function formatTime(date: Date): string {
@@ -193,6 +200,8 @@ export const Message = memo(function Message({
   streaming,
   error,
   className,
+  operatorAvatarDataUrl,
+  agentAvatar,
 }: MessageProps) {
   const reduceMotion = useReducedMotion()
 
@@ -204,6 +213,26 @@ export const Message = memo(function Message({
     if (isSystem) return <Terminal className="w-4 h-4 text-fg-2" />
     return <Bot className="w-4 h-4 text-fg-1" />
   }, [isOperator, isSystem])
+
+  const customAvatar = useMemo(() => {
+    if (isSystem) return null
+    if (isOperator) {
+      return (
+        <UserAvatar
+          avatarDataUrl={operatorAvatarDataUrl}
+          size="md"
+        />
+      )
+    }
+    if (!agentAvatar) return null
+    return (
+      <AgentAvatar
+        agentId={agentAvatar.agentId}
+        name={agentAvatar.name}
+        size="md"
+      />
+    )
+  }, [agentAvatar, isOperator, isSystem, operatorAvatarDataUrl])
 
   const wrapperAlign = isOperator ? 'justify-end' : 'justify-start'
   const parsedContent = useMemo(() => {
@@ -271,14 +300,18 @@ export const Message = memo(function Message({
     >
       <div className={cn('flex gap-3 max-w-[88%]', !isSystem && 'min-w-0', isOperator && 'justify-end', isOperator && 'flex-row-reverse')}>
         {!isSystem && (
-          <div
-            className={cn(
-              'mt-0.5 w-8 h-8 rounded-[10px] flex items-center justify-center flex-shrink-0',
-              isOperator ? 'bg-bg-3' : 'bg-bg-2'
-            )}
-          >
-            {avatar}
-          </div>
+          customAvatar ? (
+            <div className="mt-0.5 flex-shrink-0">{customAvatar}</div>
+          ) : (
+            <div
+              className={cn(
+                'mt-0.5 w-8 h-8 rounded-[10px] flex items-center justify-center flex-shrink-0',
+                isOperator ? 'bg-bg-3' : 'bg-bg-2'
+              )}
+            >
+              {avatar}
+            </div>
+          )
         )}
 
         <div className={cn('min-w-0', isOperator && 'flex flex-col items-end', isSystem && 'w-full max-w-[780px]')}>

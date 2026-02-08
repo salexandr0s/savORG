@@ -1,9 +1,12 @@
 'use client'
 
+import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { Search, Command } from 'lucide-react'
 import { StatusChipStrip, useDefaultStatusChips } from './status-chip-strip'
 import { Kbd } from '../ui/kbd'
+import { UserAvatar } from '@/components/ui/user-avatar'
+import { useSettings } from '@/lib/settings-context'
 
 interface TopBarProps {
   title?: string
@@ -21,6 +24,7 @@ export function TopBar({
   className,
 }: TopBarProps) {
   const chips = useDefaultStatusChips()
+  const { userAvatarDataUrl } = useSettings()
 
   return (
     <header
@@ -82,6 +86,18 @@ export function TopBar({
             <Kbd>K</Kbd>
           </span>
         </button>
+
+        <Link
+          href="/settings"
+          className={cn(
+            'rounded-[var(--radius-md)] border border-bd-0 p-0.5',
+            'bg-bg-2 hover:border-bd-1 transition-colors'
+          )}
+          title="Profile settings"
+          aria-label="Profile settings"
+        >
+          <UserAvatar avatarDataUrl={userAvatarDataUrl} size="sm" />
+        </Link>
       </div>
     </header>
   )

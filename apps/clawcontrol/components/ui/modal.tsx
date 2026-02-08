@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-export type ModalWidth = 'default' | 'lg' | 'full'
+export type ModalWidth = 'default' | 'lg' | 'xl' | 'full'
 
 export interface ModalFrameProps {
   open: boolean
@@ -57,6 +57,7 @@ export function ModalFrame({
   const widthClasses: Record<ModalWidth, string> = {
     default: 'w-full max-w-lg',
     lg: 'w-full max-w-3xl',
+    xl: 'w-full max-w-5xl',
     full: 'w-[min(1200px,calc(100vw-2rem))]',
   }
 

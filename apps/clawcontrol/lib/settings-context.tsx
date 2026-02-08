@@ -19,18 +19,33 @@ interface SettingsContextValue {
   setDensity: (density: Density) => void
   skipTypedConfirm: boolean
   setSkipTypedConfirm: (skip: boolean) => void
+  userAvatarDataUrl: string | null
+  setUserAvatarDataUrl: (avatarDataUrl: string | null) => void
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null)
 
+const SETTINGS_FALLBACK: SettingsContextValue = {
+  theme: 'dark',
+  setTheme: () => {},
+  density: 'compact',
+  setDensity: () => {},
+  skipTypedConfirm: false,
+  setSkipTypedConfirm: () => {},
+  userAvatarDataUrl: null,
+  setUserAvatarDataUrl: () => {},
+}
+
 const THEME_STORAGE_KEY = 'clawcontrol-theme'
 const DENSITY_STORAGE_KEY = 'clawcontrol-density'
 const SKIP_TYPED_CONFIRM_KEY = 'clawcontrol-skip-typed-confirm'
+const USER_AVATAR_STORAGE_KEY = 'clawcontrol-user-avatar-data-url'
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>('dark')
   const [density, setDensityState] = useState<Density>('compact')
   const [skipTypedConfirm, setSkipTypedConfirmState] = useState(false)
+  const [userAvatarDataUrl, setUserAvatarDataUrlState] = useState<string | null>(null)
 
   // Load saved preferences
   useEffect(() => {
@@ -48,6 +63,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       const savedSkipTypedConfirm = localStorage.getItem(SKIP_TYPED_CONFIRM_KEY)
       if (savedSkipTypedConfirm === 'true') {
         setSkipTypedConfirmState(true)
+      }
+
+      const savedUserAvatarDataUrl = localStorage.getItem(USER_AVATAR_STORAGE_KEY)
+      if (savedUserAvatarDataUrl && savedUserAvatarDataUrl.startsWith('data:image/')) {
+        setUserAvatarDataUrlState(savedUserAvatarDataUrl)
       }
     }
   }, [])
@@ -102,8 +122,31 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const setUserAvatarDataUrl = useCallback((avatarDataUrl: string | null) => {
+    const normalized = avatarDataUrl && avatarDataUrl.startsWith('data:image/')
+      ? avatarDataUrl
+      : null
+    setUserAvatarDataUrlState(normalized)
+    if (typeof window !== 'undefined') {
+      if (normalized) {
+        localStorage.setItem(USER_AVATAR_STORAGE_KEY, normalized)
+      } else {
+        localStorage.removeItem(USER_AVATAR_STORAGE_KEY)
+      }
+    }
+  }, [])
+
   return (
-    <SettingsContext.Provider value={{ theme, setTheme, density, setDensity, skipTypedConfirm, setSkipTypedConfirm }}>
+    <SettingsContext.Provider value={{
+      theme,
+      setTheme,
+      density,
+      setDensity,
+      skipTypedConfirm,
+      setSkipTypedConfirm,
+      userAvatarDataUrl,
+      setUserAvatarDataUrl,
+    }}>
       {children}
     </SettingsContext.Provider>
   )
@@ -111,8 +154,5 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
 export function useSettings() {
   const context = useContext(SettingsContext)
-  if (!context) {
-    throw new Error('useSettings must be used within a SettingsProvider')
-  }
-  return context
+  return context ?? SETTINGS_FALLBACK
 }

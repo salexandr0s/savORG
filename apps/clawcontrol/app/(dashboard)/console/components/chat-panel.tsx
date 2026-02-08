@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState, type DragEvent } from 'react'
+import { useCallback, useMemo, useRef, useState, type DragEvent } from 'react'
 import { Terminal, Bot, XCircle, Wifi, WifiOff, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AgentAvatar } from '@/components/ui/agent-avatar'
@@ -10,6 +10,7 @@ import type { ConsoleSessionDTO } from '@/app/api/openclaw/console/sessions/rout
 import type { ChatMessage } from '@/lib/stores/chat-store'
 import type { AgentDTO } from '@/lib/repo'
 import type { AvailabilityStatus } from '@/lib/openclaw/availability'
+import { useSettings } from '@/lib/settings-context'
 
 // ============================================================================
 // TYPES
@@ -48,6 +49,7 @@ export function ChatPanel({
   loading,
   onRefresh,
 }: ChatPanelProps) {
+  const { userAvatarDataUrl } = useSettings()
   const [externalDropBatch, setExternalDropBatch] = useState<{ id: number; files: File[] } | null>(null)
   const [isPanelDragOver, setIsPanelDragOver] = useState(false)
   const dragDepthRef = useRef(0)
@@ -55,6 +57,13 @@ export function ChatPanel({
 
   const headerAgent = session ? agentsBySessionKey[session.sessionKey] : undefined
   const headerName = session ? (headerAgent?.name || session.agentId) : ''
+  const messageAgentAvatar = useMemo(() => {
+    if (!headerAgent) return undefined
+    return {
+      agentId: headerAgent.id,
+      name: headerAgent.displayName || headerAgent.name || session?.agentId || headerAgent.id,
+    }
+  }, [headerAgent, session?.agentId])
 
   // Determine if input should be disabled
   const noSession = !session
@@ -258,6 +267,8 @@ export function ChatPanel({
                 pending={message.pending}
                 streaming={message.streaming}
                 error={message.error}
+                agentAvatar={messageAgentAvatar}
+                operatorAvatarDataUrl={userAvatarDataUrl}
               />
             )
           })
