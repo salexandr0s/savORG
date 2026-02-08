@@ -4,7 +4,11 @@ import { useState, useEffect, type ChangeEvent } from 'react'
 import { useLayout } from '@/lib/layout-context'
 import { useSettings } from '@/lib/settings-context'
 import { useSyncStatus } from '@/lib/hooks/useSyncStatus'
-import { configApi, type EnvConfigResponse } from '@/lib/http'
+import {
+  configApi,
+  type SettingsConfigResponse,
+  type GatewayTestResponse,
+} from '@/lib/http'
 import { cn } from '@/lib/utils'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import {
@@ -21,9 +25,19 @@ import {
 } from 'lucide-react'
 
 type OpenClawDiscoverOk = {
-  status: 'connected' | 'offline'
+  status: 'connected' | 'auth_required' | 'offline'
   gatewayUrl: string
+  gatewayWsUrl: string | null
   hasToken: boolean
+  workspacePath: string | null
+  configPath: string
+  configPaths: string[]
+  source: string
+  probe?: {
+    statusCode?: number
+    latencyMs: number
+    error?: string
+  }
   agentCount: number
   agents: Array<{ id: string; identity: string }>
 }
@@ -34,6 +48,9 @@ type OpenClawDiscoverNotFound = {
 }
 
 type OpenClawDiscoverResponse = OpenClawDiscoverOk | OpenClawDiscoverNotFound
+
+type GatewayConnectionState = 'idle' | 'testing' | 'connected' | 'auth_required' | 'offline'
+
 const USER_AVATAR_MAX_DIMENSION = 256
 const USER_AVATAR_MAX_DATA_URL_LENGTH = 1_500_000
 
@@ -57,14 +74,18 @@ export default function SettingsPage() {
     setUserAvatarDataUrl,
   } = useSettings()
 
-  // Environment config state
-  const [envConfig, setEnvConfig] = useState<EnvConfigResponse | null>(null)
-  const [envLoading, setEnvLoading] = useState(true)
-  const [envError, setEnvError] = useState<string | null>(null)
+  // Settings config state
+  const [settingsConfig, setSettingsConfig] = useState<SettingsConfigResponse | null>(null)
+  const [settingsLoading, setSettingsLoading] = useState(true)
+  const [settingsError, setSettingsError] = useState<string | null>(null)
   const [workspacePath, setWorkspacePath] = useState('')
+  const [gatewayHttpUrl, setGatewayHttpUrl] = useState('')
   const [pickerAvailable, setPickerAvailable] = useState(false)
   const [restartAvailable, setRestartAvailable] = useState(false)
   const [pickingWorkspace, setPickingWorkspace] = useState(false)
+  const [testingGateway, setTestingGateway] = useState(false)
+  const [gatewayConnectionState, setGatewayConnectionState] = useState<GatewayConnectionState>('idle')
+  const [gatewayConnectionMessage, setGatewayConnectionMessage] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [restartingServer, setRestartingServer] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
@@ -79,9 +100,9 @@ export default function SettingsPage() {
   const [syncSuccessAt, setSyncSuccessAt] = useState<string | null>(null)
   const { status: syncStatus, syncing, triggerSync } = useSyncStatus({ polling: false })
 
-  // Load environment config
+  // Load settings config
   useEffect(() => {
-    loadEnvConfig()
+    loadSettingsConfig()
     loadDiscover()
 
     if (typeof window !== 'undefined') {
@@ -102,17 +123,22 @@ export default function SettingsPage() {
     }
   }, [theme, setTheme])
 
-  async function loadEnvConfig() {
-    setEnvLoading(true)
-    setEnvError(null)
+  async function loadSettingsConfig() {
+    setSettingsLoading(true)
+    setSettingsError(null)
     try {
-      const res = await configApi.getEnv()
-      setEnvConfig(res.data)
-      setWorkspacePath(res.data.config.OPENCLAW_WORKSPACE || '')
+      const res = await configApi.getSettings()
+      setSettingsConfig(res.data)
+      setWorkspacePath(res.data.settings.workspacePath || '')
+      setGatewayHttpUrl(
+        res.data.settings.gatewayHttpUrl
+          || res.data.resolved?.gatewayHttpUrl
+          || 'http://127.0.0.1:18789'
+      )
     } catch (err) {
-      setEnvError(err instanceof Error ? err.message : 'Failed to load config')
+      setSettingsError(err instanceof Error ? err.message : 'Failed to load settings')
     } finally {
-      setEnvLoading(false)
+      setSettingsLoading(false)
     }
   }
 
@@ -129,6 +155,32 @@ export default function SettingsPage() {
       }
 
       setDiscoverData(data)
+      if (data && data.status !== 'not_found') {
+        applyGatewayTestResult({
+          gatewayUrl: data.gatewayUrl,
+          tokenProvided: data.hasToken,
+          reachable: data.status === 'connected',
+          state: data.status === 'connected'
+            ? 'reachable'
+            : data.status === 'auth_required'
+              ? 'auth_required'
+              : 'unreachable',
+          probe: data.probe
+            ? {
+                ok: data.status === 'connected',
+                state: data.status === 'connected'
+                  ? 'reachable'
+                  : data.status === 'auth_required'
+                    ? 'auth_required'
+                    : 'unreachable',
+                url: `${data.gatewayUrl.replace(/\/+$/, '')}/health`,
+                latencyMs: data.probe.latencyMs,
+                ...(data.probe.statusCode !== undefined ? { statusCode: data.probe.statusCode } : {}),
+                ...(data.probe.error ? { error: data.probe.error } : {}),
+              }
+            : undefined,
+        })
+      }
     } catch (err) {
       setDiscoverError(err instanceof Error ? err.message : 'Failed to discover OpenClaw')
       setDiscoverData(null)
@@ -137,17 +189,18 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleSaveWorkspace() {
-    const workspaceChanged = Boolean(hasWorkspaceChanges)
+  async function handleSaveSettings() {
+    const workspaceChanged = Boolean(hasSettingsChanges)
     setSaving(true)
     setRestartingServer(false)
     setSaveSuccess(false)
-    setEnvError(null)
+    setSettingsError(null)
     try {
-      const res = await configApi.updateEnv({
-        OPENCLAW_WORKSPACE: workspacePath || null,
+      const res = await configApi.updateSettings({
+        workspacePath: workspacePath || null,
+        gatewayHttpUrl: gatewayHttpUrl || null,
       })
-      setEnvConfig(res.data)
+      setSettingsConfig(res.data)
 
       if (workspaceChanged && typeof window !== 'undefined') {
         const restartFn = window.clawcontrolDesktop?.restartServer
@@ -155,9 +208,9 @@ export default function SettingsPage() {
           setRestartingServer(true)
           const restartResult = await restartFn()
           if (restartResult?.ok) {
-            await loadEnvConfig()
+            await loadSettingsConfig()
           } else {
-            setEnvError(
+            setSettingsError(
               restartResult?.message || 'Configuration saved, but automatic restart failed. Restart manually.'
             )
           }
@@ -168,7 +221,7 @@ export default function SettingsPage() {
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 3000)
     } catch (err) {
-      setEnvError(err instanceof Error ? err.message : 'Failed to save config')
+      setSettingsError(err instanceof Error ? err.message : 'Failed to save settings')
     } finally {
       setRestartingServer(false)
       setSaving(false)
@@ -177,21 +230,61 @@ export default function SettingsPage() {
 
   async function handlePickWorkspace() {
     if (typeof window === 'undefined' || typeof window.clawcontrolDesktop?.pickDirectory !== 'function') {
-      setEnvError('Directory picker is only available in the desktop app.')
+      setSettingsError('Directory picker is only available in the desktop app.')
       return
     }
 
     setPickingWorkspace(true)
-    setEnvError(null)
+    setSettingsError(null)
     try {
       const selected = await window.clawcontrolDesktop.pickDirectory(workspacePath || undefined)
       if (selected) {
         setWorkspacePath(selected)
       }
     } catch (err) {
-      setEnvError(err instanceof Error ? err.message : 'Failed to open directory picker')
+      setSettingsError(err instanceof Error ? err.message : 'Failed to open directory picker')
     } finally {
       setPickingWorkspace(false)
+    }
+  }
+
+  function applyGatewayTestResult(result: GatewayTestResponse) {
+    if (result.state === 'reachable') {
+      setGatewayConnectionState('connected')
+      setGatewayConnectionMessage('Gateway reachable')
+      return
+    }
+
+    if (result.state === 'auth_required') {
+      setGatewayConnectionState('auth_required')
+      setGatewayConnectionMessage('Gateway reachable, authentication required')
+      return
+    }
+
+    setGatewayConnectionState('offline')
+    setGatewayConnectionMessage(
+      result.probe?.error
+        ? `Gateway unreachable: ${result.probe.error}`
+        : 'Gateway unreachable'
+    )
+  }
+
+  async function handleTestConnection() {
+    setTestingGateway(true)
+    setGatewayConnectionState('testing')
+    setGatewayConnectionMessage(null)
+
+    try {
+      const res = await configApi.testGateway({
+        gatewayHttpUrl: gatewayHttpUrl || null,
+        withRetry: true,
+      })
+      applyGatewayTestResult(res.data)
+    } catch (err) {
+      setGatewayConnectionState('offline')
+      setGatewayConnectionMessage(err instanceof Error ? err.message : 'Failed to test gateway')
+    } finally {
+      setTestingGateway(false)
     }
   }
 
@@ -208,7 +301,12 @@ export default function SettingsPage() {
     await loadDiscover()
   }
 
-  const hasWorkspaceChanges = envConfig && workspacePath !== (envConfig.config.OPENCLAW_WORKSPACE || '')
+  const hasSettingsChanges = Boolean(
+    settingsConfig && (
+      workspacePath !== (settingsConfig.settings.workspacePath || '')
+      || gatewayHttpUrl !== (settingsConfig.settings.gatewayHttpUrl || settingsConfig.resolved?.gatewayHttpUrl || '')
+    )
+  )
   const discovered = discoverData && discoverData.status !== 'not_found' ? discoverData : null
   const notFound = discoverData && discoverData.status === 'not_found' ? discoverData : null
   const lastSyncAt = syncStatus?.lastSync?.timestamp ?? null
@@ -318,17 +416,17 @@ export default function SettingsPage() {
         </div>
 
         <div className="p-4 rounded-[var(--radius-lg)] bg-bg-2 border border-bd-0 space-y-4">
-          {envLoading ? (
+          {settingsLoading ? (
             <div className="flex items-center gap-2 text-fg-2">
               <Loader2 className="w-4 h-4 animate-spin" />
-              <span className="text-sm">Loading configuration...</span>
+              <span className="text-sm">Loading settings...</span>
             </div>
-          ) : envError ? (
+          ) : settingsError ? (
             <div className="flex items-center gap-2 text-status-danger">
               <AlertCircle className="w-4 h-4" />
-              <span className="text-sm">{envError}</span>
+              <span className="text-sm">{settingsError}</span>
               <button
-                onClick={loadEnvConfig}
+                onClick={loadSettingsConfig}
                 className="ml-auto p-1 hover:bg-bg-3 rounded"
               >
                 <RefreshCw className="w-4 h-4" />
@@ -336,6 +434,68 @@ export default function SettingsPage() {
             </div>
           ) : (
             <>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm text-fg-1">
+                  Gateway URL
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={gatewayHttpUrl}
+                    onChange={(e) => setGatewayHttpUrl(e.target.value)}
+                    placeholder="http://127.0.0.1:18789"
+                    className="flex-1 px-3 py-2 text-sm bg-bg-1 border border-bd-0 rounded-[var(--radius-md)] text-fg-0 placeholder:text-fg-3 focus:outline-none focus:border-status-info/50"
+                  />
+                  <button
+                    onClick={handleTestConnection}
+                    disabled={testingGateway || saving}
+                    className={cn(
+                      'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-[var(--radius-md)] transition-colors',
+                      !testingGateway && !saving
+                        ? 'bg-bg-3 text-fg-1 hover:bg-bd-1'
+                        : 'bg-bg-3 text-fg-3 cursor-not-allowed'
+                    )}
+                  >
+                    {testingGateway ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4" />
+                    )}
+                    {testingGateway ? 'Testing...' : 'Test Connection'}
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-fg-2">
+                  <span>Connection status:</span>
+                  <span
+                    className={cn(
+                      'font-medium',
+                      gatewayConnectionState === 'connected'
+                        ? 'text-status-success'
+                        : gatewayConnectionState === 'auth_required'
+                          ? 'text-status-warning'
+                          : gatewayConnectionState === 'offline'
+                            ? 'text-status-danger'
+                            : 'text-fg-3'
+                    )}
+                  >
+                    {gatewayConnectionState === 'testing'
+                      ? 'Testing'
+                      : gatewayConnectionState === 'connected'
+                        ? 'Connected'
+                        : gatewayConnectionState === 'auth_required'
+                          ? 'Auth required'
+                          : gatewayConnectionState === 'offline'
+                            ? 'Offline'
+                            : 'Not tested'}
+                  </span>
+                </div>
+
+                {gatewayConnectionMessage && (
+                  <p className="text-xs text-fg-3">{gatewayConnectionMessage}</p>
+                )}
+              </div>
+
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-sm text-fg-1">
                   <FolderOpen className="w-4 h-4 text-fg-2" />
@@ -369,11 +529,11 @@ export default function SettingsPage() {
                     </button>
                   )}
                   <button
-                    onClick={handleSaveWorkspace}
-                    disabled={!hasWorkspaceChanges || saving}
+                    onClick={handleSaveSettings}
+                    disabled={!hasSettingsChanges || saving}
                     className={cn(
                       'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-[var(--radius-md)] transition-colors',
-                      hasWorkspaceChanges && !saving
+                      hasSettingsChanges && !saving
                         ? 'bg-status-info text-white hover:bg-status-info/90'
                         : 'bg-bg-3 text-fg-3 cursor-not-allowed'
                     )}
@@ -390,25 +550,33 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              {/* Current active workspace info */}
-              {envConfig?.activeWorkspace && (
+              {/* Current resolved workspace info */}
+              {settingsConfig?.resolved?.workspacePath && (
                 <div className="pt-3 border-t border-bd-0 space-y-2">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-fg-3">Active workspace:</span>
-                    <span className="font-mono text-fg-2">{envConfig.activeWorkspace}</span>
+                    <span className="text-fg-3">Resolved workspace:</span>
+                    <span className="font-mono text-fg-2">{settingsConfig.resolved.workspacePath}</span>
                   </div>
-                  {envConfig.requiresRestart && (
-                    <div className="flex items-center gap-2 p-2 rounded bg-status-warning/10 text-status-warning text-xs">
-                      <AlertCircle className="w-3 h-3" />
-                      <span>Restart the server for changes to take effect</span>
-                    </div>
-                  )}
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-fg-3">Settings file:</span>
+                    <span className="font-mono text-fg-2 truncate max-w-[70%]">{settingsConfig.settingsPath}</span>
+                  </div>
+                </div>
+              )}
+
+              {settingsConfig && !settingsConfig.workspaceValidation.ok && (
+                <div className="flex items-center gap-2 p-2 rounded bg-status-danger/10 text-status-danger text-xs">
+                  <AlertCircle className="w-3 h-3 shrink-0" />
+                  <span>
+                    {settingsConfig.workspaceValidation.issues.find((issue) => issue.level === 'error')?.message
+                      ?? 'Workspace validation failed'}
+                  </span>
                 </div>
               )}
 
               {/* Help text */}
               <p className="text-xs text-fg-3 pt-2">
-                This should be the OpenClaw directory containing your agents/, skills/, memory/, and other workspace folders.
+                Configure both the gateway URL and workspace directory. Gateway changes apply immediately after save; workspace changes may require restart.
                 {restartAvailable
                   ? ' Changes are applied with an automatic server restart.'
                   : ' Changes require a server restart.'}
@@ -423,7 +591,7 @@ export default function SettingsPage() {
         <div>
           <h2 className="text-sm font-medium text-fg-0">OpenClaw</h2>
           <p className="text-xs text-fg-2 mt-0.5">
-            Auto-detect gateway URL and installed agents from <span className="font-mono">~/.openclaw/openclaw.json</span>
+            Auto-detect gateway URL and agents from <span className="font-mono">~/.openclaw</span> (or <span className="font-mono">~/.OpenClaw</span>), <span className="font-mono">~/.moltbot</span>, and <span className="font-mono">~/.clawdbot</span>
           </p>
         </div>
 
@@ -453,14 +621,18 @@ export default function SettingsPage() {
                       'w-2 h-2 rounded-full',
                       discoverData?.status === 'connected'
                         ? 'bg-status-success'
+                        : discoverData?.status === 'auth_required'
+                          ? 'bg-status-warning'
                         : discoverData?.status === 'offline'
                           ? 'bg-status-danger'
-                          : 'bg-status-warning'
+                        : 'bg-status-warning'
                     )}
                   />
                   <span className="text-sm text-fg-1">
                     {discoverData?.status === 'connected'
                       ? 'Connected'
+                      : discoverData?.status === 'auth_required'
+                        ? 'Auth Required'
                       : discoverData?.status === 'offline'
                         ? 'Offline'
                         : 'Not Found'}
@@ -509,8 +681,20 @@ export default function SettingsPage() {
                     <span className="font-mono text-fg-2">{discovered?.gatewayUrl || '—'}</span>
                   </div>
                   <div className="flex items-center justify-between">
+                    <span className="text-fg-3">Gateway WS URL:</span>
+                    <span className="font-mono text-fg-2">{discovered?.gatewayWsUrl || '—'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
                     <span className="text-fg-3">Token detected:</span>
                     <span className="text-fg-2">{discovered?.hasToken ? 'Yes' : 'No'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-fg-3">Workspace:</span>
+                    <span className="font-mono text-fg-2">{discovered?.workspacePath || '—'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-fg-3">Source:</span>
+                    <span className="text-fg-2">{discovered?.source || '—'}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-fg-3">Agents discovered:</span>

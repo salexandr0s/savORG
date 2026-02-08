@@ -89,6 +89,54 @@ describe('workspace path policy', () => {
     expect(await fsp.realpath(mod.getWorkspaceRoot())).toBe(await fsp.realpath(configuredWorkspace))
   })
 
+  it('reads workspace from legacy config directories and filenames', async () => {
+    const legacyDir = join(fakeHome, '.moltbot')
+    const legacyWorkspace = join(tempRoot, 'legacy-workspace')
+
+    await fsp.mkdir(legacyDir, { recursive: true })
+    await fsp.mkdir(legacyWorkspace, { recursive: true })
+    await fsp.writeFile(join(legacyWorkspace, 'AGENTS.md'), '# test')
+    await fsp.writeFile(
+      join(legacyDir, 'moltbot.json'),
+      JSON.stringify({
+        workspace: legacyWorkspace,
+      }, null, 2)
+    )
+
+    delete process.env.OPENCLAW_WORKSPACE
+    delete process.env.CLAWCONTROL_WORKSPACE_ROOT
+    delete process.env.WORKSPACE_ROOT
+    vi.resetModules()
+
+    const mod = await import('@/lib/fs/path-policy')
+    expect(await fsp.realpath(mod.getWorkspaceRoot())).toBe(await fsp.realpath(legacyWorkspace))
+  })
+
+  it('reads workspace from uppercase .OpenClaw config directory alias', async () => {
+    const lowerDir = join(fakeHome, '.openclaw')
+    const upperDir = join(fakeHome, '.OpenClaw')
+    const upperWorkspace = join(tempRoot, 'upper-workspace')
+
+    await fsp.mkdir(lowerDir, { recursive: true })
+    await fsp.mkdir(upperDir, { recursive: true })
+    await fsp.mkdir(upperWorkspace, { recursive: true })
+    await fsp.writeFile(join(upperWorkspace, 'AGENTS.md'), '# test')
+    await fsp.writeFile(
+      join(upperDir, 'openclaw.json'),
+      JSON.stringify({
+        workspace: upperWorkspace,
+      }, null, 2)
+    )
+
+    delete process.env.OPENCLAW_WORKSPACE
+    delete process.env.CLAWCONTROL_WORKSPACE_ROOT
+    delete process.env.WORKSPACE_ROOT
+    vi.resetModules()
+
+    const mod = await import('@/lib/fs/path-policy')
+    expect(await fsp.realpath(mod.getWorkspaceRoot())).toBe(await fsp.realpath(upperWorkspace))
+  })
+
   it('prefers OPENCLAW_WORKSPACE over ~/.openclaw/openclaw.json workspace', async () => {
     const configDir = join(fakeHome, '.openclaw')
     const configuredWorkspace = join(tempRoot, 'openclaw-workspace')
@@ -112,6 +160,26 @@ describe('workspace path policy', () => {
 
     const mod = await import('@/lib/fs/path-policy')
     expect(await fsp.realpath(mod.getWorkspaceRoot())).toBe(await fsp.realpath(envWorkspace))
+  })
+
+  it('prefers settings workspace over OPENCLAW_WORKSPACE', async () => {
+    const settingsWorkspace = join(tempRoot, 'settings-workspace')
+    const envWorkspace = join(tempRoot, 'env-workspace')
+    const settingsDir = join(fakeHome, '.openclaw', 'clawcontrol')
+
+    await fsp.mkdir(settingsWorkspace, { recursive: true })
+    await fsp.mkdir(envWorkspace, { recursive: true })
+    await fsp.mkdir(settingsDir, { recursive: true })
+    await fsp.writeFile(
+      join(settingsDir, 'settings.json'),
+      JSON.stringify({ workspacePath: settingsWorkspace, updatedAt: new Date().toISOString() })
+    )
+
+    process.env.OPENCLAW_WORKSPACE = envWorkspace
+    vi.resetModules()
+
+    const mod = await import('@/lib/fs/path-policy')
+    expect(await fsp.realpath(mod.getWorkspaceRoot())).toBe(await fsp.realpath(settingsWorkspace))
   })
 
   it('allows non-allowlisted top-level directories in default mode', async () => {
@@ -153,5 +221,34 @@ describe('workspace path policy', () => {
     const rows = await listWorkspace('/')
     expect(rows.some((row) => row.name === 'my-custom-dir')).toBe(false)
     expect(rows.some((row) => row.name === 'memory')).toBe(true)
+  })
+
+  it('falls back to historical workspace directory names with symlink dedupe', async () => {
+    const openClawWorkspace = join(fakeHome, 'OpenClaw')
+    const legacyAlias = join(fakeHome, 'clawd')
+
+    await fsp.mkdir(openClawWorkspace, { recursive: true })
+    await fsp.writeFile(join(openClawWorkspace, 'AGENTS.md'), '# test')
+
+    try {
+      await fsp.symlink(openClawWorkspace, legacyAlias)
+    } catch {
+      // Ignore environments where symlink creation is restricted.
+    }
+
+    delete process.env.OPENCLAW_WORKSPACE
+    delete process.env.CLAWCONTROL_WORKSPACE_ROOT
+    delete process.env.WORKSPACE_ROOT
+    vi.resetModules()
+
+    const mod = await import('@/lib/fs/path-policy')
+    expect(await fsp.realpath(mod.getWorkspaceRoot())).toBe(await fsp.realpath(openClawWorkspace))
+  })
+
+  it('uses separator-safe containment checks', async () => {
+    const mod = await import('@/lib/fs/path-policy')
+
+    expect(mod.isPathWithinRoot('/tmp/workspace/docs/file.md', '/tmp/workspace')).toBe(true)
+    expect(mod.isPathWithinRoot('/tmp/workspace-archive/file.md', '/tmp/workspace')).toBe(false)
   })
 })

@@ -27,6 +27,8 @@ export interface GatewayStatus {
 export interface ProbeResult {
   ok: boolean
   latencyMs: number
+  statusCode?: number
+  reason?: 'ok' | 'auth_required' | 'unreachable'
 }
 
 export interface StreamChunk {

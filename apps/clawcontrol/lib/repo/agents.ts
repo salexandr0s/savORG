@@ -30,6 +30,8 @@ export interface UpdateAgentInput {
   kind?: AgentKind
   dispatchEligible?: boolean
   nameSource?: AgentNameSource
+  isStale?: boolean
+  staleAt?: Date | null
 
   // Identity fields (internal use only; API routes should guard these)
   slug?: string
@@ -51,6 +53,8 @@ export interface CreateAgentInput {
   wipLimit?: number
   model?: string | null
   fallbacks?: string | null
+  isStale?: boolean
+  staleAt?: Date | null
 }
 
 export interface AgentsRepo {
@@ -140,6 +144,8 @@ export function createDbAgentsRepo(): AgentsRepo {
           wipLimit: input.wipLimit ?? 2,
           ...(input.model !== undefined ? { model: input.model } : {}),
           ...(input.fallbacks !== undefined ? { fallbacks: input.fallbacks } : {}),
+          ...(input.isStale !== undefined ? { isStale: input.isStale } : {}),
+          ...(input.staleAt !== undefined ? { staleAt: input.staleAt } : {}),
         },
       })
       return toDTO(row as unknown as PrismaAgentRow)
@@ -169,6 +175,8 @@ export function createDbAgentsRepo(): AgentsRepo {
       if (input.kind !== undefined) updateData.kind = input.kind
       if (input.dispatchEligible !== undefined) updateData.dispatchEligible = input.dispatchEligible
       if (input.nameSource !== undefined) updateData.nameSource = input.nameSource
+      if (input.isStale !== undefined) updateData.isStale = input.isStale
+      if (input.staleAt !== undefined) updateData.staleAt = input.staleAt
 
       if (input.slug !== undefined) {
         const normalizedSlug = slugifyDisplayName(input.slug)
@@ -301,6 +309,8 @@ interface PrismaAgentRow {
   avatarPath?: string | null
   fallbacks?: string | null
   model?: string | null
+  isStale?: boolean | null
+  staleAt?: Date | null
   lastSeenAt: Date | null
   lastHeartbeatAt: Date | null
   createdAt: Date
@@ -330,6 +340,8 @@ function toDTO(row: PrismaAgentRow): AgentDTO {
     avatarPath: row.avatarPath ?? null,
     model: row.model ?? null,
     fallbacks: safeParseArray(row.fallbacks),
+    isStale: row.isStale === true,
+    staleAt: row.staleAt ?? null,
     lastSeenAt: row.lastSeenAt,
     lastHeartbeatAt: row.lastHeartbeatAt,
     createdAt: row.createdAt,

@@ -1,0 +1,4 @@
+[submodule "video"]
+	path = video
+	url = ./video
+	ignore = dirty

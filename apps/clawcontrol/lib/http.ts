@@ -1528,25 +1528,109 @@ export const templatesApi = {
 // CONFIGURATION API
 // ============================================================================
 
-export interface EnvConfig {
-  OPENCLAW_WORKSPACE: string | null
-  DATABASE_URL: string | null
-  NODE_ENV: string | null
+export interface SettingsConfig {
+  gatewayHttpUrl: string | null
+  gatewayWsUrl: string | null
+  gatewayToken: string | null
+  workspacePath: string | null
+  setupCompleted: boolean
+  updatedAt: string
 }
 
-export interface EnvConfigResponse {
-  config: EnvConfig
-  activeWorkspace: string | null
-  envPath: string
-  requiresRestart: boolean
-  message?: string
+export interface SettingsResolvedConfig {
+  gatewayHttpUrl: string
+  gatewayWsUrl: string | null
+  gatewayTokenSource: 'settings' | 'env' | 'openclaw' | 'none'
+  workspacePath: string | null
+  source: 'openclaw.json' | 'moltbot.json' | 'clawdbot.json' | 'config.yaml' | 'filesystem'
+  configPath: string
+  configPaths: string[]
+  gatewayUrlSource: 'settings' | 'env' | 'openclaw'
+  gatewayWsUrlSource: 'settings' | 'env' | 'openclaw'
+  workspaceSource: 'settings' | 'env' | 'openclaw' | 'none'
+}
+
+export interface WorkspaceValidationIssue {
+  level: 'error' | 'warning'
+  code: string
+  message: string
+}
+
+export interface SettingsConfigResponse {
+  settings: SettingsConfig
+  resolved: SettingsResolvedConfig | null
+  settingsPath: string
+  legacyEnvPath: string | null
+  migratedFromEnv: boolean
+  workspaceValidation: {
+    ok: boolean
+    path: string | null
+    exists: boolean
+    issues: WorkspaceValidationIssue[]
+  }
+}
+
+export interface GatewayTestResponse {
+  gatewayUrl: string
+  tokenProvided: boolean
+  reachable: boolean
+  state: 'reachable' | 'auth_required' | 'unreachable'
+  probe?: {
+    ok: boolean
+    state: 'reachable' | 'auth_required' | 'unreachable'
+    url: string
+    latencyMs: number
+    statusCode?: number
+    error?: string
+  }
+  attempts?: number
+}
+
+export interface InitStatusResponse {
+  ready: boolean
+  requiresSetup: boolean
+  setupCompleted: boolean
+  checks: {
+    database: {
+      state: 'ok' | 'error'
+      code: string | null
+      message: string
+      databasePath: string | null
+    }
+    openclaw: {
+      state: 'ok' | 'warning'
+      installed: boolean
+      version?: string
+      message: string
+    }
+    gateway: {
+      state: 'ok' | 'warning' | 'error'
+      reachable: boolean
+      mode: 'reachable' | 'auth_required' | 'unreachable'
+      attempts: number
+      gatewayUrl: string
+      message: string
+      probe: unknown
+    }
+    workspace: {
+      state: 'ok' | 'error'
+      path: string | null
+      message: string
+      issues: WorkspaceValidationIssue[]
+    }
+  }
+  timestamp: string
 }
 
 export const configApi = {
-  getEnv: () => apiGet<{ data: EnvConfigResponse }>('/api/config/env'),
-  updateEnv: (data: Partial<{
-    OPENCLAW_WORKSPACE: string | null
-  }>) => fetch('/api/config/env', {
+  getSettings: () => apiGet<{ data: SettingsConfigResponse }>('/api/config/settings'),
+  updateSettings: (data: Partial<{
+    gatewayHttpUrl: string | null
+    gatewayWsUrl: string | null
+    gatewayToken: string | null
+    workspacePath: string | null
+    setupCompleted: boolean
+  }>) => fetch('/api/config/settings', {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -1562,8 +1646,18 @@ export const configApi = {
         errorData.error
       )
     }
-    return res.json() as Promise<{ data: EnvConfigResponse }>
+    return res.json() as Promise<{ data: SettingsConfigResponse; message?: string }>
   }),
+  testGateway: (data?: {
+    gatewayHttpUrl?: string | null
+    gatewayToken?: string | null
+    withRetry?: boolean
+  }) => apiPost<{ data: GatewayTestResponse }, {
+    gatewayHttpUrl?: string | null
+    gatewayToken?: string | null
+    withRetry?: boolean
+  }>('/api/openclaw/gateway/test', data),
+  getInitStatus: () => apiGet<{ data: InitStatusResponse }>('/api/system/init-status'),
 }
 
 // ============================================================================

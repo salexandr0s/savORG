@@ -32,7 +32,7 @@ export async function bootSync(): Promise<SyncRunStatus> {
     const agentResult = await syncAgentsFromOpenClaw({ forceRefresh })
     result.agents = {
       success: true,
-      count: agentResult.added + agentResult.updated,
+      count: agentResult.added + agentResult.updated + agentResult.stale,
     }
   } catch (err) {
     result.agents.error = err instanceof Error ? err.message : String(err)

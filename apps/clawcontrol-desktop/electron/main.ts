@@ -21,10 +21,23 @@ const SERVER_START_TIMEOUT_MS = 30_000
 const SERVER_STOP_TIMEOUT_MS = 10_000
 const PICK_DIRECTORY_CHANNEL = 'clawcontrol:pick-directory'
 const RESTART_SERVER_CHANNEL = 'clawcontrol:restart-server'
+const GET_SETTINGS_CHANNEL = 'clawcontrol:get-settings'
+const SAVE_SETTINGS_CHANNEL = 'clawcontrol:save-settings'
+const GET_INIT_STATUS_CHANNEL = 'clawcontrol:get-init-status'
+const TEST_GATEWAY_CHANNEL = 'clawcontrol:test-gateway'
 
 interface ServerRestartResponse {
   ok: boolean
   message: string
+}
+
+interface DesktopSettings {
+  gatewayHttpUrl?: string
+  gatewayWsUrl?: string
+  gatewayToken?: string
+  workspacePath?: string
+  setupCompleted?: boolean
+  updatedAt?: string
 }
 
 function isBrokenPipeError(error: unknown): error is NodeJS.ErrnoException {
@@ -234,6 +247,57 @@ function getPackagedServerDir(): string {
   return path.join(process.resourcesPath, 'server')
 }
 
+function getDesktopSettingsPath(): string {
+  return path.join(app.getPath('userData'), 'settings.json')
+}
+
+function normalizeSettingsString(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function readDesktopSettings(): DesktopSettings {
+  const settingsPath = getDesktopSettingsPath()
+  if (!fs.existsSync(settingsPath)) return {}
+
+  try {
+    const raw = JSON.parse(fs.readFileSync(settingsPath, 'utf8')) as Record<string, unknown>
+    return {
+      ...(normalizeSettingsString(raw.gatewayHttpUrl) ? { gatewayHttpUrl: normalizeSettingsString(raw.gatewayHttpUrl) ?? undefined } : {}),
+      ...(normalizeSettingsString(raw.gatewayWsUrl) ? { gatewayWsUrl: normalizeSettingsString(raw.gatewayWsUrl) ?? undefined } : {}),
+      ...(normalizeSettingsString(raw.gatewayToken) ? { gatewayToken: normalizeSettingsString(raw.gatewayToken) ?? undefined } : {}),
+      ...(normalizeSettingsString(raw.workspacePath) ? { workspacePath: normalizeSettingsString(raw.workspacePath) ?? undefined } : {}),
+      ...(typeof raw.setupCompleted === 'boolean' ? { setupCompleted: raw.setupCompleted } : {}),
+      ...(normalizeSettingsString(raw.updatedAt) ? { updatedAt: normalizeSettingsString(raw.updatedAt) ?? undefined } : {}),
+    }
+  } catch {
+    return {}
+  }
+}
+
+async function callServerJson(pathname: string, init?: RequestInit): Promise<unknown> {
+  const url = `${SERVER_URL}${pathname.startsWith('/') ? pathname : `/${pathname}`}`
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      Accept: 'application/json',
+      ...(init?.headers ? init.headers : {}),
+    },
+  })
+
+  const payload = await response.json().catch(() => null)
+
+  if (!response.ok) {
+    const error = payload && typeof payload === 'object' && 'error' in payload
+      ? String((payload as { error?: unknown }).error)
+      : `HTTP ${response.status}`
+    throw new Error(error)
+  }
+
+  return payload
+}
+
 async function spawnServer(): Promise<ChildProcess> {
   if (app.isPackaged) {
     const serverDir = getPackagedServerDir()
@@ -249,26 +313,46 @@ async function spawnServer(): Promise<ChildProcess> {
     }
 
     const cwd = path.dirname(entry)
-    const workspaceRoot = path.join(app.getPath('userData'), 'workspace')
-    const databasePath = path.join(app.getPath('userData'), 'clawcontrol.db')
+    const userDataDir = app.getPath('userData')
+    const settingsPath = getDesktopSettingsPath()
+    const settings = readDesktopSettings()
+    const workspaceRoot = settings.workspacePath || path.join(userDataDir, 'workspace')
+    const databasePath = path.join(userDataDir, 'clawcontrol.db')
+    const migrationsDir = path.join(serverDir, 'apps', 'clawcontrol', 'prisma', 'migrations')
+
     fs.mkdirSync(workspaceRoot, { recursive: true })
     await ensurePackagedDatabaseSchema(serverDir, databasePath)
+
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      ELECTRON_RUN_AS_NODE: '1',
+      NODE_ENV: 'production',
+      HOST: SERVER_HOST,
+      HOSTNAME: SERVER_HOST,
+      PORT: String(SERVER_PORT),
+      OPENCLAW_WORKSPACE: workspaceRoot,
+      CLAWCONTROL_WORKSPACE_ROOT: workspaceRoot,
+      CLAWCONTROL_USER_DATA_DIR: userDataDir,
+      CLAWCONTROL_SETTINGS_PATH: settingsPath,
+      CLAWCONTROL_MIGRATIONS_DIR: migrationsDir,
+      DATABASE_URL: `file:${databasePath}`,
+    }
+
+    if (settings.gatewayHttpUrl) {
+      env.OPENCLAW_GATEWAY_HTTP_URL = settings.gatewayHttpUrl
+    }
+    if (settings.gatewayWsUrl) {
+      env.OPENCLAW_GATEWAY_WS_URL = settings.gatewayWsUrl
+    }
+    if (settings.gatewayToken) {
+      env.OPENCLAW_GATEWAY_TOKEN = settings.gatewayToken
+    }
 
     const proc = spawn(process.execPath, [entry], {
       cwd,
       detached: process.platform !== 'win32',
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: {
-        ...process.env,
-        ELECTRON_RUN_AS_NODE: '1',
-        NODE_ENV: 'production',
-        HOST: SERVER_HOST,
-        HOSTNAME: SERVER_HOST,
-        PORT: String(SERVER_PORT),
-        OPENCLAW_WORKSPACE: workspaceRoot,
-        CLAWCONTROL_WORKSPACE_ROOT: workspaceRoot,
-        DATABASE_URL: `file:${databasePath}`,
-      },
+      env,
     })
 
     proc.stdout?.on('data', (data) => console.log(`[server] ${data.toString().trim()}`))
@@ -488,6 +572,54 @@ ipcMain.handle(RESTART_SERVER_CHANNEL, async (): Promise<ServerRestartResponse> 
       message: err instanceof Error
         ? `Saved configuration, but restart failed: ${err.message}`
         : 'Saved configuration, but restart failed.',
+    }
+  }
+})
+
+ipcMain.handle(GET_SETTINGS_CHANNEL, async () => {
+  try {
+    return await callServerJson('/api/config/settings')
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : 'Failed to load settings',
+    }
+  }
+})
+
+ipcMain.handle(SAVE_SETTINGS_CHANNEL, async (_event, payload: unknown) => {
+  try {
+    return await callServerJson('/api/config/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload ?? {}),
+    })
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : 'Failed to save settings',
+    }
+  }
+})
+
+ipcMain.handle(GET_INIT_STATUS_CHANNEL, async () => {
+  try {
+    return await callServerJson('/api/system/init-status')
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : 'Failed to load init status',
+    }
+  }
+})
+
+ipcMain.handle(TEST_GATEWAY_CHANNEL, async (_event, payload: unknown) => {
+  try {
+    return await callServerJson('/api/openclaw/gateway/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload ?? {}),
+    })
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : 'Failed to test gateway',
     }
   }
 })

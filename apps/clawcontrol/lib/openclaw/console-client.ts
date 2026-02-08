@@ -19,6 +19,7 @@ import 'server-only'
 import { existsSync, readFileSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
+import { getOpenClawConfigSync } from '@/lib/openclaw-client'
 import {
   createAdapter,
   createWsAdapter,
@@ -112,29 +113,14 @@ function loadDeviceAuthToken(deviceId: string, role = 'operator'): string | unde
   return undefined
 }
 
-function loadGatewayTokenFromConfigFile(): string | undefined {
-  const configPath = join(homedir(), '.openclaw', 'openclaw.json')
-  if (!existsSync(configPath)) return undefined
-
-  try {
-    const raw = JSON.parse(readFileSync(configPath, 'utf-8'))
-    return (
-      asString(raw?.gateway?.auth?.token) ||
-      asString(raw?.auth?.token) ||
-      asString(raw?.token) ||
-      asString(raw?.operator_token)
-    )
-  } catch {
-    return undefined
-  }
-}
-
 function resolveWsAuth(config?: ConsoleClientConfig): ResolvedWsAuth {
+  const resolved = getOpenClawConfigSync()
   const deviceIdentity = loadDeviceIdentity()
   const token = config?.wsToken
     ?? process.env.OPENCLAW_GATEWAY_TOKEN
+    ?? resolved?.token
     ?? (deviceIdentity ? loadDeviceAuthToken(deviceIdentity.deviceId, 'operator') : undefined)
-    ?? loadGatewayTokenFromConfigFile()
+    ?? undefined
 
   return {
     token,
@@ -167,11 +153,16 @@ export type {
  * Enforces loopback-only unless OPENCLAW_ALLOW_NON_LOOPBACK=true.
  */
 export function createConsoleClient(config?: ConsoleClientConfig): OpenClawAdapter {
+  const resolved = getOpenClawConfigSync()
   const baseUrl = config?.httpBaseUrl
     ?? process.env.OPENCLAW_GATEWAY_HTTP_URL
+    ?? resolved?.gatewayUrl
     ?? DEFAULT_HTTP_URL
 
-  const token = config?.httpToken ?? process.env.OPENCLAW_GATEWAY_TOKEN
+  const token = config?.httpToken
+    ?? process.env.OPENCLAW_GATEWAY_TOKEN
+    ?? resolved?.token
+    ?? undefined
 
   // Security: enforce loopback unless explicitly overridden
   if (!process.env.OPENCLAW_ALLOW_NON_LOOPBACK) {
@@ -201,8 +192,10 @@ export function createConsoleClient(config?: ConsoleClientConfig): OpenClawAdapt
  * Enforces loopback-only unless OPENCLAW_ALLOW_NON_LOOPBACK=true.
  */
 export function createWsConsoleClient(config?: ConsoleClientConfig): WsAdapter {
+  const resolved = getOpenClawConfigSync()
   const wsUrl = config?.wsUrl
     ?? process.env.OPENCLAW_GATEWAY_WS_URL
+    ?? resolved?.gatewayWsUrl
     ?? DEFAULT_WS_URL
 
   const { token, deviceIdentity } = resolveWsAuth(config)

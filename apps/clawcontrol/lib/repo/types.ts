@@ -97,6 +97,8 @@ export interface AgentDTO {
   avatarPath: string | null
   model: string | null
   fallbacks: string[]
+  isStale: boolean
+  staleAt: Date | null
   lastSeenAt: Date | null
   lastHeartbeatAt: Date | null
   createdAt: Date

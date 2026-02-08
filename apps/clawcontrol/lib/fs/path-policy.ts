@@ -8,19 +8,35 @@
  * - Resolves symlinks to prevent escape attacks
  */
 
-import { readFileSync, realpathSync, existsSync, lstatSync } from 'fs'
+import { readFileSync, realpathSync, existsSync, lstatSync, statSync } from 'fs'
 import { homedir } from 'os'
-import { resolve, join } from 'path'
+import { resolve, join, relative, isAbsolute } from 'path'
+import { load as loadYaml } from 'js-yaml'
+import { readSettingsSync } from '@/lib/settings/store'
 
 // Workspace root: where clawcontrol reads/writes agent files.
 //
 // Resolution order:
+// - settings.json workspacePath
 // - OPENCLAW_WORKSPACE (preferred)
 // - CLAWCONTROL_WORKSPACE_ROOT (app-specific)
 // - WORKSPACE_ROOT (legacy)
-// - ~/.openclaw/openclaw.json -> agents.defaults.workspace
+// - Historical config directories/files:
+//   - ~/.openclaw/, ~/.moltbot/, ~/.clawdbot/
+//   - Alias compatibility: ~/.OpenClaw/
+//   - openclaw.json, moltbot.json, clawdbot.json, config.yaml
+// - Historical workspace directories:
+//   - ~/OpenClaw, ~/moltbot, ~/clawd
 // - Auto-detect: ../../../../.. (when clawcontrol is checked out under ~/clawd/projects/clawcontrol/apps/clawcontrol)
 // - ./workspace (fallback for demo/dev)
+const CONFIG_DIR_GROUPS = [
+  ['.openclaw', '.OpenClaw'],
+  ['.moltbot'],
+  ['.clawdbot'],
+] as const
+const CONFIG_FILE_ORDER = ['openclaw.json', 'moltbot.json', 'clawdbot.json', 'config.yaml'] as const
+const WORKSPACE_DIR_ORDER = ['OpenClaw', 'moltbot', 'clawd'] as const
+
 function isWorkspaceMarkerPath(dir: string): boolean {
   return (
     existsSync(join(dir, 'AGENTS.md'))
@@ -44,6 +60,9 @@ function findNearestWorkspaceRoot(startDir: string, maxDepth = 10): string | nul
 }
 
 function pickWorkspaceRoot(): string {
+  const settingsWorkspace = workspaceFromSettings()
+  if (settingsWorkspace) return settingsWorkspace
+
   const envCandidates = [
     process.env.OPENCLAW_WORKSPACE,
     process.env.CLAWCONTROL_WORKSPACE_ROOT,
@@ -53,12 +72,14 @@ function pickWorkspaceRoot(): string {
     .map((value) => resolve(value))
 
   for (const candidate of envCandidates) {
-    // Env var is explicit; if path exists, trust it even without markers.
-    if (existsSync(candidate)) return candidate
+    return candidate
   }
 
-  const configWorkspace = workspaceFromOpenClawConfig()
+  const configWorkspace = workspaceFromOpenClawConfigFiles()
   if (configWorkspace) return configWorkspace
+
+  const knownWorkspace = workspaceFromKnownDirectories()
+  if (knownWorkspace) return knownWorkspace
 
   const discovered = findNearestWorkspaceRoot(process.cwd())
   if (discovered) return discovered
@@ -68,6 +89,17 @@ function pickWorkspaceRoot(): string {
 
   // Final fallback: current working directory (never auto-fallback to /).
   return resolve(process.cwd())
+}
+
+function workspaceFromSettings(): string | null {
+  try {
+    const { settings } = readSettingsSync()
+    const configured = toNonEmptyString(settings.workspacePath)
+    if (!configured) return null
+    return resolve(configured)
+  } catch {
+    return null
+  }
 }
 
 function toRecord(value: unknown): Record<string, unknown> | null {
@@ -81,25 +113,120 @@ function toNonEmptyString(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null
 }
 
-function workspaceFromOpenClawConfig(): string | null {
-  const configPath = join(homedir(), '.openclaw', 'openclaw.json')
-  if (!existsSync(configPath)) return null
+function pathKey(inputPath: string): string {
+  const normalized = resolve(inputPath)
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized
+}
 
-  try {
-    const raw = readFileSync(configPath, 'utf8')
-    const root = toRecord(JSON.parse(raw))
-    if (!root) return null
+function resolveWorkspaceInput(workspace: string, configDir: string): string {
+  const trimmed = workspace.trim()
+  const home = homedir()
 
-    const agents = toRecord(root.agents)
-    const defaults = toRecord(agents?.defaults)
-    const workspace = toNonEmptyString(defaults?.workspace) ?? toNonEmptyString(root.workspace)
-    if (!workspace) return null
+  if (trimmed === '~') return resolve(home)
+  if (trimmed.startsWith('~/')) return resolve(home, trimmed.slice(2))
+  if (isAbsolute(trimmed)) return resolve(trimmed)
+  return resolve(configDir, trimmed)
+}
 
-    const resolved = resolve(workspace)
-    return existsSync(resolved) ? resolved : null
-  } catch {
-    return null
+function workspaceFromParsedRecord(record: Record<string, unknown>, configDir: string): string | null {
+  const agents = toRecord(record.agents)
+  const defaults = toRecord(agents?.defaults)
+  const workspace = toNonEmptyString(defaults?.workspace) ?? toNonEmptyString(record.workspace)
+  if (!workspace) return null
+
+  return resolveWorkspaceInput(workspace, configDir)
+}
+
+function workspaceFromOpenClawConfigFiles(): string | null {
+  const home = homedir()
+  const seenDirs = new Set<string>()
+  const seenFiles = new Set<string>()
+
+  for (const configDirGroup of CONFIG_DIR_GROUPS) {
+    for (const configDirName of configDirGroup) {
+      const configDir = join(home, configDirName)
+      if (!existsSync(configDir)) continue
+      try {
+        if (!statSync(configDir).isDirectory()) continue
+      } catch {
+        continue
+      }
+
+      let realConfigDir = resolve(configDir)
+      try {
+        realConfigDir = realpathSync(configDir)
+      } catch {
+        // keep resolved candidate path
+      }
+
+      const dirKey = pathKey(realConfigDir)
+      if (seenDirs.has(dirKey)) continue
+      seenDirs.add(dirKey)
+
+      for (const configFileName of CONFIG_FILE_ORDER) {
+        const configPath = join(configDir, configFileName)
+        if (!existsSync(configPath)) continue
+
+        let realConfigPath = resolve(configPath)
+        try {
+          realConfigPath = realpathSync(configPath)
+        } catch {
+          // keep resolved candidate path
+        }
+
+        const fileKey = pathKey(realConfigPath)
+        if (seenFiles.has(fileKey)) continue
+        seenFiles.add(fileKey)
+
+        try {
+          const raw = readFileSync(configPath, 'utf8')
+          const parsed = configFileName.endsWith('.yaml')
+            ? toRecord(loadYaml(raw))
+            : toRecord(JSON.parse(raw))
+
+          if (!parsed) continue
+
+          const workspace = workspaceFromParsedRecord(parsed, configDir)
+          if (workspace) return workspace
+        } catch {
+          // Ignore malformed files and continue fallback chain.
+        }
+      }
+
+    }
   }
+
+  return null
+}
+
+function workspaceFromKnownDirectories(): string | null {
+  const home = homedir()
+  const seen = new Set<string>()
+
+  for (const dirName of WORKSPACE_DIR_ORDER) {
+    const candidate = join(home, dirName)
+    if (!existsSync(candidate)) continue
+    try {
+      if (!statSync(candidate).isDirectory()) continue
+    } catch {
+      continue
+    }
+
+    let real = resolve(candidate)
+    try {
+      real = realpathSync(candidate)
+    } catch {
+      // keep resolved candidate path
+    }
+
+    const key = pathKey(real)
+    if (seen.has(key)) continue
+    seen.add(key)
+
+    return real
+  }
+
+  return null
 }
 
 const WORKSPACE_ROOT = pickWorkspaceRoot()
@@ -111,10 +238,12 @@ type AllowedSubdir = (typeof ALLOWED_SUBDIRS)[number]
 
 const ENFORCE_ROOT_ALLOWLIST = process.env.CLAWCONTROL_WORKSPACE_ALLOWLIST_ONLY === '1'
 
-function isWithinRoot(candidatePath: string, rootPath: string): boolean {
+export function isPathWithinRoot(candidatePath: string, rootPath: string): boolean {
   const root = resolve(rootPath)
   const candidate = resolve(candidatePath)
-  return candidate === root || candidate.startsWith(`${root}/`)
+  const rel = relative(root, candidate)
+  if (!rel) return true
+  return !rel.startsWith('..') && !isAbsolute(rel)
 }
 
 // Allowed root-level files (e.g. /MEMORY.md). These do not live under a subdir.
@@ -191,7 +320,7 @@ export function validateWorkspacePath(inputPath: string): PathValidationResult {
   const fullPath = resolve(WORKSPACE_ROOT, normalized)
 
   // Verify full path is still under workspace root (defense in depth)
-  if (!isWithinRoot(fullPath, WORKSPACE_ROOT)) {
+  if (!isPathWithinRoot(fullPath, WORKSPACE_ROOT)) {
     return { valid: false, error: 'Path escapes workspace root' }
   }
 
@@ -199,7 +328,7 @@ export function validateWorkspacePath(inputPath: string): PathValidationResult {
   if (existsSync(fullPath)) {
     try {
       const resolved = realpathSync(fullPath)
-      if (!isWithinRoot(resolved, WORKSPACE_ROOT_REAL)) {
+      if (!isPathWithinRoot(resolved, WORKSPACE_ROOT_REAL)) {
         return { valid: false, error: 'Path escapes workspace via symlink' }
       }
       return { valid: true, resolvedPath: resolved }
@@ -214,7 +343,7 @@ export function validateWorkspacePath(inputPath: string): PathValidationResult {
   if (fullPath !== WORKSPACE_ROOT && existsSync(parentPath)) {
     try {
       const resolvedParent = realpathSync(parentPath)
-      if (!isWithinRoot(resolvedParent, WORKSPACE_ROOT_REAL)) {
+      if (!isPathWithinRoot(resolvedParent, WORKSPACE_ROOT_REAL)) {
         return { valid: false, error: 'Parent path escapes workspace via symlink' }
       }
     } catch (err) {

@@ -31,7 +31,7 @@ export async function runSyncJob(source: SyncRunSource = 'manual'): Promise<Sync
     const synced = await syncAgentsFromOpenClaw({ forceRefresh })
     result.agents = {
       success: true,
-      count: synced.added + synced.updated,
+      count: synced.added + synced.updated + synced.stale,
     }
   } catch (err) {
     result.agents.error = err instanceof Error ? err.message : String(err)

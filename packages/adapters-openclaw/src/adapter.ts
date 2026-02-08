@@ -521,10 +521,20 @@ class HttpAdapter implements OpenClawAdapter {
   async gatewayProbe(): Promise<ProbeResult> {
     const start = Date.now()
     try {
-      await fetch(`${this.baseUrl}/gateway/probe`, { headers: this.headers })
-      return { ok: true, latencyMs: Date.now() - start }
+      const res = await fetch(`${this.baseUrl}/gateway/probe`, { headers: this.headers })
+      const latencyMs = Date.now() - start
+
+      if (res.status >= 200 && res.status < 300) {
+        return { ok: true, latencyMs, statusCode: res.status, reason: 'ok' }
+      }
+
+      if (res.status === 401 || res.status === 403) {
+        return { ok: false, latencyMs, statusCode: res.status, reason: 'auth_required' }
+      }
+
+      return { ok: false, latencyMs, statusCode: res.status, reason: 'unreachable' }
     } catch {
-      return { ok: false, latencyMs: Date.now() - start }
+      return { ok: false, latencyMs: Date.now() - start, reason: 'unreachable' }
     }
   }
 

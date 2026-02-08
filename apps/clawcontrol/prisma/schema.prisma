@@ -122,6 +122,8 @@ model Agent {
   avatarPath      String?   @map("avatar_path") // Custom avatar image path
   model           String?   @default("claude-sonnet-4-20250514") @map("model") // Primary AI model
   fallbacks       String?   @default("[]") @map("fallbacks") // JSON array of model IDs
+  isStale         Boolean   @default(false) @map("is_stale")
+  staleAt         DateTime? @map("stale_at")
   lastSeenAt      DateTime? @map("last_seen_at")
   lastHeartbeatAt DateTime? @map("last_heartbeat_at")
   createdAt       DateTime  @default(now()) @map("created_at")

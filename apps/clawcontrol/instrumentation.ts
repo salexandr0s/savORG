@@ -11,7 +11,20 @@ export async function register() {
   // Only run on Node.js runtime (not Edge)
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     const { enableWalMode, ensureReservedWorkOrders } = await import('./lib/db')
+    const { ensureDatabaseInitialized } = await import('./lib/db/init')
     const { bootSync } = await import('./lib/boot-sync')
+    const dbStatus = await ensureDatabaseInitialized()
+
+    if (!dbStatus.ok) {
+      console.warn('[boot] DB initialization reported issues:', {
+        code: dbStatus.code,
+        message: dbStatus.message,
+        databasePath: dbStatus.databasePath,
+      })
+    } else {
+      console.log('[boot] DB initialized')
+    }
+
     await enableWalMode()
     console.log('[boot] WAL mode enabled')
 
