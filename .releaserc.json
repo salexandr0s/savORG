@@ -60,7 +60,7 @@
           "apps/clawcontrol-desktop/package.json",
           "package-lock.json"
         ],
-        "message": "chore(release): v${nextRelease.version} [skip ci]\\n\\n${nextRelease.notes}"
+        "message": "chore(release): v${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
       }
     ]
   ]
