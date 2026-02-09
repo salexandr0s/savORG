@@ -25,6 +25,9 @@ interface MigrationEntry {
 }
 
 const REQUIRED_TABLES = ['work_orders', 'operations', 'agents']
+const REQUIRED_COLUMNS_BY_TABLE: Record<string, readonly string[]> = {
+  agents: ['dispatch_eligible', 'name_source', 'is_stale', 'stale_at'],
+}
 
 let lastStatus: DbInitStatus = {
   ok: false,
@@ -201,6 +204,18 @@ function isIgnorableSqlError(message: string, sql: string): boolean {
     return statement.startsWith('alter table') && statement.includes(' add column ')
   }
 
+  if (msg.includes('no such table')) {
+    return statement.startsWith('drop table')
+  }
+
+  if (msg.includes('no such index')) {
+    return statement.startsWith('drop index')
+  }
+
+  if (msg.includes('no such trigger')) {
+    return statement.startsWith('drop trigger')
+  }
+
   return false
 }
 
@@ -231,10 +246,26 @@ async function tableExists(tableName: string): Promise<boolean> {
   return rows.length > 0
 }
 
+async function tableColumns(tableName: string): Promise<Set<string>> {
+  const safeName = tableName.replace(/"/g, '""')
+  const rows = await prisma.$queryRawUnsafe<Array<{ name: string }>>(
+    `PRAGMA table_info("${safeName}")`
+  )
+  return new Set(rows.map((row) => row.name))
+}
+
 async function hasRequiredSchema(): Promise<boolean> {
   for (const tableName of REQUIRED_TABLES) {
     if (!(await tableExists(tableName))) return false
   }
+
+  for (const [tableName, requiredColumns] of Object.entries(REQUIRED_COLUMNS_BY_TABLE)) {
+    const columns = await tableColumns(tableName)
+    for (const column of requiredColumns) {
+      if (!columns.has(column)) return false
+    }
+  }
+
   return true
 }
 
