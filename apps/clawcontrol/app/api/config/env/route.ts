@@ -8,11 +8,23 @@
 import { NextResponse } from 'next/server'
 import { getOpenClawConfig } from '@/lib/openclaw-client'
 import { readSettings, writeSettings } from '@/lib/settings/store'
+import { invalidateWorkspaceRootCache } from '@/lib/fs/path-policy'
 
 interface EnvConfig {
   OPENCLAW_WORKSPACE: string | null
   DATABASE_URL: string | null
   NODE_ENV: string | null
+}
+
+function applyRuntimeWorkspacePath(workspacePath: string | null): void {
+  if (workspacePath) {
+    process.env.OPENCLAW_WORKSPACE = workspacePath
+    process.env.CLAWCONTROL_WORKSPACE_ROOT = workspacePath
+  } else {
+    delete process.env.OPENCLAW_WORKSPACE
+    delete process.env.CLAWCONTROL_WORKSPACE_ROOT
+  }
+  invalidateWorkspaceRootCache()
 }
 
 export async function GET() {
@@ -67,9 +79,10 @@ export async function PUT(request: Request) {
         ? body.OPENCLAW_WORKSPACE.trim()
         : null
 
-      await writeSettings({
+      const saved = await writeSettings({
         workspacePath: (workspace || null) as unknown as string | undefined,
       })
+      applyRuntimeWorkspacePath(saved.settings.workspacePath ?? null)
     }
 
     const [settingsResult, resolved] = await Promise.all([
@@ -88,8 +101,8 @@ export async function PUT(request: Request) {
         config,
         activeWorkspace: resolved?.workspacePath ?? settingsResult.settings.workspacePath ?? null,
         envPath: settingsResult.path,
-        requiresRestart: true,
-        message: 'Configuration updated.',
+        requiresRestart: false,
+        message: 'Configuration updated and applied.',
       },
     })
   } catch (err) {

@@ -36,6 +36,7 @@ const CONFIG_DIR_GROUPS = [
 ] as const
 const CONFIG_FILE_ORDER = ['openclaw.json', 'moltbot.json', 'clawdbot.json', 'config.yaml'] as const
 const WORKSPACE_DIR_ORDER = ['OpenClaw', 'moltbot', 'clawd'] as const
+const WORKSPACE_ROOT_CACHE_TTL_MS = 5_000
 
 function isWorkspaceMarkerPath(dir: string): boolean {
   return (
@@ -229,8 +230,39 @@ function workspaceFromKnownDirectories(): string | null {
   return null
 }
 
-const WORKSPACE_ROOT = pickWorkspaceRoot()
-const WORKSPACE_ROOT_REAL = existsSync(WORKSPACE_ROOT) ? realpathSync(WORKSPACE_ROOT) : WORKSPACE_ROOT
+interface WorkspaceRootCacheEntry {
+  root: string
+  rootReal: string
+  expiresAt: number
+}
+
+let workspaceRootCache: WorkspaceRootCacheEntry | null = null
+
+function resolveWorkspaceRootEntry(): WorkspaceRootCacheEntry {
+  const now = Date.now()
+  if (workspaceRootCache && workspaceRootCache.expiresAt > now) {
+    return workspaceRootCache
+  }
+
+  const root = pickWorkspaceRoot()
+  let rootReal = root
+
+  if (existsSync(root)) {
+    try {
+      rootReal = realpathSync(root)
+    } catch {
+      // Keep unresolved root when realpath cannot be resolved.
+    }
+  }
+
+  workspaceRootCache = {
+    root,
+    rootReal,
+    expiresAt: now + WORKSPACE_ROOT_CACHE_TTL_MS,
+  }
+
+  return workspaceRootCache
+}
 
 // Allowed top-level subdirectories within workspace
 const ALLOWED_SUBDIRS = ['agents', 'overlays', 'skills', 'playbooks', 'plugins', 'agent-templates', 'memory', 'life', 'docs', 'tools', 'templates', 'canvas', 'projects'] as const
@@ -269,6 +301,10 @@ export interface PathValidationResult {
   resolvedPath?: string
 }
 
+export function invalidateWorkspaceRootCache(): void {
+  workspaceRootCache = null
+}
+
 /**
  * Validate a workspace path for security.
  * Returns validation result with resolved path if valid.
@@ -277,6 +313,10 @@ export interface PathValidationResult {
  * @returns Validation result
  */
 export function validateWorkspacePath(inputPath: string): PathValidationResult {
+  const workspaceRootEntry = resolveWorkspaceRootEntry()
+  const workspaceRoot = workspaceRootEntry.root
+  const workspaceRootReal = workspaceRootEntry.rootReal
+
   // Must start with /
   if (!inputPath.startsWith('/')) {
     return { valid: false, error: 'Path must start with /' }
@@ -317,10 +357,10 @@ export function validateWorkspacePath(inputPath: string): PathValidationResult {
   }
 
   // Construct full path
-  const fullPath = resolve(WORKSPACE_ROOT, normalized)
+  const fullPath = resolve(workspaceRoot, normalized)
 
   // Verify full path is still under workspace root (defense in depth)
-  if (!isPathWithinRoot(fullPath, WORKSPACE_ROOT)) {
+  if (!isPathWithinRoot(fullPath, workspaceRoot)) {
     return { valid: false, error: 'Path escapes workspace root' }
   }
 
@@ -328,7 +368,7 @@ export function validateWorkspacePath(inputPath: string): PathValidationResult {
   if (existsSync(fullPath)) {
     try {
       const resolved = realpathSync(fullPath)
-      if (!isPathWithinRoot(resolved, WORKSPACE_ROOT_REAL)) {
+      if (!isPathWithinRoot(resolved, workspaceRootReal)) {
         return { valid: false, error: 'Path escapes workspace via symlink' }
       }
       return { valid: true, resolvedPath: resolved }
@@ -340,10 +380,10 @@ export function validateWorkspacePath(inputPath: string): PathValidationResult {
   // For new files, check parent directory
   // Skip this check for WORKSPACE_ROOT itself - its parent is naturally outside
   const parentPath = resolve(fullPath, '..')
-  if (fullPath !== WORKSPACE_ROOT && existsSync(parentPath)) {
+  if (fullPath !== workspaceRoot && existsSync(parentPath)) {
     try {
       const resolvedParent = realpathSync(parentPath)
-      if (!isPathWithinRoot(resolvedParent, WORKSPACE_ROOT_REAL)) {
+      if (!isPathWithinRoot(resolvedParent, workspaceRootReal)) {
         return { valid: false, error: 'Parent path escapes workspace via symlink' }
       }
     } catch (err) {
@@ -369,7 +409,7 @@ export function isSymlink(path: string): boolean {
  * Get the workspace root path
  */
 export function getWorkspaceRoot(): string {
-  return WORKSPACE_ROOT
+  return resolveWorkspaceRootEntry().root
 }
 
 /**

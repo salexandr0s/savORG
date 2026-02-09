@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getOpenClawConfig } from '@/lib/openclaw-client'
 import { readSettings, writeSettings } from '@/lib/settings/store'
 import type { ClawcontrolSettings } from '@/lib/settings/types'
+import { invalidateWorkspaceRootCache } from '@/lib/fs/path-policy'
 import { validateWorkspaceStructure } from '@/lib/workspace/validate'
 
 function normalizeString(value: unknown): string | null {
@@ -18,6 +19,20 @@ function normalizeBoolean(value: unknown): boolean | null {
     if (normalized === 'false' || normalized === '0' || normalized === 'no' || normalized === 'off') return false
   }
   return null
+}
+
+function applyRuntimeWorkspacePath(workspacePath: string | null | undefined): void {
+  const normalized = normalizeString(workspacePath)
+
+  if (normalized) {
+    process.env.OPENCLAW_WORKSPACE = normalized
+    process.env.CLAWCONTROL_WORKSPACE_ROOT = normalized
+  } else {
+    delete process.env.OPENCLAW_WORKSPACE
+    delete process.env.CLAWCONTROL_WORKSPACE_ROOT
+  }
+
+  invalidateWorkspaceRootCache()
 }
 
 async function buildResponseData() {
@@ -109,7 +124,11 @@ export async function PUT(request: Request) {
       patch.setupCompleted = parsed
     }
 
-    await writeSettings(patch as Partial<ClawcontrolSettings>)
+    const saved = await writeSettings(patch as Partial<ClawcontrolSettings>)
+
+    if ('workspacePath' in patch) {
+      applyRuntimeWorkspacePath(saved.settings.workspacePath ?? null)
+    }
 
     const data = await buildResponseData()
 

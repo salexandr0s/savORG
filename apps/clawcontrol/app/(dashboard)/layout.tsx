@@ -8,6 +8,29 @@ import { ProtectedActionProvider } from '@/components/protected-action-modal'
 import { SyncBanner } from '@/components/sync-banner'
 import { usePathname, useRouter } from 'next/navigation'
 
+const INIT_STATUS_CACHE_TTL_MS = 15_000
+let initStatusCache: { requiresSetup: boolean; expiresAt: number } | null = null
+
+async function getRequiresSetup(): Promise<boolean> {
+  const now = Date.now()
+  if (initStatusCache && initStatusCache.expiresAt > now) {
+    return initStatusCache.requiresSetup
+  }
+
+  const res = await fetch('/api/system/init-status', { cache: 'no-store' })
+  const payload = (await res.json().catch(() => null)) as {
+    data?: { requiresSetup?: boolean }
+  } | null
+
+  const requiresSetup = payload?.data?.requiresSetup === true
+  initStatusCache = {
+    requiresSetup,
+    expiresAt: now + INIT_STATUS_CACHE_TTL_MS,
+  }
+
+  return requiresSetup
+}
+
 /**
  * Dashboard Layout
  *
@@ -31,14 +54,9 @@ export default function DashboardLayout({
 
     async function checkSetup() {
       try {
-        const res = await fetch('/api/system/init-status', { cache: 'no-store' })
-        const payload = (await res.json().catch(() => null)) as {
-          data?: { requiresSetup?: boolean }
-        } | null
-
+        const requiresSetup = await getRequiresSetup()
         if (canceled) return
-
-        if (payload?.data?.requiresSetup) {
+        if (requiresSetup) {
           router.replace('/setup' as Route)
           return
         }
@@ -50,13 +68,12 @@ export default function DashboardLayout({
       }
     }
 
-    setGuardReady(false)
     void checkSetup()
 
     return () => {
       canceled = true
     }
-  }, [pathname, router])
+  }, [router])
 
   if (!guardReady) {
     return (

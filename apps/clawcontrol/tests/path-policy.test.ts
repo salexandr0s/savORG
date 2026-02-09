@@ -182,6 +182,38 @@ describe('workspace path policy', () => {
     expect(await fsp.realpath(mod.getWorkspaceRoot())).toBe(await fsp.realpath(settingsWorkspace))
   })
 
+  it('honors runtime workspace updates after cache invalidation', async () => {
+    const settingsWorkspaceA = join(tempRoot, 'settings-workspace-a')
+    const settingsWorkspaceB = join(tempRoot, 'settings-workspace-b')
+    const settingsDir = join(fakeHome, '.openclaw', 'clawcontrol')
+    const settingsPath = join(settingsDir, 'settings.json')
+
+    await fsp.mkdir(settingsWorkspaceA, { recursive: true })
+    await fsp.mkdir(settingsWorkspaceB, { recursive: true })
+    await fsp.mkdir(settingsDir, { recursive: true })
+    await fsp.writeFile(settingsPath, JSON.stringify({
+      workspacePath: settingsWorkspaceA,
+      updatedAt: new Date().toISOString(),
+    }))
+
+    vi.resetModules()
+
+    const mod = await import('@/lib/fs/path-policy')
+    expect(await fsp.realpath(mod.getWorkspaceRoot())).toBe(await fsp.realpath(settingsWorkspaceA))
+
+    await fsp.writeFile(settingsPath, JSON.stringify({
+      workspacePath: settingsWorkspaceB,
+      updatedAt: new Date().toISOString(),
+    }))
+    mod.invalidateWorkspaceRootCache()
+
+    expect(await fsp.realpath(mod.getWorkspaceRoot())).toBe(await fsp.realpath(settingsWorkspaceB))
+
+    const validated = mod.validateWorkspacePath('/agents')
+    expect(validated.valid).toBe(true)
+    expect(validated.resolvedPath).toBe(join(settingsWorkspaceB, 'agents'))
+  })
+
   it('allows non-allowlisted top-level directories in default mode', async () => {
     await fsp.mkdir(join(tempRoot, 'my-custom-dir'), { recursive: true })
     await fsp.writeFile(join(tempRoot, 'AGENTS.md'), '# test')

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { PageHeader, PageSection, EmptyState, TypedConfirmModal } from '@clawcontrol/ui'
 import { CanonicalTable, type Column } from '@/components/ui/canonical-table'
 import { StatusPill } from '@/components/ui/status-pill'
@@ -10,6 +10,13 @@ import { useSettings } from '@/lib/settings-context'
 import { pluginsApi, type PluginWithConfig, type PluginDoctorResult, type PluginCapabilities, type PluginResponseMeta } from '@/lib/http'
 import type { PluginDTO } from '@/lib/data'
 import { cn } from '@/lib/utils'
+import { usePageReadyTiming } from '@/lib/perf/client-timing'
+import {
+  PLUGINS_TAB_STALE_TIME_MS,
+  revalidatePluginsTabCache,
+  seedPluginsTabCache,
+  usePluginsTabStore,
+} from '@/lib/stores/plugins-tab-store'
 import {
   Puzzle,
   Plus,
@@ -35,7 +42,7 @@ import {
 type PluginSourceType = 'local' | 'npm' | 'tgz' | 'git'
 
 interface Props {
-  plugins: PluginDTO[]
+  plugins?: PluginDTO[]
   meta?: PluginResponseMeta
 }
 
@@ -138,12 +145,15 @@ const pluginColumns: Column<PluginDTO>[] = [
   },
 ]
 
-export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Props) {
+export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Props = {}) {
   const { skipTypedConfirm } = useSettings()
-  const [plugins, setPlugins] = useState(initialPlugins)
-  const [meta, setMeta] = useState<PluginResponseMeta | undefined>(initialMeta)
+  const plugins = usePluginsTabStore((state) => state.plugins)
+  const meta = usePluginsTabStore((state) => state.meta)
+  const listLoading = usePluginsTabStore((state) => state.isLoading)
+  const listRefreshing = usePluginsTabStore((state) => state.isRefreshing)
+  const listError = usePluginsTabStore((state) => state.error)
   const [selectedPlugin, setSelectedPlugin] = useState<PluginWithConfig | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [isDetailLoading, setIsDetailLoading] = useState(false)
   const [isToggling, setIsToggling] = useState(false)
   const [isRunningDoctor, setIsRunningDoctor] = useState(false)
   const [isSavingConfig, setIsSavingConfig] = useState(false)
@@ -161,6 +171,34 @@ export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Pr
   const [isProbing, setIsProbing] = useState(false)
 
   const protectedAction = useProtectedAction({ skipTypedConfirm })
+  usePageReadyTiming('plugins', !listLoading)
+
+  const combinedError = error ?? listError
+
+  useEffect(() => {
+    if (!initialPlugins || initialPlugins.length === 0) return
+
+    const snapshot = usePluginsTabStore.getState()
+    if (snapshot.fetchedAt !== null) return
+
+    seedPluginsTabCache(initialPlugins, initialMeta)
+  }, [initialMeta, initialPlugins])
+
+  useEffect(() => {
+    const snapshot = usePluginsTabStore.getState()
+    const hasCache = snapshot.fetchedAt !== null
+    const cacheAgeMs = hasCache
+      ? Date.now() - Number(snapshot.fetchedAt)
+      : Number.POSITIVE_INFINITY
+    const forceRefresh = !hasCache || cacheAgeMs >= PLUGINS_TAB_STALE_TIME_MS
+
+    void revalidatePluginsTabCache({
+      force: forceRefresh,
+      blocking: !hasCache,
+    }).catch((err) => {
+      console.error('Failed to refresh plugins cache:', err)
+    })
+  }, [])
 
   const enabledCount = plugins.filter((p) => p.enabled).length
   const errorCount = plugins.filter((p) => p.status === 'error').length
@@ -178,8 +216,14 @@ export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Pr
       await pluginsApi.getCapabilities({ refresh: true })
       // Refresh plugin list with new capabilities
       const listResult = await pluginsApi.list()
-      setPlugins(listResult.data)
-      setMeta(listResult.meta)
+      usePluginsTabStore.setState({
+        plugins: listResult.data as PluginDTO[],
+        meta: listResult.meta,
+        fetchedAt: Date.now(),
+        isLoading: false,
+        isRefreshing: false,
+        error: null,
+      })
     } catch (err) {
       console.error('Failed to re-probe capabilities:', err)
       setError('Failed to refresh capabilities')
@@ -190,7 +234,7 @@ export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Pr
 
   // Load full plugin details when selecting
   const handleSelectPlugin = useCallback(async (plugin: PluginDTO) => {
-    setIsLoading(true)
+    setIsDetailLoading(true)
     setError(null)
     try {
       const result = await pluginsApi.get(plugin.id)
@@ -200,7 +244,7 @@ export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Pr
       console.error('Failed to load plugin:', err)
       setError('Failed to load plugin details')
     } finally {
-      setIsLoading(false)
+      setIsDetailLoading(false)
     }
   }, [])
 
@@ -228,13 +272,14 @@ export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Pr
 
           // Update local state
           setSelectedPlugin(result.data)
-          setPlugins((prev) =>
-            prev.map((p) =>
+          usePluginsTabStore.setState((state) => ({
+            plugins: state.plugins.map((p) =>
               p.id === selectedPlugin.id
                 ? { ...p, enabled: result.data.enabled, status: result.data.status }
                 : p
-            )
-          )
+            ),
+            fetchedAt: Date.now(),
+          }))
         } finally {
           setIsToggling(false)
         }
@@ -267,13 +312,14 @@ export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Pr
           setSelectedPlugin((prev) =>
             prev ? { ...prev, doctorResult: result.data.doctorResult } : prev
           )
-          setPlugins((prev) =>
-            prev.map((p) =>
+          usePluginsTabStore.setState((state) => ({
+            plugins: state.plugins.map((p) =>
               p.id === selectedPlugin.id
                 ? { ...p, doctorResult: result.data.doctorResult }
                 : p
-            )
-          )
+            ),
+            fetchedAt: Date.now(),
+          }))
 
           // Switch to doctor tab to show results
           setActiveTab('doctor')
@@ -312,7 +358,10 @@ export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Pr
           })
 
           // Add to plugins list
-          setPlugins((prev) => [...prev, result.data as unknown as PluginDTO])
+          usePluginsTabStore.setState((state) => ({
+            plugins: [...state.plugins, result.data as unknown as PluginDTO],
+            fetchedAt: Date.now(),
+          }))
 
           // Close modal and reset
           setShowInstallModal(false)
@@ -350,7 +399,10 @@ export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Pr
           await pluginsApi.uninstall(selectedPlugin.id, typedConfirmText)
 
           // Remove from plugins list
-          setPlugins((prev) => prev.filter((p) => p.id !== selectedPlugin.id))
+          usePluginsTabStore.setState((state) => ({
+            plugins: state.plugins.filter((p) => p.id !== selectedPlugin.id),
+            fetchedAt: Date.now(),
+          }))
 
           // Close drawer
           setSelectedPlugin(null)
@@ -387,13 +439,14 @@ export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Pr
 
           // Update local state
           setSelectedPlugin(result.data)
-          setPlugins((prev) =>
-            prev.map((p) =>
+          usePluginsTabStore.setState((state) => ({
+            plugins: state.plugins.map((p) =>
               p.id === selectedPlugin.id
                 ? { ...p, restartRequired: result.data.restartRequired }
                 : p
-            )
-          )
+            ),
+            fetchedAt: Date.now(),
+          }))
         } finally {
           setIsSavingConfig(false)
         }
@@ -420,9 +473,10 @@ export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Pr
           await pluginsApi.restart(typedConfirmText)
 
           // Clear restartRequired flags locally
-          setPlugins((prev) =>
-            prev.map((p) => ({ ...p, restartRequired: false }))
-          )
+          usePluginsTabStore.setState((state) => ({
+            plugins: state.plugins.map((p) => ({ ...p, restartRequired: false })),
+            fetchedAt: Date.now(),
+          }))
           if (selectedPlugin) {
             setSelectedPlugin((prev) =>
               prev ? { ...prev, restartRequired: false } : prev
@@ -464,6 +518,26 @@ export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Pr
             </div>
           }
         />
+
+        {listLoading && plugins.length === 0 && (
+          <div className="rounded-md border border-bd-0 bg-bg-2 px-3 py-2 text-sm text-fg-2 flex items-center gap-2">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Loading plugins...
+          </div>
+        )}
+
+        {listRefreshing && plugins.length > 0 && (
+          <div className="rounded-md border border-bd-0 bg-bg-2 px-3 py-2 text-sm text-fg-2 flex items-center gap-2">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Refreshing plugins in background...
+          </div>
+        )}
+
+        {combinedError && (
+          <div className="p-3 bg-status-error/10 border border-status-error/30 rounded-md text-sm text-status-error">
+            {combinedError}
+          </div>
+        )}
 
         {/* Unsupported Banner */}
         {isUnsupported && (
@@ -576,12 +650,12 @@ export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Pr
             plugin={selectedPlugin}
             activeTab={activeTab}
             onTabChange={setActiveTab}
-            isLoading={isLoading}
+            isLoading={isDetailLoading}
             isToggling={isToggling}
             isRunningDoctor={isRunningDoctor}
             isSavingConfig={isSavingConfig}
             isUninstalling={isUninstalling}
-            error={error}
+            error={combinedError}
             capabilities={capabilities}
             onToggleEnabled={handleToggleEnabled}
             onRunDoctor={handleRunDoctor}

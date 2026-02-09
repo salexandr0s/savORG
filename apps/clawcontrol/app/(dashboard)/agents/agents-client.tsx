@@ -14,7 +14,6 @@ import { FileEditorModal } from '@/components/file-editor-modal'
 import { SkillSelector } from '@/components/skill-selector'
 import {
   agentsApi,
-  operationsApi,
   templatesApi,
   skillsApi,
   type AgentHierarchyData,
@@ -27,6 +26,7 @@ import { slugifyDisplayName } from '@/lib/agent-identity'
 import { useStations } from '@/lib/stations-context'
 import { cn } from '@/lib/utils'
 import { usePageReadyTiming } from '@/lib/perf/client-timing'
+import { AGENTS_TAB_STALE_TIME_MS, revalidateAgentsTabCache, useAgentsTabStore } from '@/lib/stores/agents-tab-store'
 import { StationsTab, StationUpsertModal } from './stations-tab'
 import { HierarchyView } from './hierarchy-view'
 import {
@@ -173,10 +173,10 @@ const agentColumns: Column<AgentDTO>[] = [
 // ============================================================================
 
 export function AgentsClient() {
-  const [agents, setAgents] = useState<AgentDTO[]>([])
-  const [operations, setOperations] = useState<OperationDTO[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const agents = useAgentsTabStore((state) => state.agents)
+  const operations = useAgentsTabStore((state) => state.operations)
+  const loading = useAgentsTabStore((state) => state.isLoading)
+  const error = useAgentsTabStore((state) => state.error)
   const [selectedId, setSelectedId] = useState<string | undefined>()
 
   const { stations } = useStations()
@@ -207,7 +207,11 @@ export function AgentsClient() {
 
   // Fetch agents and operations on mount
   useEffect(() => {
-    fetchData()
+    const snapshot = useAgentsTabStore.getState()
+    const hasCache = snapshot.fetchedAt !== null
+    const cacheAgeMs = hasCache ? Date.now() - Number(snapshot.fetchedAt) : Number.POSITIVE_INFINITY
+    const forceRefresh = !hasCache || cacheAgeMs >= AGENTS_TAB_STALE_TIME_MS
+    void fetchData({ force: forceRefresh, blocking: !hasCache })
   }, [])
 
   useEffect(() => {
@@ -223,19 +227,15 @@ export function AgentsClient() {
     }
   }, [agentView])
 
-  async function fetchData() {
+  async function fetchData(options?: { force?: boolean; blocking?: boolean }) {
     try {
-      setLoading(true)
-      const [agentsResult, opsResult] = await Promise.all([
-        agentsApi.list(),
-        operationsApi.list(),
-      ])
-      setAgents(agentsResult.data)
-      setOperations(opsResult.data)
+      await revalidateAgentsTabCache({
+        force: options?.force ?? true,
+        blocking: options?.blocking ?? false,
+      })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load agents')
+      console.error('Failed to refresh agents cache:', err)
     } finally {
-      setLoading(false)
       if (agentView === 'hierarchy') {
         void fetchHierarchy()
       }
@@ -489,7 +489,7 @@ export function AgentsClient() {
     })
   }
 
-  if (loading) {
+  if (loading && agents.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="w-6 h-6 animate-spin text-fg-2" />
