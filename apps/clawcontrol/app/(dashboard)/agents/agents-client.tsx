@@ -603,14 +603,14 @@ export function AgentsClient() {
 
                   <button
                     onClick={() => setShowTemplateWizard(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] border border-bd-0 text-fg-1 hover:bg-bg-3 transition-colors"
+                    className="btn-secondary flex items-center gap-1.5"
                   >
                     <LayoutTemplate className="w-3.5 h-3.5" />
                     From Template
                   </button>
                   <button
                     onClick={() => setShowCreateModal(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] bg-status-progress text-white hover:bg-status-progress/90 transition-colors"
+                    className="btn-primary flex items-center gap-1.5"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     Create Agent

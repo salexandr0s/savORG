@@ -116,11 +116,18 @@ export async function GET() {
 
       try {
         const repos = getRepos()
-        const [statusRes, probeRes, resolvedConfig] = await Promise.all([
+        const [statusRes, resolvedConfig] = await Promise.all([
           repos.gateway.status(),
-          repos.gateway.probe(),
           getOpenClawConfig(true).catch(() => null),
         ])
+        const statusData = statusRes.data ?? { running: false }
+        const resolvedVersion = typeof statusData.version === 'string' && statusData.version.trim().length > 0
+          ? statusData.version
+          : (cliStatus.cliVersion ?? undefined)
+        const statusPayload = {
+          ...statusData,
+          ...(resolvedVersion ? { version: resolvedVersion } : {}),
+        }
 
         const fallbackConfig = resolvedConfig ?? getOpenClawConfigSync()
         const gatewayUrl = fallbackConfig?.gatewayUrl ?? DEFAULT_GATEWAY_HTTP_URL
@@ -145,14 +152,14 @@ export async function GET() {
               message: statusRes.error ?? undefined,
               timestamp: statusRes.timestamp,
             },
-            status: statusRes.data ?? { running: false },
+            status: statusPayload,
             probe: {
-              ok: probeRes.data?.reachable ?? probeRes.status !== 'unavailable',
-              latencyMs: probeRes.data?.latencyMs ?? probeRes.latencyMs,
-              ...(probeRes.error ? { error: probeRes.error } : {}),
+              ok: statusRes.status !== 'unavailable',
+              latencyMs: statusRes.latencyMs,
+              ...(statusRes.error ? { error: statusRes.error } : {}),
             },
             pollIntervalMs,
-            timestamp: new Date().toISOString(),
+            timestamp: statusRes.timestamp,
           },
         }
 

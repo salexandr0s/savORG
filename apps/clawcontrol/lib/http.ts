@@ -1793,6 +1793,35 @@ export interface GatewayTestResponse {
   attempts?: number
 }
 
+export interface TailscaleReadinessCheck {
+  id: string
+  title: string
+  state: 'ok' | 'warning' | 'error' | 'unknown'
+  message: string
+  detail?: string
+}
+
+export interface TailscaleReadinessResponse {
+  generatedAt: string
+  summary: {
+    state: 'ok' | 'warning' | 'error'
+    ok: number
+    warning: number
+    error: number
+    unknown: number
+  }
+  checks: TailscaleReadinessCheck[]
+  context: {
+    remoteAccessMode: RemoteAccessMode
+    gatewayUrl: string
+    suggestedHost: string
+  }
+  commands: {
+    clawcontrolTunnel: string
+    gatewayTunnel: string
+  }
+}
+
 export interface InitStatusResponse {
   ready: boolean
   requiresSetup: boolean
@@ -1874,6 +1903,8 @@ export const configApi = {
     gatewayToken?: string | null
     withRetry?: boolean
   }>('/api/openclaw/gateway/test', data),
+  getTailscaleReadiness: () =>
+    apiGet<{ data: TailscaleReadinessResponse }>('/api/system/tailscale-readiness'),
   getInitStatus: () => apiGet<{ data: InitStatusResponse }>('/api/system/init-status'),
 }
 

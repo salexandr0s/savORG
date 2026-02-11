@@ -1,170 +1,106 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  runCommandJson: vi.fn(),
-  probeGatewayHealth: vi.fn(),
-  getOpenClawConfig: vi.fn(),
-  getOpenClawConfigSync: vi.fn(),
-  getCached: vi.fn(),
-  setCache: vi.fn(),
+  getRepos: vi.fn(),
 }))
 
-vi.mock('@clawcontrol/adapters-openclaw', () => ({
-  runCommandJson: mocks.runCommandJson,
-  probeGatewayHealth: mocks.probeGatewayHealth,
-}))
-
-vi.mock('@/lib/openclaw-client', () => ({
-  getOpenClawConfig: mocks.getOpenClawConfig,
-  getOpenClawConfigSync: mocks.getOpenClawConfigSync,
-}))
-
-vi.mock('@/lib/openclaw/availability', () => ({
-  OPENCLAW_TIMEOUT_MS: 120_000,
-  DEGRADED_THRESHOLD_MS: 30_000,
-  getCached: mocks.getCached,
-  setCache: mocks.setCache,
+vi.mock('@/lib/repo', () => ({
+  getRepos: mocks.getRepos,
 }))
 
 beforeEach(() => {
   vi.resetModules()
-
-  mocks.runCommandJson.mockReset()
-  mocks.probeGatewayHealth.mockReset()
-  mocks.getOpenClawConfig.mockReset()
-  mocks.getOpenClawConfigSync.mockReset()
-  mocks.getCached.mockReset()
-  mocks.setCache.mockReset()
-
-  mocks.getCached.mockReturnValue(null)
+  mocks.getRepos.mockReset()
 })
 
 describe('gateway status route', () => {
-  it('returns ok when probe is reachable even if CLI status command is unavailable', async () => {
-    mocks.getOpenClawConfig.mockResolvedValue({
-      gatewayUrl: 'http://127.0.0.1:18789',
-      token: 'token',
+  it('returns the repository gateway status response as-is', async () => {
+    const status = vi.fn().mockResolvedValue({
+      status: 'ok',
+      latencyMs: 17,
+      data: {
+        running: true,
+        version: '2026.2.9',
+      },
+      error: null,
+      timestamp: '2026-02-11T00:00:00.000Z',
+      cached: false,
     })
-    mocks.probeGatewayHealth.mockResolvedValue({
-      ok: true,
-      state: 'reachable',
-      url: 'http://127.0.0.1:18789/health',
-      latencyMs: 12,
-      statusCode: 200,
-    })
-    mocks.runCommandJson.mockResolvedValue({
-      data: null,
-      error: 'OpenClaw CLI not available',
+
+    mocks.getRepos.mockReturnValue({
+      gateway: { status },
     })
 
     const route = await import('@/app/api/openclaw/gateway/status/route')
     const response = await route.GET()
-    const payload = (await response.json()) as {
-      status: string
-      data: { running?: boolean } | null
-      error: string | null
-    }
+    const payload = await response.json()
 
     expect(response.status).toBe(200)
-    expect(payload.status).toBe('ok')
-    expect(payload.data?.running).toBe(true)
-    expect(payload.error).toBeNull()
-    expect(mocks.setCache).toHaveBeenCalledTimes(1)
+    expect(payload).toEqual({
+      status: 'ok',
+      latencyMs: 17,
+      data: {
+        running: true,
+        version: '2026.2.9',
+      },
+      error: null,
+      timestamp: '2026-02-11T00:00:00.000Z',
+      cached: false,
+    })
+    expect(status).toHaveBeenCalledTimes(1)
   })
 
-  it('returns degraded when probe reports auth_required', async () => {
-    mocks.getOpenClawConfig.mockResolvedValue({
-      gatewayUrl: 'http://127.0.0.1:18789',
-      token: 'bad-token',
+  it('preserves degraded auth-required results from repository', async () => {
+    const status = vi.fn().mockResolvedValue({
+      status: 'degraded',
+      latencyMs: 25,
+      data: {
+        running: true,
+      },
+      error: 'Gateway reachable, authentication required',
+      timestamp: '2026-02-11T00:00:00.000Z',
+      cached: true,
+      staleAgeMs: 523,
     })
-    mocks.probeGatewayHealth.mockResolvedValue({
-      ok: false,
-      state: 'auth_required',
-      url: 'http://127.0.0.1:18789/health',
-      latencyMs: 15,
-      statusCode: 401,
-      error: 'HTTP 401',
-    })
-    mocks.runCommandJson.mockResolvedValue({
-      data: null,
-      error: 'OpenClaw CLI not available',
+
+    mocks.getRepos.mockReturnValue({
+      gateway: { status },
     })
 
     const route = await import('@/app/api/openclaw/gateway/status/route')
     const response = await route.GET()
-    const payload = (await response.json()) as {
-      status: string
-      data: { running?: boolean } | null
-      error: string | null
-    }
+    const payload = await response.json()
 
     expect(response.status).toBe(200)
     expect(payload.status).toBe('degraded')
-    expect(payload.data?.running).toBe(true)
     expect(payload.error).toContain('authentication required')
-    expect(mocks.setCache).toHaveBeenCalledTimes(1)
+    expect(payload.cached).toBe(true)
+    expect(payload.staleAgeMs).toBe(523)
+    expect(status).toHaveBeenCalledTimes(1)
   })
 
-  it('falls back to sync config when async config resolves null', async () => {
-    mocks.getOpenClawConfig.mockResolvedValue(null)
-    mocks.getOpenClawConfigSync.mockReturnValue({
-      gatewayUrl: 'http://127.0.0.1:18789',
-      token: null,
-    })
-    mocks.probeGatewayHealth.mockResolvedValue({
-      ok: true,
-      state: 'reachable',
-      url: 'http://127.0.0.1:18789/health',
-      latencyMs: 11,
-      statusCode: 200,
-    })
-    mocks.runCommandJson.mockResolvedValue({
+  it('preserves unavailable results from repository', async () => {
+    const status = vi.fn().mockResolvedValue({
+      status: 'unavailable',
+      latencyMs: 3002,
       data: null,
-      error: 'OpenClaw CLI not available',
+      error: 'connect ECONNREFUSED 127.0.0.1:18789',
+      timestamp: '2026-02-11T00:00:00.000Z',
+      cached: false,
+    })
+
+    mocks.getRepos.mockReturnValue({
+      gateway: { status },
     })
 
     const route = await import('@/app/api/openclaw/gateway/status/route')
     const response = await route.GET()
-    const payload = (await response.json()) as {
-      status: string
-      data: { running?: boolean } | null
-      error: string | null
-    }
+    const payload = await response.json()
 
     expect(response.status).toBe(200)
-    expect(payload.status).toBe('ok')
-    expect(payload.data?.running).toBe(true)
-    expect(payload.error).toBeNull()
-    expect(mocks.setCache).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps probing default gateway when config resolution throws', async () => {
-    mocks.getOpenClawConfig.mockRejectedValue(new Error('config failure'))
-    mocks.getOpenClawConfigSync.mockReturnValue(null)
-    mocks.probeGatewayHealth.mockResolvedValue({
-      ok: true,
-      state: 'reachable',
-      url: 'http://127.0.0.1:18789/health',
-      latencyMs: 9,
-      statusCode: 200,
-    })
-    mocks.runCommandJson.mockResolvedValue({
-      data: null,
-      error: 'OpenClaw CLI not available',
-    })
-
-    const route = await import('@/app/api/openclaw/gateway/status/route')
-    const response = await route.GET()
-    const payload = (await response.json()) as {
-      status: string
-      data: { running?: boolean } | null
-      error: string | null
-    }
-
-    expect(response.status).toBe(200)
-    expect(payload.status).toBe('ok')
-    expect(payload.data?.running).toBe(true)
-    expect(payload.error).toBeNull()
-    expect(mocks.probeGatewayHealth).toHaveBeenCalledWith('http://127.0.0.1:18789', undefined)
+    expect(payload.status).toBe('unavailable')
+    expect(payload.data).toBeNull()
+    expect(payload.error).toContain('ECONNREFUSED')
+    expect(status).toHaveBeenCalledTimes(1)
   })
 })

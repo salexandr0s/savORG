@@ -5,6 +5,8 @@
  * Returns OpenClawResponse<T> with explicit ok|degraded|unavailable status.
  */
 
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import {
   type GatewayProbeStatus,
   probeGatewayHealth,
@@ -22,6 +24,20 @@ import {
   getOpenClawConfigSync,
 } from '@/lib/openclaw-client'
 import { DEFAULT_GATEWAY_HTTP_URL } from '@/lib/settings/types'
+
+const execFileAsync = promisify(execFile)
+const PROCESS_UPTIME_TIMEOUT_MS = 750
+
+function parseStatusEnrichmentTimeoutMs(): number {
+  const raw = process.env.OPENCLAW_GATEWAY_STATUS_JSON_TIMEOUT_MS
+  if (!raw) return 2_500
+
+  const parsed = Number.parseInt(raw, 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) return 2_500
+  return parsed
+}
+
+const GATEWAY_STATUS_ENRICH_TIMEOUT_MS = parseStatusEnrichmentTimeoutMs()
 
 // ============================================================================
 // TYPES
@@ -133,16 +149,145 @@ function availabilityFromProbe(probe: GatewayProbeStatus, latencyMs: number): Av
   return latencyMs > DEGRADED_THRESHOLD_MS ? 'degraded' : 'ok'
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  return value as Record<string, unknown>
+}
+
+function asNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value !== 'string') return undefined
+
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+
+  const parsed = Number.parseFloat(trimmed)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function asNonNegativeInteger(value: unknown): number | undefined {
+  const num = asNumber(value)
+  if (num === undefined || num < 0) return undefined
+  return Math.floor(num)
+}
+
+function firstNonEmptyString(values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value !== 'string') continue
+    const trimmed = value.trim()
+    if (trimmed) return trimmed
+  }
+  return undefined
+}
+
+function parseElapsedPsTime(raw: string): number | null {
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+
+  const [dayPart, clockPart] = trimmed.includes('-')
+    ? trimmed.split('-', 2)
+    : [null, trimmed]
+
+  const segments = clockPart.split(':').map((segment) => Number.parseInt(segment, 10))
+  if (segments.some((segment) => Number.isNaN(segment) || segment < 0)) return null
+
+  const days = dayPart === null
+    ? 0
+    : Number.parseInt(dayPart, 10)
+  if (Number.isNaN(days) || days < 0) return null
+
+  if (segments.length === 2) {
+    const [minutes, seconds] = segments
+    return (days * 86_400) + (minutes * 60) + seconds
+  }
+
+  if (segments.length === 3) {
+    const [hours, minutes, seconds] = segments
+    return (days * 86_400) + (hours * 3_600) + (minutes * 60) + seconds
+  }
+
+  return null
+}
+
+async function resolveProcessUptimeSeconds(pid: number): Promise<number | undefined> {
+  if (!Number.isInteger(pid) || pid <= 0) return undefined
+
+  try {
+    const { stdout } = await execFileAsync('ps', ['-o', 'etime=', '-p', String(pid)], {
+      timeout: PROCESS_UPTIME_TIMEOUT_MS,
+      maxBuffer: 8 * 1024,
+    })
+    const parsed = parseElapsedPsTime(stdout)
+    return parsed ?? undefined
+  } catch {
+    return undefined
+  }
+}
+
 function normalizeStatusData(cliData: unknown): GatewayStatusDTO {
-  if (!cliData || typeof cliData !== 'object') {
+  const root = asRecord(cliData)
+  if (!root) {
     return { running: true }
   }
 
-  const record = cliData as Record<string, unknown>
-  const partial = record as unknown as Partial<GatewayStatusDTO>
+  const service = asRecord(root.service)
+  const runtime = asRecord(service?.runtime)
+  const connections = asRecord(root.connections)
+  const memory = asRecord(root.memory)
+  const gateway = asRecord(root.gateway)
+  const self = asRecord(root.self)
+  const gatewaySelf = asRecord(gateway?.self)
+
+  const runningFromRuntime = (() => {
+    const status = firstNonEmptyString([runtime?.status, runtime?.state])?.toLowerCase()
+    if (!status) return undefined
+    return status === 'running' || status === 'active'
+  })()
+
+  const pid = asNonNegativeInteger(root.pid) ?? asNonNegativeInteger(runtime?.pid)
+  const uptimeSeconds = asNonNegativeInteger(root.uptime)
+    ?? asNonNegativeInteger(runtime?.uptime)
+    ?? asNonNegativeInteger(runtime?.uptimeSeconds)
+    ?? (() => {
+      const uptimeMs = asNonNegativeInteger(root.uptimeMs) ?? asNonNegativeInteger(runtime?.uptimeMs)
+      return uptimeMs === undefined ? undefined : Math.floor(uptimeMs / 1000)
+    })()
+
+  const activeConnections = asNonNegativeInteger(connections?.active)
+    ?? asNonNegativeInteger(root.clients)
+  const idleConnections = asNonNegativeInteger(connections?.idle)
+  const version = firstNonEmptyString([
+    root.version,
+    root.build,
+    self?.version,
+    gatewaySelf?.version,
+  ])
+  const heapUsed = asNonNegativeInteger(memory?.heapUsed)
+  const heapTotal = asNonNegativeInteger(memory?.heapTotal)
+  const rss = asNonNegativeInteger(memory?.rss)
+
+  const normalized: GatewayStatusDTO = {
+    running: typeof root.running === 'boolean' ? root.running : (runningFromRuntime ?? true),
+    ...(pid !== undefined ? { pid } : {}),
+    ...(uptimeSeconds !== undefined ? { uptime: uptimeSeconds } : {}),
+    ...(version ? { version } : {}),
+    ...(activeConnections !== undefined || idleConnections !== undefined ? {
+      connections: {
+        active: activeConnections ?? 0,
+        idle: idleConnections ?? 0,
+      },
+    } : {}),
+    ...(heapUsed !== undefined || heapTotal !== undefined || rss !== undefined ? {
+      memory: {
+        heapUsed: heapUsed ?? 0,
+        heapTotal: heapTotal ?? 0,
+        rss: rss ?? 0,
+      },
+    } : {}),
+  }
+
   return {
-    ...partial,
-    running: typeof record.running === 'boolean' ? record.running : true,
+    ...normalized,
   }
 }
 
@@ -191,11 +336,20 @@ export function createCliGatewayRepo(): GatewayRepo {
 
         let data: GatewayStatusDTO = { running: true }
         try {
-          const cli = await runCommandJson<GatewayStatusDTO>('status.json', {
-            timeout: OPENCLAW_TIMEOUT_MS,
+          const cli = await runCommandJson<unknown>('status.noprobe.json', {
+            timeout: Math.min(OPENCLAW_TIMEOUT_MS, GATEWAY_STATUS_ENRICH_TIMEOUT_MS),
           })
           if (!cli.error && cli.data) {
             data = normalizeStatusData(cli.data)
+            if (data.running && data.pid !== undefined && data.uptime === undefined) {
+              const processUptimeSeconds = await resolveProcessUptimeSeconds(data.pid)
+              if (processUptimeSeconds !== undefined) {
+                data = {
+                  ...data,
+                  uptime: processUptimeSeconds,
+                }
+              }
+            }
           }
         } catch {
           // Keep probe-derived status when CLI enrichment fails.

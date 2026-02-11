@@ -136,17 +136,26 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
   const [localOnly, setLocalOnly] = useState<MaintenanceStatus['localOnly'] | null>(null)
   const [errorSummary, setErrorSummary] = useState<ErrorSummaryData | null>(null)
   const [errorSummaryLoading, setErrorSummaryLoading] = useState(false)
+  const [relativeNowMs, setRelativeNowMs] = useState(() => Date.now())
 
   const protectedAction = useProtectedAction({ skipTypedConfirm })
 
   const applyMaintenanceStatus = useCallback((status: MaintenanceStatus) => {
+    const version = status.status.version ?? status.cliVersion ?? undefined
+    const uptime = status.status.uptime
+    const lastCheckTimestamp = status.health.timestamp || status.timestamp
+
     setGateway((prev) => ({
       ...prev,
       status: status.health.status,
-      latencyMs: status.probe.latencyMs,
-      version: status.status.version || prev.version,
-      uptime: status.status.uptime || prev.uptime,
-      lastCheckAt: new Date(status.timestamp),
+      latencyMs: typeof status.probe.latencyMs === 'number' ? status.probe.latencyMs : prev.latencyMs,
+      version: version ?? prev.version,
+      uptime: uptime ?? prev.uptime,
+      lastCheckAt: new Date(lastCheckTimestamp),
+      connections: {
+        ...prev.connections,
+        openClaw: status.status.running ? 'connected' : 'disconnected',
+      },
     }))
     setCliStatus({
       available: status.cliAvailable,
@@ -186,6 +195,14 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
     refreshStatus()
     refreshErrors()
   }, [refreshStatus, refreshErrors])
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setRelativeNowMs(Date.now())
+    }, 1000)
+
+    return () => window.clearInterval(intervalId)
+  }, [])
 
   // Handle playbook click - open in drawer
   const handlePlaybookClick = useCallback(async (id: string) => {
@@ -475,7 +492,7 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
             />
             <StatusCard
               label="Last Check"
-              value={formatRelativeTime(gateway.lastCheckAt)}
+              value={formatRelativeTime(gateway.lastCheckAt, relativeNowMs)}
               icon={RefreshCw}
             />
           </div>
@@ -887,10 +904,12 @@ function formatUptime(seconds: number): string {
   return `${days}d ${hours}h`
 }
 
-function formatRelativeTime(date: Date | string): string {
-  const now = new Date()
+function formatRelativeTime(date: Date | string, nowMs = Date.now()): string {
   const d = typeof date === 'string' ? new Date(date) : date
-  const diff = now.getTime() - d.getTime()
+  const dateMs = d.getTime()
+  if (!Number.isFinite(dateMs)) return 'unknown'
+
+  const diff = Math.max(0, nowMs - dateMs)
   const secs = Math.floor(diff / 1000)
   const mins = Math.floor(diff / 60000)
   const hours = Math.floor(diff / 3600000)

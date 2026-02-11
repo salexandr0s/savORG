@@ -51,6 +51,12 @@ describe('gateway repo', () => {
     expect(status.status).toBe('ok')
     expect(status.error).toBeNull()
     expect(status.data?.running).toBe(true)
+    expect(mocks.runCommandJson).toHaveBeenCalledWith(
+      'status.noprobe.json',
+      expect.objectContaining({
+        timeout: expect.any(Number),
+      })
+    )
   })
 
   it('returns unavailable when probe cannot reach the gateway', async () => {

@@ -1,49 +1,40 @@
-import { getGatewayStatus, type GatewayRepoStatusDTO, type GatewayStatusDTO } from '@/lib/data'
+import { getGatewayProbe, type GatewayProbeDTO, type GatewayStatusDTO } from '@/lib/data'
 import { MaintenanceClient } from './maintenance-client'
 import { AvailabilityBadge } from '@/components/availability-badge'
 import { listPlaybooks } from '@/lib/fs/playbooks-fs'
 
 /**
- * Map OpenClaw GatewayRepoStatusDTO to the UI's GatewayStatusDTO format.
+ * Map OpenClaw gateway probe response to the UI's GatewayStatusDTO format.
  */
-function mapToUiDto(data: GatewayRepoStatusDTO | null, latencyMs: number): GatewayStatusDTO {
-  if (!data) {
-    return {
-      status: 'down',
-      lastCheckAt: new Date(),
-      latencyMs,
-      version: 'unknown',
-      uptime: 0,
-      connections: {
-        openClaw: 'disconnected',
-        database: 'disconnected',
-        redis: 'disconnected',
-      },
-    }
-  }
+function mapToUiDto(
+  data: GatewayProbeDTO | null,
+  status: 'ok' | 'degraded' | 'unavailable',
+  latencyMs: number,
+  timestamp: string
+): GatewayStatusDTO {
+  const reachable = data?.reachable ?? status !== 'unavailable'
+  const uiStatus = status === 'unavailable' ? 'down' : status
 
   return {
-    status: data.running ? 'ok' : 'down',
-    lastCheckAt: new Date(),
-    latencyMs,
-    version: data.version ?? 'unknown',
-    uptime: data.uptime ?? 0,
+    status: reachable ? uiStatus : 'down',
+    lastCheckAt: new Date(timestamp),
+    latencyMs: data?.latencyMs ?? latencyMs,
+    version: 'unknown',
+    uptime: 0,
     connections: {
-      openClaw: data.running ? 'connected' : 'disconnected',
-      database: 'connected', // Not available from CLI, assume connected if gateway is up
-      redis: 'connected', // Not available from CLI, assume connected if gateway is up
+      openClaw: reachable ? 'connected' : 'disconnected',
+      database: reachable ? 'connected' : 'disconnected',
+      redis: reachable ? 'connected' : 'disconnected',
     },
   }
 }
 
 export default async function MaintenancePage() {
-  const response = await getGatewayStatus()
-
-  // Map OpenClaw DTO to UI DTO
-  const gateway = mapToUiDto(response.data, response.latencyMs)
-
-  // Get playbook summaries (without content)
-  const playbooks = await listPlaybooks()
+  const [response, playbooks] = await Promise.all([
+    getGatewayProbe(),
+    listPlaybooks(),
+  ])
+  const gateway = mapToUiDto(response.data, response.status, response.latencyMs, response.timestamp)
 
   return (
     <div>

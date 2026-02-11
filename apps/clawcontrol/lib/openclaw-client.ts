@@ -36,11 +36,40 @@ export interface GatewayRetryResult {
 let cachedConfig: ResolvedOpenClawConfig | null = null
 let lastCheckMs = 0
 const CACHE_TTL_MS = 60_000
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]'])
 
 function normalizeString(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const trimmed = value.trim()
   return trimmed.length > 0 ? trimmed : null
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  const normalized = hostname.trim().toLowerCase()
+  if (LOOPBACK_HOSTS.has(normalized)) return true
+  return /^127(?:\.\d{1,3}){3}$/.test(normalized)
+}
+
+function isLoopbackUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return isLoopbackHostname(parsed.hostname)
+  } catch {
+    return false
+  }
+}
+
+type ConfigSource = 'settings' | 'env' | 'openclaw'
+
+function pickFirstLoopbackUrl(
+  candidates: Array<{ value: string | null; source: ConfigSource }>
+): { value: string | null; source: ConfigSource | null } {
+  for (const candidate of candidates) {
+    if (candidate.value && isLoopbackUrl(candidate.value)) {
+      return { value: candidate.value, source: candidate.source }
+    }
+  }
+  return { value: null, source: null }
 }
 
 function toWsUrl(httpUrl: string): string {
@@ -93,18 +122,21 @@ async function resolveConfig(): Promise<ResolvedOpenClawConfig | null> {
     return null
   }
 
-  const gatewayUrl =
-    settingsGatewayUrl
-    || envGatewayUrl
-    || discoveredGatewayUrl
-    || DEFAULT_GATEWAY_HTTP_URL
+  const httpSelection = pickFirstLoopbackUrl([
+    { value: settingsGatewayUrl, source: 'settings' },
+    { value: envGatewayUrl, source: 'env' },
+    { value: discoveredGatewayUrl, source: 'openclaw' },
+  ])
+  const gatewayUrl = httpSelection.value || DEFAULT_GATEWAY_HTTP_URL
+  const gatewayUrlSource = httpSelection.source || 'openclaw'
 
-  const gatewayWsUrl =
-    settingsGatewayWsUrl
-    || envGatewayWsUrl
-    || discoveredGatewayWsUrl
-    || toWsUrl(gatewayUrl)
-    || DEFAULT_GATEWAY_WS_URL
+  const wsSelection = pickFirstLoopbackUrl([
+    { value: settingsGatewayWsUrl, source: 'settings' },
+    { value: envGatewayWsUrl, source: 'env' },
+    { value: discoveredGatewayWsUrl, source: 'openclaw' },
+  ])
+  const gatewayWsUrl = wsSelection.value || toWsUrl(gatewayUrl) || DEFAULT_GATEWAY_WS_URL
+  const gatewayWsUrlSource = wsSelection.source || gatewayUrlSource
 
   const token =
     settingsGatewayToken
@@ -134,10 +166,8 @@ async function resolveConfig(): Promise<ResolvedOpenClawConfig | null> {
     configPaths,
     source: discovered?.source ?? 'filesystem',
     resolution: {
-      gatewayUrlSource:
-        settingsGatewayUrl ? 'settings' : envGatewayUrl ? 'env' : 'openclaw',
-      gatewayWsUrlSource:
-        settingsGatewayWsUrl ? 'settings' : envGatewayWsUrl ? 'env' : 'openclaw',
+      gatewayUrlSource,
+      gatewayWsUrlSource,
       tokenSource:
         settingsGatewayToken
           ? 'settings'
@@ -229,8 +259,19 @@ export function getOpenClawConfigSync(): ResolvedOpenClawConfig | null {
     return null
   }
 
-  const gatewayUrl = settingsGatewayUrl || envGatewayUrl || DEFAULT_GATEWAY_HTTP_URL
-  const gatewayWsUrl = settingsGatewayWsUrl || envGatewayWsUrl || toWsUrl(gatewayUrl)
+  const httpSelection = pickFirstLoopbackUrl([
+    { value: settingsGatewayUrl, source: 'settings' },
+    { value: envGatewayUrl, source: 'env' },
+  ])
+  const gatewayUrl = httpSelection.value || DEFAULT_GATEWAY_HTTP_URL
+  const gatewayUrlSource = httpSelection.source || 'openclaw'
+
+  const wsSelection = pickFirstLoopbackUrl([
+    { value: settingsGatewayWsUrl, source: 'settings' },
+    { value: envGatewayWsUrl, source: 'env' },
+  ])
+  const gatewayWsUrl = wsSelection.value || toWsUrl(gatewayUrl)
+  const gatewayWsUrlSource = wsSelection.source || gatewayUrlSource
   const token = settingsGatewayToken || envGatewayToken || null
   const workspacePath = settingsWorkspace || envWorkspace || null
 
@@ -244,8 +285,8 @@ export function getOpenClawConfigSync(): ResolvedOpenClawConfig | null {
     configPaths: [settingsResult.path],
     source: 'filesystem',
     resolution: {
-      gatewayUrlSource: settingsGatewayUrl ? 'settings' : envGatewayUrl ? 'env' : 'openclaw',
-      gatewayWsUrlSource: settingsGatewayWsUrl ? 'settings' : envGatewayWsUrl ? 'env' : 'openclaw',
+      gatewayUrlSource,
+      gatewayWsUrlSource,
       tokenSource: settingsGatewayToken ? 'settings' : envGatewayToken ? 'env' : 'none',
       workspaceSource: settingsWorkspace ? 'settings' : envWorkspace ? 'env' : 'none',
     },

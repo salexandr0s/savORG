@@ -206,8 +206,11 @@ export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Pr
 
   // Capability flags for disabling actions
   const capabilities = meta?.capabilities
-  const isUnsupported = meta?.source === 'unsupported' || !capabilities?.supported
-  const isDegraded = meta?.degraded && !isUnsupported
+  const hasCapabilitySnapshot = Boolean(meta)
+  const isUnsupported = hasCapabilitySnapshot
+    && (meta?.source === 'unsupported' || capabilities?.supported === false)
+  const isDegraded = hasCapabilitySnapshot && Boolean(meta?.degraded) && !isUnsupported
+  const showCapabilityBanner = !listLoading && hasCapabilitySnapshot
 
   // Re-probe capabilities
   const handleReprobe = useCallback(async () => {
@@ -509,8 +512,14 @@ export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Pr
               <button
                 className="btn-secondary flex items-center gap-1.5"
                 onClick={() => setShowInstallModal(true)}
-                disabled={isUnsupported || !capabilities?.install}
-                title={!capabilities?.install ? 'Install not supported by OpenClaw' : undefined}
+                disabled={listLoading || isUnsupported || !capabilities?.install}
+                title={
+                  listLoading
+                    ? 'Loading plugin capabilities...'
+                    : !capabilities?.install
+                      ? 'Install not supported by OpenClaw'
+                      : undefined
+                }
               >
                 <Plus className="w-3.5 h-3.5" />
                 Install
@@ -540,7 +549,7 @@ export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Pr
         )}
 
         {/* Unsupported Banner */}
-        {isUnsupported && (
+        {showCapabilityBanner && isUnsupported && (
           <div className="p-3 bg-status-error/10 border border-status-error/30 rounded-md flex items-center gap-3">
             <ServerOff className="w-5 h-5 text-status-error shrink-0" />
             <div className="flex-1">
@@ -568,7 +577,7 @@ export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Pr
         )}
 
         {/* Degraded Mode Banner */}
-        {isDegraded && (
+        {showCapabilityBanner && isDegraded && (
           <div className="p-3 bg-status-warning/10 border border-status-warning/30 rounded-md flex items-center gap-3">
             <CloudOff className="w-5 h-5 text-status-warning shrink-0" />
             <div className="flex-1">

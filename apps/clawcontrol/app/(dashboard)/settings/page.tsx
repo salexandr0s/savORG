@@ -8,12 +8,12 @@ import {
   configApi,
   type SettingsConfigResponse,
   type GatewayTestResponse,
+  type TailscaleReadinessResponse,
   type RemoteAccessMode,
 } from '@/lib/http'
 import { cn } from '@/lib/utils'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import {
-  Maximize2,
   Check,
   FolderOpen,
   AlertCircle,
@@ -65,7 +65,7 @@ declare global {
 }
 
 export default function SettingsPage() {
-  const { mode, setMode, resolved } = useLayout()
+  const { mode, setMode } = useLayout()
   const {
     theme,
     setTheme,
@@ -88,6 +88,9 @@ export default function SettingsPage() {
   const [testingGateway, setTestingGateway] = useState(false)
   const [gatewayConnectionState, setGatewayConnectionState] = useState<GatewayConnectionState>('idle')
   const [gatewayConnectionMessage, setGatewayConnectionMessage] = useState<string | null>(null)
+  const [tailscaleReadiness, setTailscaleReadiness] = useState<TailscaleReadinessResponse | null>(null)
+  const [tailscaleReadinessLoading, setTailscaleReadinessLoading] = useState(false)
+  const [tailscaleReadinessError, setTailscaleReadinessError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [restartingServer, setRestartingServer] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
@@ -293,6 +296,34 @@ export default function SettingsPage() {
     } finally {
       setTestingGateway(false)
     }
+  }
+
+  async function handleRunTailscaleReadiness() {
+    setTailscaleReadinessLoading(true)
+    setTailscaleReadinessError(null)
+
+    try {
+      const res = await configApi.getTailscaleReadiness()
+      setTailscaleReadiness(res.data)
+    } catch (err) {
+      setTailscaleReadinessError(err instanceof Error ? err.message : 'Failed to run tailscale readiness checks')
+    } finally {
+      setTailscaleReadinessLoading(false)
+    }
+  }
+
+  function readinessStateClass(state: 'ok' | 'warning' | 'error' | 'unknown') {
+    if (state === 'ok') return 'text-status-success'
+    if (state === 'warning') return 'text-status-warning'
+    if (state === 'error') return 'text-status-danger'
+    return 'text-fg-3'
+  }
+
+  function readinessStateLabel(state: 'ok' | 'warning' | 'error' | 'unknown') {
+    if (state === 'ok') return 'OK'
+    if (state === 'warning') return 'Warning'
+    if (state === 'error') return 'Error'
+    return 'Unknown'
   }
 
   async function handleManualSync() {
@@ -502,6 +533,86 @@ ssh -L 3000:127.0.0.1:3000 {'<user>@<host-tailnet-name>'}
                     Local-only mode never exposes ClawControl to LAN or internet interfaces.
                   </p>
                 )}
+
+                <div className="rounded-[var(--radius-md)] border border-bd-0 bg-bg-1 p-3 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-fg-1">Tailscale Readiness Check</p>
+                      <p className="text-xs text-fg-3">
+                        Runs security and usability checks: listener bindings, gateway policy, tailscale status, serve exposure, and SSH availability.
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleRunTailscaleReadiness}
+                      disabled={tailscaleReadinessLoading}
+                      className={cn(
+                        'shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-[var(--radius-md)] transition-colors',
+                        tailscaleReadinessLoading
+                          ? 'bg-bg-3 text-fg-3 cursor-not-allowed'
+                          : 'bg-bg-3 text-fg-1 hover:bg-bd-1'
+                      )}
+                    >
+                      {tailscaleReadinessLoading ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <RefreshCw className="w-3.5 h-3.5" />
+                      )}
+                      {tailscaleReadinessLoading ? 'Running...' : 'Run Checks'}
+                    </button>
+                  </div>
+
+                  {tailscaleReadinessError && (
+                    <div className="flex items-center gap-2 p-2 rounded bg-status-danger/10 text-status-danger text-xs">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{tailscaleReadinessError}</span>
+                    </div>
+                  )}
+
+                  {tailscaleReadiness && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-fg-2">Overall readiness</span>
+                        <span className={cn('font-medium', readinessStateClass(tailscaleReadiness.summary.state))}>
+                          {readinessStateLabel(tailscaleReadiness.summary.state)}
+                          {' '}
+                          ({tailscaleReadiness.summary.ok} ok / {tailscaleReadiness.summary.warning} warning / {tailscaleReadiness.summary.error} error / {tailscaleReadiness.summary.unknown} unknown)
+                        </span>
+                      </div>
+
+                      <div className="space-y-2">
+                        {tailscaleReadiness.checks.map((check) => (
+                          <div key={check.id} className="rounded border border-bd-0 bg-bg-2 p-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs text-fg-1">{check.title}</span>
+                              <span className={cn('text-[11px] font-medium uppercase', readinessStateClass(check.state))}>
+                                {readinessStateLabel(check.state)}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-xs text-fg-2">{check.message}</p>
+                            {check.detail && (
+                              <p className="mt-1 text-[11px] text-fg-3 font-mono break-all">{check.detail}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="pt-2 border-t border-bd-0 space-y-1">
+                        <p className="text-xs text-fg-2">
+                          Suggested host: <span className="font-mono">{tailscaleReadiness.context.suggestedHost}</span>
+                        </p>
+                        <pre className="overflow-x-auto rounded bg-bg-2 p-2 text-[11px] text-fg-2">
+{tailscaleReadiness.commands.clawcontrolTunnel}
+                        </pre>
+                        <pre className="overflow-x-auto rounded bg-bg-2 p-2 text-[11px] text-fg-2">
+{tailscaleReadiness.commands.gatewayTunnel}
+                        </pre>
+                        <p className="text-[11px] text-fg-3">
+                          Last run: {new Date(tailscaleReadiness.generatedAt).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -826,57 +937,6 @@ ssh -L 3000:127.0.0.1:3000 {'<user>@<host-tailnet-name>'}
               )}
             </>
           )}
-        </div>
-      </section>
-
-      {/* Layout Mode Section */}
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-sm font-medium text-fg-0">Layout Mode</h2>
-          <p className="text-xs text-fg-2 mt-0.5">
-            Layout selection is simplified to automatic mode
-          </p>
-        </div>
-
-        <div className="p-4 rounded-[var(--radius-lg)] bg-bg-2 border border-bd-0 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-[var(--radius-md)] bg-bg-3">
-                <Maximize2 className="w-4 h-4 text-fg-2" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-fg-0">Auto</p>
-                <p className="text-xs text-fg-2 mt-0.5">Adapts to your current screen shape</p>
-              </div>
-            </div>
-            <span className="px-2 py-1 text-[11px] rounded-[var(--radius-md)] bg-status-info/10 text-status-info">
-              Enabled
-            </span>
-          </div>
-
-          <p className="text-xs text-fg-3">
-            Current resolved layout: <span className="font-mono text-fg-2">{resolved}</span>
-          </p>
-        </div>
-      </section>
-
-      {/* Theme Section */}
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-sm font-medium text-fg-0">Theme</h2>
-          <p className="text-xs text-fg-2 mt-0.5">
-            Theme selection is simplified to automatic default
-          </p>
-        </div>
-
-        <div className="p-4 rounded-[var(--radius-lg)] bg-bg-2 border border-bd-0 flex items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-fg-0">Auto (Ops Dark)</p>
-            <p className="text-xs text-fg-2 mt-0.5">Keeps the default monitoring theme enabled</p>
-          </div>
-          <span className="px-2 py-1 text-[11px] rounded-[var(--radius-md)] bg-status-info/10 text-status-info">
-            Enabled
-          </span>
         </div>
       </section>
 

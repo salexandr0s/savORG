@@ -248,6 +248,60 @@ body {
   .accent-bar-danger::before { background-color: var(--danger); }
   .accent-bar-info::before { background-color: var(--info); }
   .accent-bar-progress::before { background-color: var(--progress); }
+
+  /* Shared dashboard action buttons */
+  .btn-primary,
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 12px;
+    font-size: 12px;
+    line-height: 1;
+    font-weight: 500;
+    border-radius: var(--radius-md);
+    border: 1px solid transparent;
+    white-space: nowrap;
+    transition:
+      background-color var(--transition-fast),
+      color var(--transition-fast),
+      border-color var(--transition-fast),
+      opacity var(--transition-fast);
+  }
+
+  .btn-primary {
+    color: #fff;
+    background-color: rgb(var(--progress-rgb) / 1);
+    border-color: rgb(var(--progress-rgb) / 1);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background-color: rgb(var(--progress-rgb) / 0.9);
+    border-color: rgb(var(--progress-rgb) / 0.9);
+  }
+
+  .btn-secondary {
+    color: rgb(var(--fg1-rgb) / 1);
+    background-color: rgb(var(--bg2-rgb) / 1);
+    border-color: rgb(var(--bd0-rgb) / 1);
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    color: rgb(var(--fg0-rgb) / 1);
+    background-color: rgb(var(--bg3-rgb) / 1);
+    border-color: rgb(var(--bd1-rgb) / 1);
+  }
+
+  .btn-primary:disabled,
+  .btn-secondary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-sm {
+    padding: 4px 10px;
+    font-size: 11px;
+  }
 }
 
 @layer utilities {

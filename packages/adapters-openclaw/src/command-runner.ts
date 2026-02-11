@@ -28,6 +28,11 @@ export const ALLOWED_COMMANDS = {
   'health.json': { args: ['health', '--json'], danger: false, description: 'Check gateway health (JSON output)' },
   'status': { args: ['gateway', 'status'], danger: false, description: 'Get gateway status' },
   'status.json': { args: ['gateway', 'status', '--json'], danger: false, description: 'Get gateway status (JSON output)' },
+  'status.noprobe.json': {
+    args: ['gateway', 'status', '--json', '--no-probe'],
+    danger: false,
+    description: 'Get gateway status (JSON output, no probe)',
+  },
   'probe': { args: ['gateway', 'probe'], danger: false, description: 'Probe gateway connectivity' },
 
   // Doctor (note: openclaw doctor doesn't support --json flag)

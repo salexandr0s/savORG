@@ -89,4 +89,49 @@ describe('maintenance route', () => {
     expect(payload.data.probe.ok).toBe(true)
     expect(payload.data.localOnly.openclawDashboard.ok).toBe(true)
   })
+
+  it('falls back to CLI version when gateway status omits version', async () => {
+    mocks.getOpenClawRuntimeDependencyStatus.mockResolvedValue({
+      cliAvailable: true,
+      cliVersion: '2026.2.9',
+      belowMinVersion: false,
+      resolvedCliBin: '/usr/local/bin/openclaw',
+      checkedAt: '2026-02-10T00:00:00.000Z',
+      cacheTtlMs: 30_000,
+    })
+
+    mocks.getRepos.mockReturnValue({
+      gateway: {
+        status: vi.fn().mockResolvedValue({
+          status: 'ok',
+          latencyMs: 14,
+          data: { running: true },
+          error: null,
+          timestamp: '2026-02-10T00:00:00.000Z',
+          cached: false,
+        }),
+      },
+    })
+
+    mocks.getOpenClawConfig.mockResolvedValue({
+      gatewayUrl: 'http://127.0.0.1:18789',
+      token: null,
+    })
+    mocks.getOpenClawConfigSync.mockReturnValue(null)
+
+    const route = await import('@/app/api/maintenance/route')
+    const response = await route.GET()
+    const payload = (await response.json()) as {
+      data: {
+        status: { version?: string }
+        timestamp: string
+        probe: { latencyMs: number }
+      }
+    }
+
+    expect(response.status).toBe(200)
+    expect(payload.data.status.version).toBe('2026.2.9')
+    expect(payload.data.timestamp).toBe('2026-02-10T00:00:00.000Z')
+    expect(payload.data.probe.latencyMs).toBe(14)
+  })
 })
