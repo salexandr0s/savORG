@@ -6,6 +6,7 @@ import {
   DEGRADED_THRESHOLD_MS,
   clearCache,
 } from '@/lib/openclaw/availability'
+import { classifyOpenClawError } from '@/lib/openclaw/error-shape'
 
 interface RunResult {
   jobId: string
@@ -48,11 +49,13 @@ export async function POST(
     const latencyMs = Date.now() - start
 
     if (res.error) {
+      const details = classifyOpenClawError(res.error)
       return NextResponse.json({
         status: 'unavailable',
         latencyMs,
         data: null,
         error: res.error,
+        ...details,
         timestamp: new Date().toISOString(),
         cached: false,
       })
@@ -70,12 +73,14 @@ export async function POST(
       cached: false,
     })
   } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error'
     const latencyMs = Date.now() - start
     return NextResponse.json({
       status: 'unavailable',
       latencyMs,
       data: null,
-      error: err instanceof Error ? err.message : 'Unknown error',
+      error: errorMessage,
+      ...classifyOpenClawError(errorMessage),
       timestamp: new Date().toISOString(),
       cached: false,
     })

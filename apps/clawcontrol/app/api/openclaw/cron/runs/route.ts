@@ -7,6 +7,7 @@ import {
   getCached,
   setCache,
 } from '@/lib/openclaw/availability'
+import { classifyOpenClawError } from '@/lib/openclaw/error-shape'
 
 /**
  * Cron run DTO from OpenClaw CLI.
@@ -70,11 +71,13 @@ export async function GET(request: NextRequest): Promise<NextResponse<OpenClawRe
     const latencyMs = Date.now() - start
 
     if (res.error) {
+      const details = classifyOpenClawError(res.error)
       const response: OpenClawResponse<CronRunDTO[]> = {
         status: 'unavailable',
         latencyMs,
         data: null,
         error: res.error,
+        ...details,
         timestamp: new Date().toISOString(),
         cached: false,
       }
@@ -96,12 +99,14 @@ export async function GET(request: NextRequest): Promise<NextResponse<OpenClawRe
     setCache(cacheKey, response)
     return NextResponse.json(response)
   } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error'
     const latencyMs = Date.now() - start
     const response: OpenClawResponse<CronRunDTO[]> = {
       status: 'unavailable',
       latencyMs,
       data: null,
-      error: err instanceof Error ? err.message : 'Unknown error',
+      error: errorMessage,
+      ...classifyOpenClawError(errorMessage),
       timestamp: new Date().toISOString(),
       cached: false,
     }

@@ -16,6 +16,7 @@
     "db:push": "prisma db push",
     "db:reset": "prisma migrate reset",
     "db:studio": "prisma studio",
+    "templates:migrate-manager-role": "node scripts/migrate-manager-template-role.mjs",
     "postinstall": "prisma generate"
   },
   "dependencies": {

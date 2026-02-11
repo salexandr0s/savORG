@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getOpenClawCapabilities, clearCapabilitiesCache } from '@/lib/openclaw'
+import {
+  clearCache as clearOpenClawCheckCache,
+  getOpenClawBin,
+} from '@clawcontrol/adapters-openclaw'
 
 /**
  * GET /api/openclaw/capabilities
@@ -19,6 +23,7 @@ export async function GET(request: NextRequest) {
     // Clear cache if refresh requested
     if (forceRefresh) {
       clearCapabilitiesCache()
+      clearOpenClawCheckCache()
     }
 
     const capabilities = await getOpenClawCapabilities()
@@ -40,6 +45,7 @@ export async function GET(request: NextRequest) {
         data: {
           version: null,
           available: false,
+          resolvedBin: getOpenClawBin(),
           plugins: {
             supported: false,
             listJson: false,

@@ -21,6 +21,10 @@ export interface OpenClawResponse<T> {
   data: T | null
   /** Error message if status is 'unavailable' */
   error: string | null
+  /** Machine-readable error code for unavailable/degraded states */
+  code?: string
+  /** Actionable remediation hint for operators */
+  fixHint?: string
   /** ISO timestamp when this response was generated */
   timestamp: string
   /** Whether this response was served from cache */

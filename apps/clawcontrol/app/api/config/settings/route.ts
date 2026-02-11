@@ -4,6 +4,8 @@ import { readSettings, writeSettings } from '@/lib/settings/store'
 import type { ClawcontrolSettings, RemoteAccessMode } from '@/lib/settings/types'
 import { invalidateWorkspaceRootCache } from '@/lib/fs/path-policy'
 import { validateWorkspaceStructure } from '@/lib/workspace/validate'
+import { getOpenClawRuntimeDependencyStatus } from '@/lib/openclaw/runtime-deps'
+import { invalidateTemplatesCache } from '@/lib/templates'
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]'])
 
@@ -58,11 +60,15 @@ function applyRuntimeWorkspacePath(workspacePath: string | null | undefined): vo
   }
 
   invalidateWorkspaceRootCache()
+  invalidateTemplatesCache()
 }
 
 async function buildResponseData() {
-  const settingsResult = await readSettings()
-  const resolved = await getOpenClawConfig(true)
+  const [settingsResult, resolved, runtimeCli] = await Promise.all([
+    readSettings(),
+    getOpenClawConfig(true),
+    getOpenClawRuntimeDependencyStatus(),
+  ])
 
   const settings = settingsResult.settings
   const workspacePath = resolved?.workspacePath ?? settings.workspacePath ?? null
@@ -96,6 +102,9 @@ async function buildResponseData() {
     legacyEnvPath: settingsResult.legacyEnvPath,
     migratedFromEnv: settingsResult.migratedFromEnv,
     workspaceValidation,
+    runtime: {
+      cli: runtimeCli,
+    },
   }
 }
 

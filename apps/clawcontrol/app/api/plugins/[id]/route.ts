@@ -3,6 +3,7 @@ import { enforceTypedConfirm } from '@/lib/with-governor'
 import { getRepos } from '@/lib/repo'
 import { PluginUnsupportedError } from '@/lib/repo/plugins'
 import type { ActionKind } from '@clawcontrol/core'
+import { classifyOpenClawError } from '@/lib/openclaw/error-shape'
 
 /**
  * GET /api/plugins/:id
@@ -100,11 +101,16 @@ export async function PATCH(
           message: err.message,
           operation: err.operation,
           capabilities: err.capabilities,
+          ...classifyOpenClawError(err.message),
         },
         { status: err.httpStatus }
       )
     }
-    throw err
+    const errorMessage = err instanceof Error ? err.message : 'Failed to update plugin'
+    return NextResponse.json(
+      { error: errorMessage, ...classifyOpenClawError(errorMessage) },
+      { status: 500 }
+    )
   }
 }
 
@@ -238,10 +244,15 @@ export async function DELETE(
           message: err.message,
           operation: err.operation,
           capabilities: err.capabilities,
+          ...classifyOpenClawError(err.message),
         },
         { status: err.httpStatus }
       )
     }
-    throw err
+    const errorMessage = err instanceof Error ? err.message : 'Failed to uninstall plugin'
+    return NextResponse.json(
+      { error: errorMessage, ...classifyOpenClawError(errorMessage) },
+      { status: 500 }
+    )
   }
 }

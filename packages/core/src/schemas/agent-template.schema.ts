@@ -36,8 +36,8 @@ export const AGENT_TEMPLATE_SCHEMA = {
     },
     role: {
       type: 'string',
-      enum: ['CEO', 'BUILD', 'OPS', 'REVIEW', 'SPEC', 'QA', 'SHIP', 'COMPOUND', 'UPDATE', 'CUSTOM'],
-      description: 'Agent role type (MANAGER planned for v1.1)',
+      enum: ['CEO', 'MANAGER', 'BUILD', 'OPS', 'REVIEW', 'SPEC', 'QA', 'SHIP', 'COMPOUND', 'UPDATE', 'CUSTOM'],
+      description: 'Agent role type',
     },
     namingPattern: {
       type: 'string',
@@ -161,7 +161,7 @@ export interface AgentTemplateConfig {
   name: string
   description: string
   version: string
-  role: 'CEO' | 'BUILD' | 'OPS' | 'REVIEW' | 'SPEC' | 'QA' | 'SHIP' | 'COMPOUND' | 'UPDATE' | 'CUSTOM'
+  role: 'CEO' | 'MANAGER' | 'BUILD' | 'OPS' | 'REVIEW' | 'SPEC' | 'QA' | 'SHIP' | 'COMPOUND' | 'UPDATE' | 'CUSTOM'
   namingPattern?: string
   sessionKeyPattern?: string
   paramsSchema?: {

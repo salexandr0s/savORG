@@ -17,6 +17,7 @@ import { slugifyDisplayName } from './agent-identity'
  * Standard role suffixes for auto-generated names.
  */
 export const AGENT_ROLE_MAP: Record<string, { prefix: string; station: StationId; description: string }> = {
+  manager: { prefix: 'MANAGER', station: 'orchestration', description: 'Workflow orchestration & coordination' },
   spec: { prefix: 'SPEC', station: 'spec', description: 'Specification & requirements' },
   build: { prefix: 'BUILD', station: 'build', description: 'Implementation & coding' },
   qa: { prefix: 'QA', station: 'qa', description: 'Testing & quality assurance' },

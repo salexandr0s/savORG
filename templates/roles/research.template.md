@@ -78,4 +78,4 @@ Every research output must follow this structure:
 
 - You report to: **{{PREFIX_CAPITALIZED}}Manager**
 - You receive tasks from: **{{PREFIX_CAPITALIZED}}Manager** only
-- Your output feeds into: **{{PREFIX_CAPITALIZED}}Plan** (most commonly) or directly to **{{PREFIX_CAPITALIZED}}Manager** for research-only workflows
+- Your output feeds into: **{{PREFIX_CAPITALIZED}}Plan** (most commonly) or directly to **{{PREFIX_CAPITALIZED}}Manager** when research is the first stage in a workflow

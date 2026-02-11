@@ -91,6 +91,14 @@ export function getOpenClawBin(): string {
   return resolvedOpenClawBin
 }
 
+export function getOpenClawCheckTimestampMs(): number | null {
+  return cacheTime > 0 ? cacheTime : null
+}
+
+export function getOpenClawCheckCacheTtlMs(): number {
+  return CACHE_TTL
+}
+
 // ============================================================================
 // VERSION COMPARISON
 // ============================================================================

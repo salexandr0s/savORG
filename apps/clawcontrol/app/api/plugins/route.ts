@@ -3,6 +3,7 @@ import { enforceTypedConfirm } from '@/lib/with-governor'
 import { getRepos } from '@/lib/repo'
 import { PluginUnsupportedError } from '@/lib/repo/plugins'
 import type { PluginSourceType } from '@clawcontrol/core'
+import { classifyOpenClawError } from '@/lib/openclaw/error-shape'
 
 // Validation helpers
 const ALLOWED_LOCAL_BASES = ['/usr/local/lib/clawcontrol/plugins', '/opt/clawcontrol/plugins']
@@ -229,6 +230,7 @@ export async function POST(request: NextRequest) {
           message: err.message,
           operation: err.operation,
           capabilities: err.capabilities,
+          ...classifyOpenClawError(err.message),
         },
         { status: err.httpStatus }
       )
@@ -244,8 +246,9 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    const errorMessage = err instanceof Error ? err.message : 'Failed to install plugin'
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to install plugin' },
+      { error: errorMessage, ...classifyOpenClawError(errorMessage) },
       { status: 500 }
     )
   }

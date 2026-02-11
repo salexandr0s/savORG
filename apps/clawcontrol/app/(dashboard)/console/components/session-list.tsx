@@ -24,12 +24,10 @@ interface SessionListProps {
   endingSessionIds: Record<string, boolean>
   filters: {
     containsErrors: boolean
-    minCostUsd: string
     toolUsed: string
   }
   onFiltersChange: (filters: {
     containsErrors: boolean
-    minCostUsd: string
     toolUsed: string
   }) => void
 }
@@ -189,12 +187,6 @@ export function SessionList({
             onChange={(e) => onFiltersChange({ ...filters, containsErrors: e.target.checked })}
           />
         </label>
-        <input
-          value={filters.minCostUsd}
-          onChange={(e) => onFiltersChange({ ...filters, minCostUsd: e.target.value })}
-          placeholder="Min cost (USD)"
-          className="w-full px-2 py-1.5 text-xs bg-bg-0 border border-bd-0 rounded-[var(--radius-sm)] text-fg-0 placeholder:text-fg-3 focus:outline-none"
-        />
         <input
           value={filters.toolUsed}
           onChange={(e) => onFiltersChange({ ...filters, toolUsed: e.target.value })}

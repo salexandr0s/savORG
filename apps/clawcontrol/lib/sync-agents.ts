@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { runCommand } from '@clawcontrol/adapters-openclaw'
+import { runCommandJson } from '@clawcontrol/adapters-openclaw'
 import { getRepos } from '@/lib/repo'
 import { prisma } from '@/lib/db'
 import { getOpenClawConfig } from '@/lib/openclaw-client'
@@ -113,15 +113,10 @@ function normalizeCliPayload(payload: unknown): OpenClawAgentConfig[] {
 }
 
 async function discoverAgents(forceRefresh: boolean): Promise<{ agents: OpenClawAgentConfig[]; source: 'cli' | 'config' }> {
-  const cliResult = await runCommand('config.agents.list.json')
-  if (cliResult.exitCode === 0) {
-    try {
-      const parsed = JSON.parse(cliResult.stdout)
-      const agents = normalizeCliPayload(parsed)
-      return { agents, source: 'cli' }
-    } catch {
-      // Fall through to file-based discovery.
-    }
+  const cliResult = await runCommandJson<unknown>('config.agents.list.json')
+  if (!cliResult.error && cliResult.data) {
+    const agents = normalizeCliPayload(cliResult.data)
+    return { agents, source: 'cli' }
   }
 
   const config = await getOpenClawConfig(forceRefresh)

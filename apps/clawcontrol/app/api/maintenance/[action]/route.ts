@@ -9,6 +9,7 @@ import {
   type AllowedCommandId,
 } from '@clawcontrol/adapters-openclaw'
 import type { ActionKind } from '@clawcontrol/core'
+import { classifyOpenClawError } from '@/lib/openclaw/error-shape'
 
 // Map action paths to command IDs and Governor action kinds
 const ACTION_MAP: Record<string, {
@@ -210,6 +211,9 @@ export async function POST(
         stderr,
         parsedJson,
         receiptId: receipt.id,
+        ...(exitCode !== 0
+          ? classifyOpenClawError(stderr || stdout || `Command failed with exit code ${exitCode}`)
+          : {}),
       },
     })
   } catch (err) {
@@ -229,6 +233,7 @@ export async function POST(
       {
         error: errorMessage,
         receiptId: receipt.id,
+        ...classifyOpenClawError(errorMessage),
       },
       { status: 500 }
     )

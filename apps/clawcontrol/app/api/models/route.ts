@@ -6,9 +6,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { runCommand } from '@clawcontrol/adapters-openclaw'
+import { runCommandJson } from '@clawcontrol/adapters-openclaw'
 import { withRouteTiming } from '@/lib/perf/route-timing'
 import { getOrLoadWithCache, invalidateAsyncCache } from '@/lib/perf/async-cache'
+import { classifyOpenClawError } from '@/lib/openclaw/error-shape'
 
 // ============================================================================
 // TYPES
@@ -97,26 +98,35 @@ interface ModelStatusResponse {
 const MODELS_STATUS_TTL_MS = 15_000
 const MODELS_LIST_TTL_MS = 15_000
 
+function failureResponse(error: string, options: { parseFailed?: boolean } = {}) {
+  return {
+    ...classifyOpenClawError(error, options),
+    error,
+  }
+}
+
 const getModels = async () => {
   try {
     const { value: statusResult, cacheHit, sharedInFlight } = await getOrLoadWithCache(
       'api.models.get:models.status.json',
       MODELS_STATUS_TTL_MS,
-      async () => runCommand('models.status.json')
+      async () => runCommandJson<ModelStatusResponse>('models.status.json')
     )
 
-    if (statusResult.exitCode !== 0) {
+    if (statusResult.error || !statusResult.data) {
+      const details = failureResponse(
+        statusResult.error ?? 'Failed to parse model status JSON',
+        { parseFailed: !statusResult.error && !statusResult.data }
+      )
       return NextResponse.json(
-        { error: 'Failed to get model status', details: statusResult.stderr },
+        { error: 'Failed to get model status', details: statusResult.error ?? null, ...details },
         { status: 500 }
       )
     }
 
-    const status: ModelStatusResponse = JSON.parse(statusResult.stdout)
-
     return NextResponse.json({
       data: {
-        status,
+        status: statusResult.data,
         cache: {
           cacheHit,
           sharedInFlight,
@@ -142,7 +152,7 @@ const postModels = async (request: NextRequest) => {
     const body = await request.json()
     const { action } = body as { action: 'list' | 'list-all' | 'status' | 'probe' }
 
-    let result
+    let result: { data?: unknown; error?: string; exitCode: number }
     let cacheMeta: { cacheHit: boolean; sharedInFlight: boolean } | null = null
     switch (action) {
       case 'list':
@@ -150,7 +160,7 @@ const postModels = async (request: NextRequest) => {
           const cached = await getOrLoadWithCache(
             'api.models.post:models.list.json',
             MODELS_LIST_TTL_MS,
-            async () => runCommand('models.list.json')
+            async () => runCommandJson('models.list.json')
           )
           result = cached.value
           cacheMeta = {
@@ -164,7 +174,7 @@ const postModels = async (request: NextRequest) => {
           const cached = await getOrLoadWithCache(
             'api.models.post:models.list.all.json',
             MODELS_LIST_TTL_MS,
-            async () => runCommand('models.list.all.json')
+            async () => runCommandJson('models.list.all.json')
           )
           result = cached.value
           cacheMeta = {
@@ -178,7 +188,7 @@ const postModels = async (request: NextRequest) => {
           const cached = await getOrLoadWithCache(
             'api.models.post:models.status.json',
             MODELS_STATUS_TTL_MS,
-            async () => runCommand('models.status.json')
+            async () => runCommandJson('models.status.json')
           )
           result = cached.value
           cacheMeta = {
@@ -192,7 +202,7 @@ const postModels = async (request: NextRequest) => {
         invalidateAsyncCache('api.models.post:models.status.json')
         invalidateAsyncCache('api.models.post:models.list.json')
         invalidateAsyncCache('api.models.post:models.list.all.json')
-        result = await runCommand('models.status.probe.json')
+        result = await runCommandJson('models.status.probe.json')
         break
       default:
         return NextResponse.json(
@@ -201,17 +211,24 @@ const postModels = async (request: NextRequest) => {
         )
     }
 
-    if (result.exitCode !== 0) {
+    if (result.error) {
+      const details = failureResponse(result.error)
       return NextResponse.json(
-        { error: `Command failed: ${result.stderr}` },
+        { error: `Command failed: ${result.error}`, ...details },
         { status: 500 }
       )
     }
 
-    const data = JSON.parse(result.stdout)
+    if (result.data === undefined) {
+      const details = failureResponse('Failed to parse JSON output', { parseFailed: true })
+      return NextResponse.json(
+        { error: 'Failed to parse JSON output', ...details },
+        { status: 500 }
+      )
+    }
 
     return NextResponse.json({
-      data,
+      data: result.data,
       ...(cacheMeta
         ? {
             meta: {

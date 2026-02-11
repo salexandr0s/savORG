@@ -443,8 +443,8 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
                 label={gateway.status.toUpperCase()}
               />
               <button
-                onClick={() => handleAction('health')}
-                disabled={runningAction !== null}
+                onClick={() => void refreshStatus()}
+                disabled={runningAction !== null || isLoading}
                 className="btn-secondary flex items-center gap-1.5 text-xs"
               >
                 {runningAction === 'health' ? (
@@ -452,7 +452,7 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
                 ) : (
                   <RefreshCw className="w-3 h-3" />
                 )}
-                Refresh
+                Refresh Status
               </button>
             </div>
           </div>
@@ -506,6 +506,13 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
         {/* Maintenance Actions */}
         <PageSection title="Actions" description="System maintenance operations">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <LiveActionCard
+              action="health"
+              config={ACTION_CONFIG['health']}
+              isRunning={runningAction === 'health'}
+              disabled={runningAction !== null}
+              onClick={() => handleAction('health')}
+            />
             <LiveActionCard
               action="doctor"
               config={ACTION_CONFIG['doctor']}

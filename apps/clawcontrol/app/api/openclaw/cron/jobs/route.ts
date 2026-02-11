@@ -8,6 +8,7 @@ import {
   setCache,
 } from '@/lib/openclaw/availability'
 import { withRouteTiming } from '@/lib/perf/route-timing'
+import { classifyOpenClawError } from '@/lib/openclaw/error-shape'
 
 /**
  * Cron job schedule types.
@@ -85,11 +86,13 @@ const getCronJobsRoute = async (): Promise<NextResponse<OpenClawResponse<CronJob
     const latencyMs = Date.now() - start
 
     if (res.error) {
+      const details = classifyOpenClawError(res.error)
       const response: OpenClawResponse<CronJobDTO[]> = {
         status: 'unavailable',
         latencyMs,
         data: null,
         error: res.error,
+        ...details,
         timestamp: new Date().toISOString(),
         cached: false,
       }
@@ -111,12 +114,14 @@ const getCronJobsRoute = async (): Promise<NextResponse<OpenClawResponse<CronJob
     setCache(CACHE_KEY, response)
     return NextResponse.json(response)
   } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error'
     const latencyMs = Date.now() - start
     const response: OpenClawResponse<CronJobDTO[]> = {
       status: 'unavailable',
       latencyMs,
       data: null,
-      error: err instanceof Error ? err.message : 'Unknown error',
+      error: errorMessage,
+      ...classifyOpenClawError(errorMessage),
       timestamp: new Date().toISOString(),
       cached: false,
     }

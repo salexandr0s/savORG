@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { enforceTypedConfirm } from '@/lib/with-governor'
 import { getRepos } from '@/lib/repo'
 import { PluginUnsupportedError } from '@/lib/repo/plugins'
+import { classifyOpenClawError } from '@/lib/openclaw/error-shape'
 
 /**
  * POST /api/plugins/restart
@@ -113,10 +114,15 @@ export async function POST(request: NextRequest) {
           message: err.message,
           operation: err.operation,
           capabilities: err.capabilities,
+          ...classifyOpenClawError(err.message),
         },
         { status: err.httpStatus }
       )
     }
-    throw err
+    const errorMessage = err instanceof Error ? err.message : 'Failed to restart plugins'
+    return NextResponse.json(
+      { error: errorMessage, ...classifyOpenClawError(errorMessage) },
+      { status: 500 }
+    )
   }
 }

@@ -5,7 +5,9 @@ import {
   executeCommand,
   runCommandJson,
   checkOpenClawAvailable,
+  parseJsonFromCommandOutput,
 } from '@clawcontrol/adapters-openclaw'
+import { classifyOpenClawError } from '@/lib/openclaw/error-shape'
 
 /**
  * Recovery Playbook Steps
@@ -120,6 +122,7 @@ export async function POST(request: NextRequest) {
 
     const cliCheck = await checkOpenClawAvailable()
     if (!cliCheck.available) {
+      const details = classifyOpenClawError(cliCheck.error ?? 'OpenClaw CLI not available')
       updateStep('check_availability', 'failed', cliCheck.error || 'CLI not available')
       await log(`  FAILED: ${cliCheck.error}`)
       state.finalStatus = 'failed'
@@ -142,7 +145,15 @@ export async function POST(request: NextRequest) {
         payloadJson: { state, receiptIds: receipts },
       })
 
-      return NextResponse.json({ data: state, receiptId: parentReceipt.id }, { status: 503 })
+      return NextResponse.json(
+        {
+          data: state,
+          receiptId: parentReceipt.id,
+          error: cliCheck.error ?? 'OpenClaw CLI not available',
+          ...details,
+        },
+        { status: 503 }
+      )
     }
 
     updateStep('check_availability', 'success', `CLI version: ${cliCheck.version}`)
@@ -212,12 +223,10 @@ export async function POST(request: NextRequest) {
       parsedJson: { output: doctorOutput },
     })
 
-    let doctorData: { ok: boolean; issues?: unknown[] } = { ok: true }
-    try {
-      doctorData = JSON.parse(doctorOutput)
-    } catch {
-      // Not JSON, assume issues
-      doctorData = { ok: false, issues: [{ message: 'Unable to parse doctor output' }] }
+    const parsedDoctorData = parseJsonFromCommandOutput<{ ok: boolean; issues?: unknown[] }>(doctorOutput)
+    const doctorData: { ok: boolean; issues?: unknown[] } = parsedDoctorData ?? {
+      ok: false,
+      issues: [{ message: 'Unable to parse doctor output' }],
     }
 
     if (doctorData.ok) {
@@ -393,7 +402,12 @@ export async function POST(request: NextRequest) {
     })
 
     return NextResponse.json(
-      { error: errorMessage, data: state, receiptId: parentReceipt.id },
+      {
+        error: errorMessage,
+        data: state,
+        receiptId: parentReceipt.id,
+        ...classifyOpenClawError(errorMessage),
+      },
       { status: 500 }
     )
   }

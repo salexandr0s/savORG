@@ -1672,6 +1672,17 @@ export interface SettingsConfigResponse {
     exists: boolean
     issues: WorkspaceValidationIssue[]
   }
+  runtime: {
+    cli: {
+      cliAvailable: boolean
+      cliVersion: string | null
+      cliError?: string
+      belowMinVersion?: boolean
+      resolvedCliBin: string
+      checkedAt: string | null
+      cacheTtlMs: number
+    }
+  }
 }
 
 export interface GatewayTestResponse {

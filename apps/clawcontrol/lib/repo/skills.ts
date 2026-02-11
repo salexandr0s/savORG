@@ -578,11 +578,10 @@ async function parseSkillFromDirectory(
   if (!pathResult.valid || !pathResult.resolvedPath) return null
 
   const absPath = pathResult.resolvedPath
-  const skillMdPath = join(absPath, 'skill.md')
+  const skillMdPath = await resolveSkillMdPath(absPath)
 
   try {
-    // Check skill.md exists
-    await fsp.access(skillMdPath)
+    if (!skillMdPath) return null
 
     const skillMdContent = await fsp.readFile(skillMdPath, 'utf8')
     const stat = await fsp.stat(absPath)
@@ -631,7 +630,10 @@ async function parseSkillWithContent(
   const absPath = pathResult.resolvedPath
 
   try {
-    const skillMd = await fsp.readFile(join(absPath, 'skill.md'), 'utf8')
+    const skillMdPath = await resolveSkillMdPath(absPath)
+    if (!skillMdPath) return null
+
+    const skillMd = await fsp.readFile(skillMdPath, 'utf8')
     let config: string | undefined
 
     if (skill.hasConfig) {
@@ -685,6 +687,16 @@ async function fileExists(path: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+async function resolveSkillMdPath(absPath: string): Promise<string | null> {
+  const lower = join(absPath, 'skill.md')
+  if (await fileExists(lower)) return lower
+
+  const upper = join(absPath, 'SKILL.md')
+  if (await fileExists(upper)) return upper
+
+  return null
 }
 
 function isValidSkillName(name: string): boolean {

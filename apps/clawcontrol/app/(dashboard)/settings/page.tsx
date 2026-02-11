@@ -561,8 +561,32 @@ ssh -L 3000:127.0.0.1:3000 {'<user>@<host-tailnet-name>'}
                   </span>
                 </div>
 
+                <div className="flex items-center justify-between text-xs text-fg-2">
+                  <span>CLI status:</span>
+                  <span
+                    className={cn(
+                      'font-medium',
+                      settingsConfig?.runtime.cli.cliAvailable
+                        ? 'text-status-success'
+                        : 'text-status-danger'
+                    )}
+                  >
+                    {settingsConfig?.runtime.cli.cliAvailable
+                      ? `Available (${settingsConfig.runtime.cli.cliVersion ?? 'unknown'})`
+                      : 'Unavailable'}
+                  </span>
+                </div>
+
+                <div className="text-xs text-fg-3 font-mono break-all">
+                  Binary: {settingsConfig?.runtime.cli.resolvedCliBin ?? 'unknown'}
+                </div>
+
                 {gatewayConnectionMessage && (
                   <p className="text-xs text-fg-3">{gatewayConnectionMessage}</p>
+                )}
+
+                {settingsConfig?.runtime.cli.cliError && (
+                  <p className="text-xs text-status-danger">{settingsConfig.runtime.cli.cliError}</p>
                 )}
               </div>
 

@@ -6,6 +6,7 @@ import {
   DEGRADED_THRESHOLD_MS,
   clearCache,
 } from '@/lib/openclaw/availability'
+import { classifyOpenClawError } from '@/lib/openclaw/error-shape'
 
 type EditMode = 'every' | 'cron' | 'at'
 
@@ -30,6 +31,7 @@ function unavailable(error: string, latencyMs: number): OpenClawResponse<EditRes
     latencyMs,
     data: null,
     error,
+    ...classifyOpenClawError(error),
     timestamp: new Date().toISOString(),
     cached: false,
   }

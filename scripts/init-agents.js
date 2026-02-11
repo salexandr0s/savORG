@@ -930,10 +930,15 @@ function validateWorkflowGateInvariants(config, prefix) {
       }
     }
 
-    const opsIndex = indexOfAgent(opsId);
     const securityIndex = indexOfAgent(securityId);
-    if (opsIndex !== -1 && securityIndex !== -1 && securityIndex > opsIndex) {
-      errors.push(`workflow "${workflowName}" must run ${securityId} before ${opsId}`);
+    const opsIndices = stages
+      .map((stage, index) => (stage.agent === opsId ? index : -1))
+      .filter((index) => index !== -1);
+    if (securityIndex !== -1 && opsIndices.length > 0) {
+      const hasOpsAfterSecurity = opsIndices.some((index) => index > securityIndex);
+      if (!hasOpsAfterSecurity) {
+        errors.push(`workflow "${workflowName}" must include at least one ${opsId} stage after ${securityId}`);
+      }
     }
 
     if (workflowName === 'bug_fix' || workflowName === 'hotfix') {

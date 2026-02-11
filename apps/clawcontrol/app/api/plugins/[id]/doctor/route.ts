@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { enforceTypedConfirm } from '@/lib/with-governor'
 import { getRepos } from '@/lib/repo'
 import { PluginUnsupportedError } from '@/lib/repo/plugins'
+import { classifyOpenClawError } from '@/lib/openclaw/error-shape'
 
 /**
  * POST /api/plugins/:id/doctor
@@ -117,10 +118,15 @@ export async function POST(
           message: err.message,
           operation: err.operation,
           capabilities: err.capabilities,
+          ...classifyOpenClawError(err.message),
         },
         { status: err.httpStatus }
       )
     }
-    throw err
+    const errorMessage = err instanceof Error ? err.message : 'Failed to run plugin doctor'
+    return NextResponse.json(
+      { error: errorMessage, ...classifyOpenClawError(errorMessage) },
+      { status: 500 }
+    )
   }
 }

@@ -158,6 +158,7 @@ export async function POST(request: NextRequest) {
       canWrite: true,
       canExecute: role === 'BUILD' || role === 'OPS',
       canApprove: role === 'CEO' || role === 'REVIEW',
+      canDelegate: role === 'CEO' || role === 'MANAGER',
     }
 
     await repos.receipts.append(receipt.id, {

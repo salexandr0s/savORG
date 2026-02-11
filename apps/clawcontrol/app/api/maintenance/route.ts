@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
-import { checkOpenClaw, OPENCLAW_BIN, MIN_OPENCLAW_VERSION } from '@clawcontrol/adapters-openclaw'
+import { OPENCLAW_BIN, MIN_OPENCLAW_VERSION } from '@clawcontrol/adapters-openclaw'
 import { getRepos } from '@/lib/repo'
 import { getOpenClawConfig, getOpenClawConfigSync } from '@/lib/openclaw-client'
 import { DEFAULT_GATEWAY_HTTP_URL } from '@/lib/settings/types'
+import { getOpenClawRuntimeDependencyStatus } from '@/lib/openclaw/runtime-deps'
 
 const CACHE_TTL_MS = 30_000
 
@@ -11,11 +12,13 @@ type MaintenanceResponseBody = {
     mode: string
     localOnly: unknown
     cliBin: string
+    resolvedCliBin: string
     cliAvailable: boolean
     cliVersion: string | null
     minVersion: string
     belowMinVersion?: boolean
     cliError?: string
+    cliCheckedAt?: string | null
     health: {
       status: 'ok' | 'degraded' | 'down'
       message?: string
@@ -107,8 +110,8 @@ export async function GET() {
 
   if (!inFlight) {
     inFlight = (async (): Promise<MaintenanceResponseBody> => {
-      // Check OpenClaw CLI availability
-      const cliCheck = await checkOpenClaw()
+      // Check OpenClaw runtime dependency status
+      const cliStatus = await getOpenClawRuntimeDependencyStatus()
       const pollIntervalMs = parsePollIntervalMs()
 
       try {
@@ -129,11 +132,13 @@ export async function GET() {
             localOnly,
             // CLI info
             cliBin: OPENCLAW_BIN,
-            cliAvailable: cliCheck.available,
-            cliVersion: cliCheck.version,
+            resolvedCliBin: cliStatus.resolvedCliBin,
+            cliAvailable: cliStatus.cliAvailable,
+            cliVersion: cliStatus.cliVersion,
             minVersion: MIN_OPENCLAW_VERSION,
-            belowMinVersion: cliCheck.belowMinVersion,
-            cliError: cliCheck.error,
+            belowMinVersion: cliStatus.belowMinVersion,
+            cliError: cliStatus.cliError,
+            cliCheckedAt: cliStatus.checkedAt,
             // Gateway status (lean)
             health: {
               status: mapAvailabilityToHealthStatus(statusRes.status),
@@ -158,11 +163,13 @@ export async function GET() {
             mode: 'probe_first',
             // CLI info (even on error)
             cliBin: OPENCLAW_BIN,
-            cliAvailable: cliCheck.available,
-            cliVersion: cliCheck.version,
+            resolvedCliBin: cliStatus.resolvedCliBin,
+            cliAvailable: cliStatus.cliAvailable,
+            cliVersion: cliStatus.cliVersion,
             minVersion: MIN_OPENCLAW_VERSION,
-            belowMinVersion: cliCheck.belowMinVersion,
-            cliError: cliCheck.error,
+            belowMinVersion: cliStatus.belowMinVersion,
+            cliError: cliStatus.cliError,
+            cliCheckedAt: cliStatus.checkedAt,
             // Error state
             localOnly: null,
             health: {
@@ -198,6 +205,7 @@ export async function GET() {
         mode: 'unknown',
         localOnly: null,
         cliBin: OPENCLAW_BIN,
+        resolvedCliBin: OPENCLAW_BIN,
         cliAvailable: false,
         cliVersion: null,
         minVersion: MIN_OPENCLAW_VERSION,

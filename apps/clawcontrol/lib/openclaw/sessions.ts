@@ -5,7 +5,11 @@ import { promisify } from 'util'
 import { randomUUID } from 'crypto'
 import { prisma } from '../db'
 import { getWsConsoleClient } from './console-client'
-import { runCommandJson } from '@clawcontrol/adapters-openclaw'
+import {
+  runCommandJson,
+  getOpenClawBin,
+  parseJsonFromCommandOutput,
+} from '@clawcontrol/adapters-openclaw'
 
 const execFileAsync = promisify(execFile)
 const OPENCLAW_STATUS_TIMEOUT_MS = 15_000
@@ -73,7 +77,7 @@ export async function spawnAgentSession(options: SpawnOptions): Promise<SpawnRes
   let stderr = ''
 
   try {
-    const res = await execFileAsync('openclaw', args, {
+    const res = await execFileAsync(getOpenClawBin(), args, {
       timeout: timeoutSeconds * 1000,
       maxBuffer: 10 * 1024 * 1024,
     })
@@ -86,13 +90,12 @@ export async function spawnAgentSession(options: SpawnOptions): Promise<SpawnRes
 
   let parsed: unknown = null
   let sessionId: string | null = null
-  try {
-    parsed = JSON.parse(stdout.trim())
+  const parsedOutput = parseJsonFromCommandOutput(stdout)
+  if (parsedOutput && typeof parsedOutput === 'object') {
+    parsed = parsedOutput
     const obj = parsed as { sessionId?: unknown; id?: unknown }
     if (typeof obj.sessionId === 'string') sessionId = obj.sessionId
     else if (typeof obj.id === 'string') sessionId = obj.id
-  } catch {
-    // Non-JSON output is acceptable; telemetry sync can still discover sessions by label.
   }
 
   if (sessionId) {

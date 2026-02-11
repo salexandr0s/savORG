@@ -29,7 +29,6 @@ interface SessionsApiResponse {
 
 interface SessionQueryFilters {
   containsErrors: boolean
-  minCostUsd: string
   toolUsed: string
 }
 
@@ -84,7 +83,6 @@ export function ConsoleClient() {
   const [endingSessionIds, setEndingSessionIds] = useState<Record<string, boolean>>({})
   const [queryFilters, setQueryFilters] = useState<SessionQueryFilters>({
     containsErrors: false,
-    minCostUsd: '',
     toolUsed: '',
   })
 
@@ -122,12 +120,6 @@ export function ConsoleClient() {
       const params = new URLSearchParams()
       if (queryFilters.containsErrors) params.set('containsErrors', 'true')
       if (queryFilters.toolUsed.trim()) params.set('toolUsed', queryFilters.toolUsed.trim())
-      if (queryFilters.minCostUsd.trim()) {
-        const parsed = Number(queryFilters.minCostUsd)
-        if (Number.isFinite(parsed) && parsed > 0) {
-          params.set('minCostMicros', String(Math.round(parsed * 1_000_000)))
-        }
-      }
 
       const res = await fetch(`/api/openclaw/console/sessions${params.toString() ? `?${params.toString()}` : ''}`)
       const data: SessionsApiResponse = await res.json()
@@ -156,7 +148,7 @@ export function ConsoleClient() {
     } finally {
       setLoading(false)
     }
-  }, [queryFilters.containsErrors, queryFilters.minCostUsd, queryFilters.toolUsed])
+  }, [queryFilters.containsErrors, queryFilters.toolUsed])
 
   const fetchAgents = useCallback(async () => {
     try {
@@ -310,6 +302,7 @@ export function ConsoleClient() {
     if (!selectedSessionId) return null
     return sessions.find((s) => s.sessionId === selectedSessionId) ?? null
   }, [selectedSessionId, sessions])
+  const hasActiveSessionFilters = queryFilters.containsErrors || queryFilters.toolUsed.trim().length > 0
   const combinedError = error || chatError
 
   return (
@@ -340,7 +333,7 @@ export function ConsoleClient() {
               <span className="text-sm text-fg-2">Loading sessions...</span>
             </div>
           </div>
-        ) : sessions.length === 0 ? (
+        ) : sessions.length === 0 && !hasActiveSessionFilters ? (
           <div className="flex-1 flex items-center justify-center p-8">
             <EmptyState
               icon={<Terminal className="w-12 h-12" />}

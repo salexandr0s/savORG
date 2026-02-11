@@ -3,6 +3,7 @@ import { enforceTypedConfirm } from '@/lib/with-governor'
 import { getRepos } from '@/lib/repo'
 import { PluginUnsupportedError } from '@/lib/repo/plugins'
 import Ajv from 'ajv'
+import { classifyOpenClawError } from '@/lib/openclaw/error-shape'
 
 const ajv = new Ajv({ allErrors: true, strict: false })
 
@@ -174,10 +175,15 @@ export async function PUT(
           message: err.message,
           operation: err.operation,
           capabilities: err.capabilities,
+          ...classifyOpenClawError(err.message),
         },
         { status: err.httpStatus }
       )
     }
-    throw err
+    const errorMessage = err instanceof Error ? err.message : 'Failed to update plugin config'
+    return NextResponse.json(
+      { error: errorMessage, ...classifyOpenClawError(errorMessage) },
+      { status: 500 }
+    )
   }
 }

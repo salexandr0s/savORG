@@ -53,6 +53,7 @@ const tabs: { id: TabId; label: string; icon: typeof Info }[] = [
 
 const AGENT_ROLES = [
   'CEO',
+  'MANAGER',
   'BUILD',
   'OPS',
   'REVIEW',

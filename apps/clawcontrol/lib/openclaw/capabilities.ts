@@ -10,7 +10,7 @@
  */
 
 import { spawn } from 'child_process'
-import { OPENCLAW_BIN, checkOpenClaw } from '@clawcontrol/adapters-openclaw'
+import { checkOpenClaw, getOpenClawBin } from '@clawcontrol/adapters-openclaw'
 
 // ============================================================================
 // TYPES
@@ -49,6 +49,8 @@ export interface OpenClawCapabilities {
   version: string | null
   /** Whether OpenClaw is available */
   available: boolean
+  /** Resolved binary path/name currently in use */
+  resolvedBin: string
   /** Plugin-related capabilities */
   plugins: PluginCapabilities
   /** Data source capabilities */
@@ -106,7 +108,7 @@ async function runCommand(args: string[], timeoutMs = 5000): Promise<{ success: 
     let stdout = ''
     let stderr = ''
 
-    const child = spawn(OPENCLAW_BIN, args, {
+    const child = spawn(getOpenClawBin(), args, {
       timeout: timeoutMs,
       stdio: ['ignore', 'pipe', 'pipe'],
     })
@@ -209,6 +211,7 @@ export async function getOpenClawCapabilities(): Promise<OpenClawCapabilities> {
   const capabilities: OpenClawCapabilities = {
     version: null,
     available: false,
+    resolvedBin: getOpenClawBin(),
     plugins: {
       supported: false,
       listJson: false,
@@ -231,6 +234,7 @@ export async function getOpenClawCapabilities(): Promise<OpenClawCapabilities> {
   const cliCheck = await checkOpenClaw()
 
   if (!cliCheck.available) {
+    capabilities.resolvedBin = getOpenClawBin()
     capabilities.degradedReason = cliCheck.error || 'OpenClaw CLI not found'
     cacheCapabilities(capabilities)
     return capabilities
@@ -238,6 +242,7 @@ export async function getOpenClawCapabilities(): Promise<OpenClawCapabilities> {
 
   capabilities.available = true
   capabilities.version = cliCheck.version
+  capabilities.resolvedBin = getOpenClawBin()
   capabilities.sources.cli = true
 
   if (cliCheck.belowMinVersion) {

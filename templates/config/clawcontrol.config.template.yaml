@@ -371,138 +371,178 @@ agents:
     actions: ["approve", "veto_with_findings", "flag_warning"]
 
 # ============================================================================
-# WORKFLOW CHAINS
+# WORKFLOWS
 # ============================================================================
 workflows:
 
-  feature_request:
-    description: "Standard feature implementation"
+  greenfield_project:
+    id: "greenfield_project"
+    description: "Standard greenfield project workflow with planning, iterative build stories, and governance gates."
     stages:
-      - agent: "{{PREFIX}}research"
+      - ref: "research"
+        agent: "{{PREFIX}}research"
         condition: "unknowns_exist"
         optional: true
-      - agent: "{{PREFIX}}plan"
-      - agent: "{{PREFIX}}planreview"
-        loop_target: "{{PREFIX}}plan"
-        max_iterations: 2
-      - agent: "{{PREFIX}}build"
-      - agent: "{{PREFIX}}buildreview"
-        loop_target: "{{PREFIX}}build"
-        max_iterations: 2
-      - agent: "{{PREFIX}}security"
-        loop_target: "{{PREFIX}}build"
-        max_iterations: 1
-        can_veto: true
-      - agent: "{{PREFIX}}ops"
+
+      - ref: "plan"
+        agent: "{{PREFIX}}plan"
+
+      - ref: "plan_review"
+        agent: "{{PREFIX}}planreview"
+        loopTarget: "plan"
+        maxIterations: 2
+
+      - ref: "build_stories"
+        agent: "{{PREFIX}}build"
+        type: "loop"
+        loop:
+          over: "stories"
+          completion: "all_done"
+          verifyEach: true
+          verifyStageRef: "build_review"
+          maxStories: 25
+
+      - ref: "build_review"
+        agent: "{{PREFIX}}buildreview"
+        loopTarget: "build_stories"
+        maxIterations: 2
+
+      - ref: "security"
+        agent: "{{PREFIX}}security"
+        condition: "security_relevant"
+        optional: true
+        canVeto: true
+        loopTarget: "build_stories"
+        maxIterations: 1
+
+      - ref: "ops"
+        agent: "{{PREFIX}}ops"
         condition: "deployment_needed"
         optional: true
 
-  ui_feature:
-    description: "UI/frontend feature"
+  bug_fix:
+    id: "bug_fix"
+    description: "Bug-fix workflow with iterative implementation stories and verification."
     stages:
-      - agent: "{{PREFIX}}research"
+      - ref: "research"
+        agent: "{{PREFIX}}research"
         condition: "unknowns_exist"
         optional: true
-      - agent: "{{PREFIX}}plan"
-      - agent: "{{PREFIX}}planreview"
-        loop_target: "{{PREFIX}}plan"
-        max_iterations: 2
-      - agent: "{{PREFIX}}ui"
-      - agent: "{{PREFIX}}uireview"
-        loop_target: "{{PREFIX}}ui"
-        max_iterations: 2
-      - agent: "{{PREFIX}}security"
-        loop_target: "{{PREFIX}}ui"
-        max_iterations: 1
-        can_veto: true
-      - agent: "{{PREFIX}}ops"
-        condition: "deployment_needed"
-        optional: true
 
-  full_stack_feature:
-    description: "Feature with backend + UI"
+      - ref: "plan"
+        agent: "{{PREFIX}}plan"
+
+      - ref: "plan_review"
+        agent: "{{PREFIX}}planreview"
+        loopTarget: "plan"
+        maxIterations: 1
+
+      - ref: "build_stories"
+        agent: "{{PREFIX}}build"
+        type: "loop"
+        loop:
+          over: "stories"
+          completion: "all_done"
+          verifyEach: true
+          verifyStageRef: "build_review"
+          maxStories: 15
+
+      - ref: "build_review"
+        agent: "{{PREFIX}}buildreview"
+        loopTarget: "build_stories"
+        maxIterations: 2
+
+      - ref: "security"
+        agent: "{{PREFIX}}security"
+        condition: "security_relevant"
+        optional: true
+        canVeto: true
+        loopTarget: "build_stories"
+        maxIterations: 1
+
+  content_creation:
+    id: "content_creation"
+    description: "Content creation workflow with iterative story production and editorial review."
     stages:
-      - agent: "{{PREFIX}}research"
+      - ref: "research"
+        agent: "{{PREFIX}}research"
         condition: "unknowns_exist"
         optional: true
-      - agent: "{{PREFIX}}plan"
-      - agent: "{{PREFIX}}planreview"
-        loop_target: "{{PREFIX}}plan"
-        max_iterations: 2
-      - agent: "{{PREFIX}}build"
-      - agent: "{{PREFIX}}buildreview"
-        loop_target: "{{PREFIX}}build"
-        max_iterations: 2
-      - agent: "{{PREFIX}}ui"
-      - agent: "{{PREFIX}}uireview"
-        loop_target: "{{PREFIX}}ui"
-        max_iterations: 2
-      - agent: "{{PREFIX}}security"
-        can_veto: true
-      - agent: "{{PREFIX}}ops"
-        condition: "deployment_needed"
-        optional: true
 
-  research_only:
-    description: "Pure research / question answering"
-    stages:
-      - agent: "{{PREFIX}}research"
+      - ref: "plan"
+        agent: "{{PREFIX}}plan"
+
+      - ref: "plan_review"
+        agent: "{{PREFIX}}planreview"
+        loopTarget: "plan"
+        maxIterations: 1
+
+      - ref: "content_stories"
+        agent: "{{PREFIX}}ui"
+        type: "loop"
+        loop:
+          over: "stories"
+          completion: "all_done"
+          verifyEach: true
+          verifyStageRef: "content_review"
+          maxStories: 20
+
+      - ref: "content_review"
+        agent: "{{PREFIX}}uireview"
+        loopTarget: "content_stories"
+        maxIterations: 2
+
+      - ref: "security"
+        agent: "{{PREFIX}}security"
+        condition: "security_relevant"
+        optional: true
+        canVeto: true
+        loopTarget: "content_stories"
+        maxIterations: 1
 
   security_audit:
-    description: "Standalone security audit"
+    id: "security_audit"
+    description: "Security-first audit workflow for vulnerability and risk assessment."
     stages:
-      - agent: "{{PREFIX}}security"
-      - agent: "{{PREFIX}}buildreview"
+      - ref: "security"
+        agent: "{{PREFIX}}security"
+        canVeto: true
+
+      - ref: "build_review"
+        agent: "{{PREFIX}}buildreview"
         condition: "code_review_needed"
         optional: true
 
-  ops_task:
-    description: "Infrastructure / ops changes"
+  ops_change:
+    id: "ops_change"
+    description: "Operational change workflow for infrastructure and deployment modifications with finalize stage."
     stages:
-      - agent: "{{PREFIX}}plan"
-      - agent: "{{PREFIX}}planreview"
-        loop_target: "{{PREFIX}}plan"
-        max_iterations: 2
-      - agent: "{{PREFIX}}security"
-        loop_target: "{{PREFIX}}ops"
-        max_iterations: 1
-        can_veto: true
-      - agent: "{{PREFIX}}ops"
+      - ref: "plan"
+        agent: "{{PREFIX}}plan"
 
-  bug_fix:
-    description: "Bug fix — abbreviated workflow"
-    stages:
-      - agent: "{{PREFIX}}research"
-        condition: "unknowns_exist"
-        optional: true
-      - agent: "{{PREFIX}}plan"
-      - agent: "{{PREFIX}}planreview"
-        loop_target: "{{PREFIX}}plan"
-        max_iterations: 2
-      - agent: "{{PREFIX}}build"
-      - agent: "{{PREFIX}}buildreview"
-        loop_target: "{{PREFIX}}build"
-        max_iterations: 2
-      - agent: "{{PREFIX}}security"
-        condition: "security_relevant"
-        optional: true
+      - ref: "plan_review"
+        agent: "{{PREFIX}}planreview"
+        loopTarget: "plan"
+        maxIterations: 2
 
-  hotfix:
-    description: "Emergency hotfix — minimal gates"
-    stages:
-      - agent: "{{PREFIX}}plan"
-      - agent: "{{PREFIX}}planreview"
-        loop_target: "{{PREFIX}}plan"
-        max_iterations: 1
-      - agent: "{{PREFIX}}build"
-      - agent: "{{PREFIX}}buildreview"
-        loop_target: "{{PREFIX}}build"
-        max_iterations: 1
-      - agent: "{{PREFIX}}security"
-        loop_target: "{{PREFIX}}build"
-        max_iterations: 1
-        can_veto: true
-      - agent: "{{PREFIX}}ops"
+      - ref: "ops_stories"
+        agent: "{{PREFIX}}ops"
+        type: "loop"
+        loop:
+          over: "stories"
+          completion: "all_done"
+          verifyEach: true
+          verifyStageRef: "security"
+          maxStories: 12
+
+      - ref: "security"
+        agent: "{{PREFIX}}security"
+        canVeto: true
+        loopTarget: "ops_stories"
+        maxIterations: 1
+
+      - ref: "ops_finalize"
+        agent: "{{PREFIX}}ops"
 
 # ============================================================================
 # INPUT PIPELINE

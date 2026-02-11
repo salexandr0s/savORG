@@ -7,6 +7,7 @@ import {
   getCached,
   setCache,
 } from '@/lib/openclaw/availability'
+import { classifyOpenClawError } from '@/lib/openclaw/error-shape'
 
 /**
  * Cron scheduler status response from OpenClaw CLI.
@@ -45,11 +46,15 @@ export async function GET(): Promise<NextResponse<OpenClawResponse<CronStatusDTO
     const latencyMs = Date.now() - start
 
     if (res.error || !res.data) {
+      const details = classifyOpenClawError(res.error ?? 'Failed to get cron status', {
+        parseFailed: !res.error && !res.data,
+      })
       const response: OpenClawResponse<CronStatusDTO> = {
         status: 'unavailable',
         latencyMs,
         data: null,
         error: res.error ?? 'Failed to get cron status',
+        ...details,
         timestamp: new Date().toISOString(),
         cached: false,
       }
@@ -68,12 +73,14 @@ export async function GET(): Promise<NextResponse<OpenClawResponse<CronStatusDTO
     setCache(CACHE_KEY, response)
     return NextResponse.json(response)
   } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error'
     const latencyMs = Date.now() - start
     const response: OpenClawResponse<CronStatusDTO> = {
       status: 'unavailable',
       latencyMs,
       data: null,
-      error: err instanceof Error ? err.message : 'Unknown error',
+      error: errorMessage,
+      ...classifyOpenClawError(errorMessage),
       timestamp: new Date().toISOString(),
       cached: false,
     }

@@ -15,3 +15,9 @@ export {
   type PluginCapabilities,
   type SourceCapabilities,
 } from './capabilities'
+
+export {
+  getOpenClawRuntimeDependencyStatus,
+  getCachedOpenClawRuntimeDependencyStatus,
+  type OpenClawRuntimeDependencyStatus,
+} from './runtime-deps'

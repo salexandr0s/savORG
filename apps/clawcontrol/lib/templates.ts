@@ -16,7 +16,7 @@ import {
   type AgentTemplateConfig,
   type TemplateValidationResult,
 } from '@clawcontrol/core'
-import { validateWorkspacePath } from './fs/path-policy'
+import { getWorkspaceRoot, validateWorkspacePath } from './fs/path-policy'
 import { decodeWorkspaceId, encodeWorkspaceId } from './fs/workspace-fs'
 
 // ============================================================================
@@ -147,10 +147,12 @@ export function getTemplateDir(templateId: string): string {
 // Cache for scanned templates
 let templateCache: AgentTemplate[] | null = null
 let _lastScanTime: Date | null = null
+let templateCacheWorkspaceRoot: string | null = null
 
-function invalidateTemplateCache() {
+export function invalidateTemplatesCache() {
   templateCache = null
   _lastScanTime = null
+  templateCacheWorkspaceRoot = null
 }
 
 async function readWorkspaceTextFile(workspacePath: string): Promise<string | null> {
@@ -180,6 +182,7 @@ export async function scanTemplates(): Promise<AgentTemplate[]> {
   const templates = await scanTemplatesFs()
   templateCache = templates
   _lastScanTime = new Date()
+  templateCacheWorkspaceRoot = getWorkspaceRoot()
   return templates
 }
 
@@ -284,7 +287,9 @@ async function scanTemplatesFs(): Promise<AgentTemplate[]> {
  * Get all templates (uses cache if available)
  */
 export async function getTemplates(forceRescan = false): Promise<AgentTemplate[]> {
-  if (!forceRescan && templateCache) {
+  const workspaceRoot = getWorkspaceRoot()
+  const cacheValidForWorkspace = templateCacheWorkspaceRoot === workspaceRoot
+  if (!forceRescan && templateCache && cacheValidForWorkspace) {
     return templateCache
   }
   return scanTemplates()
@@ -487,7 +492,7 @@ Created from ${templateId} template
       'utf8'
     )
 
-    invalidateTemplateCache()
+    invalidateTemplatesCache()
     return { success: true, templatePath }
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : 'Failed to create template scaffold' }

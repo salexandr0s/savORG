@@ -416,6 +416,14 @@ async function spawnServer(): Promise<ChildProcess> {
   }
 
   const script = isDev() ? 'dev' : 'start'
+  const userDataDir = app.getPath('userData')
+  const settingsPath = getDesktopSettingsPath()
+  const settings = readDesktopSettings()
+  const workspaceRoot = settings.workspacePath || path.join(userDataDir, 'workspace')
+  const serverPath = buildServerPath(process.env.PATH)
+  const openClawBin = resolveOpenClawBin(serverPath)
+
+  fs.mkdirSync(workspaceRoot, { recursive: true })
 
   const proc = spawn('npm', ['--prefix', clawcontrolDir, 'run', script], {
     cwd: clawcontrolDir,
@@ -427,6 +435,15 @@ async function spawnServer(): Promise<ChildProcess> {
       HOST: SERVER_HOST,
       HOSTNAME: SERVER_HOST,
       PORT: String(SERVER_PORT),
+      OPENCLAW_WORKSPACE: workspaceRoot,
+      CLAWCONTROL_WORKSPACE_ROOT: workspaceRoot,
+      CLAWCONTROL_USER_DATA_DIR: userDataDir,
+      CLAWCONTROL_SETTINGS_PATH: settingsPath,
+      PATH: serverPath,
+      ...(openClawBin ? { OPENCLAW_BIN: openClawBin } : {}),
+      ...(settings.gatewayHttpUrl ? { OPENCLAW_GATEWAY_HTTP_URL: settings.gatewayHttpUrl } : {}),
+      ...(settings.gatewayWsUrl ? { OPENCLAW_GATEWAY_WS_URL: settings.gatewayWsUrl } : {}),
+      ...(settings.gatewayToken ? { OPENCLAW_GATEWAY_TOKEN: settings.gatewayToken } : {}),
     },
   })
 
