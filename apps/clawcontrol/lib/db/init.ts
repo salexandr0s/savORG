@@ -140,6 +140,7 @@ function splitSqlStatements(sql: string): string[] {
   let inDoubleQuote = false
   let inLineComment = false
   let inBlockComment = false
+  let inTriggerDefinition = false
 
   for (let i = 0; i < sql.length; i += 1) {
     const ch = sql[i]
@@ -196,6 +197,18 @@ function splitSqlStatements(sql: string): string[] {
     }
 
     if (ch === ';' && !inSingleQuote && !inDoubleQuote) {
+      if (inTriggerDefinition) {
+        if (/END\s*$/i.test(current.trim())) {
+          const trimmed = current.trim()
+          if (trimmed) statements.push(trimmed)
+          current = ''
+          inTriggerDefinition = false
+        } else {
+          current += ch
+        }
+        continue
+      }
+
       const trimmed = current.trim()
       if (trimmed) statements.push(trimmed)
       current = ''
@@ -203,6 +216,13 @@ function splitSqlStatements(sql: string): string[] {
     }
 
     current += ch
+
+    if (!inTriggerDefinition) {
+      const normalized = current.trimStart().toUpperCase()
+      if (normalized.startsWith('CREATE TRIGGER')) {
+        inTriggerDefinition = true
+      }
+    }
   }
 
   const trailing = current.trim()

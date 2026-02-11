@@ -9,6 +9,11 @@ stages:
   - ref: plan
     agent: plan
 
+  - ref: plan_review
+    agent: plan_review
+    loopTarget: plan
+    maxIterations: 2
+
   - ref: content_stories
     agent: ui
     type: loop

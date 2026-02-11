@@ -2,15 +2,34 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   startManagedWorkOrder: vi.fn(),
+  verifyOperatorRequest: vi.fn(),
 }))
 
 vi.mock('@/lib/services/manager', () => ({
   startManagedWorkOrder: mocks.startManagedWorkOrder,
 }))
 
+vi.mock('@/lib/auth/operator-auth', () => ({
+  verifyOperatorRequest: mocks.verifyOperatorRequest,
+  asAuthErrorResponse: (result: { error: string; code: string }) => ({
+    error: result.error,
+    code: result.code,
+  }),
+}))
+
 beforeEach(() => {
   vi.resetModules()
   mocks.startManagedWorkOrder.mockReset()
+  mocks.verifyOperatorRequest.mockReset()
+  mocks.verifyOperatorRequest.mockReturnValue({
+    ok: true,
+    principal: {
+      actor: 'user:operator',
+      actorType: 'user',
+      actorId: 'operator',
+      sessionId: 'sess_test',
+    },
+  })
 })
 
 describe('work order start route', () => {

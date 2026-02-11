@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { enforceTypedConfirm } from '@/lib/with-governor'
+import { enforceActionPolicy } from '@/lib/with-governor'
 import { getRepos } from '@/lib/repo'
 import { getAgentModelFromOpenClaw, upsertAgentToOpenClaw } from '@/lib/services/openclaw-config'
 import {
@@ -28,7 +28,7 @@ export async function POST(
   }
 
   // Enforce Governor - agent.provision is caution level
-  const result = await enforceTypedConfirm({
+  const result = await enforceActionPolicy({
     actionKind: 'agent.provision',
     typedConfirmText,
   })
@@ -39,7 +39,7 @@ export async function POST(
         error: result.errorType,
         policy: result.policy,
       },
-      { status: result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403 }
+      { status: result.status ?? (result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403) }
     )
   }
 

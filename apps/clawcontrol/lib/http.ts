@@ -7,6 +7,13 @@
 
 import { timedClientFetch } from './perf/client-timing'
 
+const CSRF_HEADER = 'x-clawcontrol-csrf'
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+const AUTH_BOOTSTRAP_PATH = '/api/auth/bootstrap'
+
+let csrfTokenCache: string | null = null
+let bootstrapInFlight: Promise<string> | null = null
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -123,6 +130,75 @@ async function timedRequest(path: string, init: RequestInit): Promise<Response> 
   })
 }
 
+function normalizeHeaders(headers: HeadersInit | undefined): Headers {
+  if (!headers) return new Headers()
+  if (headers instanceof Headers) return new Headers(headers)
+  return new Headers(headers)
+}
+
+function getPathname(path: string): string {
+  const baseOrigin = typeof window === 'undefined' ? 'http://localhost' : window.location.origin
+  const url = path.startsWith('http://') || path.startsWith('https://')
+    ? new URL(path)
+    : new URL(path, baseOrigin)
+  return url.pathname
+}
+
+async function bootstrapOperatorSession(): Promise<string> {
+  if (csrfTokenCache) return csrfTokenCache
+  if (typeof window === 'undefined') return ''
+  if (bootstrapInFlight) return bootstrapInFlight
+
+  bootstrapInFlight = (async () => {
+    const response = await timedRequest(AUTH_BOOTSTRAP_PATH, {
+      method: 'GET',
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
+    })
+    const payload = await response.json().catch(() => ({})) as {
+      success?: boolean
+      csrfToken?: string
+      error?: string
+    }
+    if (!response.ok || !payload.success || !payload.csrfToken) {
+      throw new HttpError(payload.error || 'Failed to bootstrap operator session', response.status)
+    }
+    csrfTokenCache = payload.csrfToken
+    return csrfTokenCache
+  })()
+
+  try {
+    return await bootstrapInFlight
+  } finally {
+    bootstrapInFlight = null
+  }
+}
+
+async function withOperatorAuth(path: string, init: RequestInit): Promise<RequestInit> {
+  const method = (init.method ?? 'GET').toString().toUpperCase()
+  const headers = normalizeHeaders(init.headers)
+
+  if (
+    MUTATING_METHODS.has(method)
+    && getPathname(path).startsWith('/api/')
+    && getPathname(path) !== AUTH_BOOTSTRAP_PATH
+  ) {
+    const csrfToken = await bootstrapOperatorSession()
+    if (csrfToken) headers.set(CSRF_HEADER, csrfToken)
+  }
+
+  return {
+    ...init,
+    headers,
+    credentials: 'same-origin',
+  }
+}
+
+async function apiFetch(path: string, init: RequestInit): Promise<Response> {
+  const withAuth = await withOperatorAuth(path, init)
+  return timedRequest(path, withAuth)
+}
+
 // ============================================================================
 // API METHODS
 // ============================================================================
@@ -136,7 +212,7 @@ export async function apiGet<T>(
 ): Promise<T> {
   const url = buildUrl(path, params)
 
-  const response = await timedRequest(url, {
+  const response = await apiFetch(url, {
     method: 'GET',
     headers: {
       Accept: 'application/json',
@@ -153,7 +229,7 @@ export async function apiPost<T, B = unknown>(
   path: string,
   body?: B
 ): Promise<T> {
-  const response = await timedRequest(path, {
+  const response = await apiFetch(path, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -172,7 +248,7 @@ export async function apiPatch<T, B = unknown>(
   path: string,
   body: B
 ): Promise<T> {
-  const response = await timedRequest(path, {
+  const response = await apiFetch(path, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -188,7 +264,7 @@ export async function apiPatch<T, B = unknown>(
  * DELETE request
  */
 export async function apiDelete<T = void>(path: string): Promise<T> {
-  const response = await timedRequest(path, {
+  const response = await apiFetch(path, {
     method: 'DELETE',
     headers: {
       Accept: 'application/json',
@@ -205,7 +281,7 @@ export async function apiDeleteJson<T, B = unknown>(
   path: string,
   body: B
 ): Promise<T> {
-  const response = await timedRequest(path, {
+  const response = await apiFetch(path, {
     method: 'DELETE',
     headers: {
       'Content-Type': 'application/json',
@@ -444,7 +520,7 @@ export const agentsApi = {
     customName?: string
     typedConfirmText: string
   }) =>
-    fetch('/api/agents/create', {
+    apiFetch('/api/agents/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -469,7 +545,7 @@ export const agentsApi = {
   }>) => apiPatch<{ data: AgentDTO }>(`/api/agents/${id}`, data),
 
   provision: (id: string, typedConfirmText: string) =>
-    fetch(`/api/agents/${id}/provision`, {
+    apiFetch(`/api/agents/${id}/provision`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ typedConfirmText }),
@@ -488,7 +564,7 @@ export const agentsApi = {
     }),
 
   test: (id: string, message?: string) =>
-    fetch(`/api/agents/${id}/test`, {
+    apiFetch(`/api/agents/${id}/test`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message }),
@@ -556,7 +632,7 @@ export const agentsApi = {
     displayName?: string
     typedConfirmText: string
   }) =>
-    fetch('/api/agents/create-from-template', {
+    apiFetch('/api/agents/create-from-template', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -714,7 +790,7 @@ export const workspaceApi = {
     content: string
     /** Required for protected files (AGENTS.md, etc) */
     typedConfirmText?: string
-  }) => fetch(`/api/workspace/${id}`, {
+  }) => apiFetch(`/api/workspace/${id}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -740,7 +816,7 @@ export const workspaceApi = {
     type: 'file' | 'folder'
     content?: string
     typedConfirmText: string
-  }) => fetch('/api/workspace', {
+  }) => apiFetch('/api/workspace', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -760,7 +836,7 @@ export const workspaceApi = {
     return res.json() as Promise<{ data: WorkspaceFileSummary }>
   }),
 
-  delete: (id: string, typedConfirmText: string) => fetch(`/api/workspace/${id}`, {
+  delete: (id: string, typedConfirmText: string) => apiFetch(`/api/workspace/${id}`, {
     method: 'DELETE',
     headers: {
       'Content-Type': 'application/json',
@@ -857,7 +933,7 @@ export const playbooksApi = {
   update: (id: string, data: {
     content: string
     typedConfirmText?: string
-  }) => fetch(`/api/playbooks/${id}`, {
+  }) => apiFetch(`/api/playbooks/${id}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -880,7 +956,7 @@ export const playbooksApi = {
   run: (id: string, data: {
     typedConfirmText: string
     workOrderId?: string
-  }) => fetch(`/api/playbooks/${id}/run`, {
+  }) => apiFetch(`/api/playbooks/${id}/run`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -942,7 +1018,7 @@ export const skillsApi = {
     scope: 'global' | 'agent'
     agentId?: string
     typedConfirmText: string
-  }) => fetch('/api/skills', {
+  }) => apiFetch('/api/skills', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -967,7 +1043,7 @@ export const skillsApi = {
     skillMd?: string
     config?: string
     typedConfirmText: string
-  }) => fetch(`/api/skills/${scope}/${id}`, {
+  }) => apiFetch(`/api/skills/${scope}/${id}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -988,7 +1064,7 @@ export const skillsApi = {
   }),
 
   uninstall: (scope: 'global' | 'agent', id: string, typedConfirmText: string) =>
-    fetch(`/api/skills/${scope}/${id}`, {
+    apiFetch(`/api/skills/${scope}/${id}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -1012,7 +1088,12 @@ export const skillsApi = {
     apiPost<{ data: { validation: SkillValidationResult } }>(`/api/skills/${scope}/${id}/validate`),
 
   export: (scope: 'global' | 'agent', id: string) =>
-    fetch(`/api/skills/${scope}/${id}/export`).then((res) => {
+    apiFetch(`/api/skills/${scope}/${id}/export`, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/zip,application/octet-stream',
+      },
+    }).then((res) => {
       if (!res.ok) {
         throw new HttpError('Export failed', res.status)
       }
@@ -1031,7 +1112,7 @@ export const skillsApi = {
     if (data.agentId) formData.set('agentId', data.agentId)
     formData.set('typedConfirmText', data.typedConfirmText)
 
-    return fetch('/api/skills/import', {
+    return apiFetch('/api/skills/import', {
       method: 'POST',
       headers: { Accept: 'application/json' },
       body: formData,
@@ -1058,7 +1139,7 @@ export const skillsApi = {
       newName?: string
       typedConfirmText: string
     }
-  ) => fetch(`/api/skills/${scope}/${id}/duplicate`, {
+  ) => apiFetch(`/api/skills/${scope}/${id}/duplicate`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1186,7 +1267,7 @@ export const pluginsApi = {
   update: (id: string, data: {
     enabled?: boolean
     typedConfirmText: string
-  }) => fetch(`/api/plugins/${id}`, {
+  }) => apiFetch(`/api/plugins/${id}`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -1206,7 +1287,7 @@ export const pluginsApi = {
     return res.json() as Promise<{ data: PluginWithConfig }>
   }),
 
-  doctor: (id: string, typedConfirmText?: string) => fetch(`/api/plugins/${id}/doctor`, {
+  doctor: (id: string, typedConfirmText?: string) => apiFetch(`/api/plugins/${id}/doctor`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1230,7 +1311,7 @@ export const pluginsApi = {
     sourceType: 'local' | 'npm' | 'tgz' | 'git'
     spec: string
     typedConfirmText: string
-  }) => fetch('/api/plugins', {
+  }) => apiFetch('/api/plugins', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1250,7 +1331,7 @@ export const pluginsApi = {
     return res.json() as Promise<{ data: PluginWithConfig; receiptId: string }>
   }),
 
-  uninstall: (id: string, typedConfirmText: string) => fetch(`/api/plugins/${id}`, {
+  uninstall: (id: string, typedConfirmText: string) => apiFetch(`/api/plugins/${id}`, {
     method: 'DELETE',
     headers: {
       'Content-Type': 'application/json',
@@ -1273,7 +1354,7 @@ export const pluginsApi = {
   updateConfig: (id: string, data: {
     config: Record<string, unknown>
     typedConfirmText: string
-  }) => fetch(`/api/plugins/${id}/config`, {
+  }) => apiFetch(`/api/plugins/${id}/config`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -1293,7 +1374,7 @@ export const pluginsApi = {
     return res.json() as Promise<{ data: PluginWithConfig; receiptId: string }>
   }),
 
-  restart: (typedConfirmText: string) => fetch('/api/plugins/restart', {
+  restart: (typedConfirmText: string) => apiFetch('/api/plugins/restart', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1386,7 +1467,7 @@ export interface RecoveryState {
 export const maintenanceApi = {
   getStatus: () => apiGet<{ data: MaintenanceStatus }>('/api/maintenance'),
 
-  runAction: (action: string, typedConfirmText?: string) => fetch(`/api/maintenance/${action}`, {
+  runAction: (action: string, typedConfirmText?: string) => apiFetch(`/api/maintenance/${action}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1406,7 +1487,7 @@ export const maintenanceApi = {
     return res.json() as Promise<{ data: MaintenanceActionResult }>
   }),
 
-  recover: (typedConfirmText: string) => fetch('/api/maintenance/recover', {
+  recover: (typedConfirmText: string) => apiFetch('/api/maintenance/recover', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1517,7 +1598,7 @@ async function throwTemplateImportError(res: Response): Promise<never> {
 const importJsonTemplate = (data: {
   template: TemplateImportTemplatePayload
   typedConfirmText: string
-}) => fetch('/api/agent-templates/import', {
+}) => apiFetch('/api/agent-templates/import', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -1539,7 +1620,7 @@ const importFileTemplate = (data: {
   formData.set('file', data.file)
   formData.set('typedConfirmText', data.typedConfirmText)
 
-  return fetch('/api/agent-templates/import', {
+  return apiFetch('/api/agent-templates/import', {
     method: 'POST',
     headers: {
       Accept: 'application/json',
@@ -1566,7 +1647,7 @@ export const templatesApi = {
     name: string
     role: string
     typedConfirmText: string
-  }) => fetch('/api/agent-templates', {
+  }) => apiFetch('/api/agent-templates', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1586,7 +1667,7 @@ export const templatesApi = {
     return res.json() as Promise<{ data: TemplateSummary; receiptId: string }>
   }),
 
-  delete: (id: string, typedConfirmText: string) => fetch(`/api/agent-templates/${id}`, {
+  delete: (id: string, typedConfirmText: string) => apiFetch(`/api/agent-templates/${id}`, {
     method: 'DELETE',
     headers: {
       'Content-Type': 'application/json',
@@ -1610,7 +1691,12 @@ export const templatesApi = {
     apiGet<{ data: { fileId: string; content: string } }>(`/api/agent-templates/${id}/files/${fileId}`),
 
   export: (id: string) =>
-    fetch(`/api/agent-templates/${id}/export`).then((res) => {
+    apiFetch(`/api/agent-templates/${id}/export`, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/zip,application/octet-stream',
+      },
+    }).then((res) => {
       if (!res.ok) {
         throw new HttpError('Export failed', res.status)
       }
@@ -1761,7 +1847,7 @@ export const configApi = {
     gatewayToken: string | null
     workspacePath: string | null
     setupCompleted: boolean
-  }>) => fetch('/api/config/settings', {
+  }>) => apiFetch('/api/config/settings', {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -1839,7 +1925,7 @@ export type AuditType = 'basic' | 'deep' | 'fix'
 
 export const securityApi = {
   runAudit: (type: AuditType, typedConfirmText?: string) =>
-    fetch('/api/security/audit', {
+    apiFetch('/api/security/audit', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

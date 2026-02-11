@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { startManagedWorkOrder } from '@/lib/services/manager'
+import { asAuthErrorResponse, verifyOperatorRequest } from '@/lib/auth/operator-auth'
 
 type StartBody = {
   context?: Record<string, unknown>
@@ -18,6 +19,10 @@ interface RouteContext {
  */
 export async function POST(request: Request, context: RouteContext) {
   const { id: workOrderId } = await context.params
+  const auth = verifyOperatorRequest(request, { requireCsrf: true })
+  if (!auth.ok) {
+    return NextResponse.json(asAuthErrorResponse(auth), { status: auth.status })
+  }
 
   let body: StartBody = {}
   try {

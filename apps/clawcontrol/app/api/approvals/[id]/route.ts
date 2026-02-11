@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getRepos } from '@/lib/repo'
 import { prisma } from '@/lib/db'
 import { resumeManagedWorkOrder } from '@/lib/services/manager'
+import { asAuthErrorResponse, verifyOperatorRequest } from '@/lib/auth/operator-auth'
 
 interface RouteContext {
   params: Promise<{ id: string }>
@@ -52,8 +53,13 @@ export async function PATCH(
   const { id } = await context.params
 
   try {
+    const auth = verifyOperatorRequest(request, { requireCsrf: true })
+    if (!auth.ok) {
+      return NextResponse.json(asAuthErrorResponse(auth), { status: auth.status })
+    }
+
     const body = await request.json()
-    const { status, resolvedBy, note } = body
+    const { status, note } = body
 
     if (!status || !['approved', 'rejected'].includes(status)) {
       return NextResponse.json(
@@ -90,7 +96,7 @@ export async function PATCH(
     // Update the approval
     const data = await repos.approvals.update(id, {
       status,
-      resolvedBy: resolvedBy || 'user',
+      resolvedBy: auth.principal.actor,
     })
 
     if (!data) {
@@ -103,7 +109,7 @@ export async function PATCH(
     // Write activity record for the approval itself
     await repos.activities.create({
       type: `approval.${status}`,
-      actor: resolvedBy || 'user',
+      actor: auth.principal.actor,
       entityType: 'approval',
       entityId: id,
       summary: `Approval ${status}: "${current.questionMd.substring(0, 50)}${current.questionMd.length > 50 ? '...' : ''}"`,
@@ -119,7 +125,7 @@ export async function PATCH(
     // Also write activity for the work order
     await repos.activities.create({
       type: `work_order.approval_${status}`,
-      actor: resolvedBy || 'user',
+      actor: auth.principal.actor,
       entityType: 'work_order',
       entityId: data.workOrderId,
       summary: `Approval ${status} for ${data.type.replace(/_/g, ' ')}${note ? `: ${note}` : ''}`,
@@ -139,10 +145,21 @@ export async function PATCH(
     if (shouldAutoResume && current.operationId) {
       const operation = await prisma.operation.findUnique({
         where: { id: current.operationId },
-        select: { id: true, workflowId: true },
+        select: {
+          id: true,
+          workflowId: true,
+          escalationReason: true,
+          blockedReason: true,
+          escalatedAt: true,
+        },
       })
 
-      if (operation?.workflowId) {
+      const isSecurityVeto =
+        operation?.escalationReason === 'security_veto'
+        || (operation?.blockedReason ?? '').toLowerCase().includes('security_veto')
+      const isEscalationApproval = Boolean(operation?.escalatedAt)
+
+      if (operation?.workflowId && isEscalationApproval && !isSecurityVeto) {
         try {
           const resumed = await resumeManagedWorkOrder(data.workOrderId, {
             reason: `approval:${id}`,
@@ -160,6 +177,8 @@ export async function PATCH(
             payloadJson: {
               approvalId: id,
               operationId: current.operationId,
+              isEscalationApproval,
+              skippedForSecurityVeto: isSecurityVeto,
               resumed: Boolean(resumed),
               resumedOperationId: resumed?.operationId ?? null,
             },

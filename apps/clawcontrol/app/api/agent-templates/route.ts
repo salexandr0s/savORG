@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { enforceTypedConfirm } from '@/lib/with-governor'
+import { enforceActionPolicy } from '@/lib/with-governor'
 import { getRepos } from '@/lib/repo'
 import {
   getTemplates,
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Enforce Governor - template.create is caution level
-  const result = await enforceTypedConfirm({
+  const result = await enforceActionPolicy({
     actionKind: 'template.create',
     typedConfirmText,
   })
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
         error: result.errorType,
         policy: result.policy,
       },
-      { status: result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403 }
+      { status: result.status ?? (result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403) }
     )
   }
 

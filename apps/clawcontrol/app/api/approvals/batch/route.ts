@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRepos, type ApprovalDTO } from '@/lib/repo'
+import { asAuthErrorResponse, verifyOperatorRequest } from '@/lib/auth/operator-auth'
 
 /**
  * POST /api/approvals/batch
@@ -9,11 +10,15 @@ import { getRepos, type ApprovalDTO } from '@/lib/repo'
  */
 export async function POST(request: NextRequest) {
   try {
+    const auth = verifyOperatorRequest(request, { requireCsrf: true })
+    if (!auth.ok) {
+      return NextResponse.json(asAuthErrorResponse(auth), { status: auth.status })
+    }
+
     const body = await request.json()
-    const { ids, status, resolvedBy } = body as {
+    const { ids, status } = body as {
       ids: string[]
       status: 'approved' | 'rejected'
-      resolvedBy?: string
     }
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
@@ -58,7 +63,7 @@ export async function POST(request: NextRequest) {
         // Update the approval
         const result = await repos.approvals.update(id, {
           status,
-          resolvedBy: resolvedBy ?? 'operator',
+          resolvedBy: auth.principal.actor,
         })
         if (result) {
           updated.push(result)

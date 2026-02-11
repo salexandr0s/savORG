@@ -2,15 +2,34 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   advanceOnCompletion: vi.fn(),
+  verifyInternalToken: vi.fn(),
 }))
 
 vi.mock('@/lib/services/workflow-engine', () => ({
   advanceOnCompletion: mocks.advanceOnCompletion,
 }))
 
+vi.mock('@/lib/auth/operator-auth', () => ({
+  verifyInternalToken: mocks.verifyInternalToken,
+  asAuthErrorResponse: (result: { error: string; code: string }) => ({
+    error: result.error,
+    code: result.code,
+  }),
+}))
+
 beforeEach(() => {
   vi.resetModules()
   mocks.advanceOnCompletion.mockReset()
+  mocks.verifyInternalToken.mockReset()
+  mocks.verifyInternalToken.mockReturnValue({
+    ok: true,
+    principal: {
+      actor: 'system:internal',
+      actorType: 'user',
+      actorId: 'internal',
+      sessionId: 'internal',
+    },
+  })
 })
 
 describe('agents completion route', () => {
@@ -41,6 +60,8 @@ describe('agents completion route', () => {
       success: true,
       duplicate: true,
       noop: true,
+      code: null,
+      reason: null,
     })
     expect(mocks.advanceOnCompletion).toHaveBeenCalledWith(
       'op_1',

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { enforceTypedConfirm } from '@/lib/with-governor'
+import { enforceActionPolicy } from '@/lib/with-governor'
 import { requiresEnableOverride } from '@/lib/skill-validator'
 import { getRepos } from '@/lib/repo'
 import type { ActionKind } from '@clawcontrol/core'
@@ -78,7 +78,7 @@ export async function PUT(
   }
 
   // Enforce Governor
-  const result = await enforceTypedConfirm({
+  const result = await enforceActionPolicy({
     actionKind,
     typedConfirmText,
   })
@@ -89,7 +89,7 @@ export async function PUT(
         error: result.errorType,
         policy: result.policy,
       },
-      { status: result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403 }
+      { status: result.status ?? (result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403) }
     )
   }
 
@@ -179,7 +179,7 @@ export async function DELETE(
 
   // Enforce Governor - skill.uninstall is danger level
   const ACTION_KIND: ActionKind = 'skill.uninstall'
-  const result = await enforceTypedConfirm({
+  const result = await enforceActionPolicy({
     actionKind: ACTION_KIND,
     typedConfirmText,
   })
@@ -190,7 +190,7 @@ export async function DELETE(
         error: result.errorType,
         policy: result.policy,
       },
-      { status: result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403 }
+      { status: result.status ?? (result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403) }
     )
   }
 

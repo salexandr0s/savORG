@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getRepos } from '@/lib/repo'
 import { enforceGovernor } from '@/lib/with-governor'
 import { getRequestActor } from '@/lib/request-actor'
+import { asAuthErrorResponse, verifyOperatorRequest } from '@/lib/auth/operator-auth'
 import {
   validateWorkOrderTransition,
   getValidWorkOrderTransitions,
@@ -18,13 +19,14 @@ const STATE_TO_ACTION: Record<string, ActionKind> = {
   shipped: 'work_order.ship',
   cancelled: 'work_order.cancel',
 }
-
-function isManagerActor(request: NextRequest): boolean {
-  const actorType = request.headers.get('x-clawcontrol-actor-type')?.trim().toLowerCase()
-  const actorId = request.headers.get('x-clawcontrol-actor-id')?.trim().toLowerCase()
-  if (actorType !== 'system') return false
-  return actorId === 'manager' || actorId === 'manager-engine' || actorId === 'workflow-engine'
-}
+const WORK_ORDER_STATES = new Set<WorkOrderState>([
+  'planned',
+  'active',
+  'blocked',
+  'review',
+  'shipped',
+  'cancelled',
+])
 
 /**
  * GET /api/work-orders/:id
@@ -78,6 +80,11 @@ export async function PATCH(
   const { id } = await context.params
 
   try {
+    const auth = verifyOperatorRequest(request, { requireCsrf: true })
+    if (!auth.ok) {
+      return NextResponse.json(asAuthErrorResponse(auth), { status: auth.status })
+    }
+
     const body = await request.json()
     const {
       title,
@@ -93,7 +100,15 @@ export async function PATCH(
     } = body
 
     const repos = getRepos()
-    const actorInfo = getRequestActor(request)
+    const hasState = Object.prototype.hasOwnProperty.call(body, 'state')
+    const nextState = hasState ? String(state ?? '').trim() : undefined
+    const actorInfo = getRequestActor(request, {
+      fallback: {
+        actor: auth.principal.actor,
+        actorType: 'user',
+        actorId: auth.principal.actorId,
+      },
+    })
 
     // Always fetch current for comparison
     const current = await repos.workOrders.getById(id)
@@ -104,22 +119,31 @@ export async function PATCH(
       )
     }
 
-    // If state is being changed to a different value, validate the transition
-    const stateActuallyChanging = state && state !== current.state
-    if (stateActuallyChanging) {
-      if (state === 'active' && !isManagerActor(request)) {
+    if (hasState) {
+      if (!nextState || !WORK_ORDER_STATES.has(nextState as WorkOrderState)) {
         return NextResponse.json(
-          {
-            error: 'Work order activation is manager-controlled',
-            code: 'MANAGER_CONTROLLED_STATE',
-          },
+          { error: `Invalid state: ${state}`, code: 'INVALID_STATE' },
           { status: 400 }
         )
       }
+    }
 
+    if (hasState && nextState === 'active') {
+      return NextResponse.json(
+        {
+          error: 'Work order activation is manager-controlled',
+          code: 'MANAGER_CONTROLLED_STATE',
+        },
+        { status: 400 }
+      )
+    }
+
+    // If state is being changed to a different value, validate the transition
+    const stateActuallyChanging = Boolean(hasState && nextState && nextState !== current.state)
+    if (stateActuallyChanging) {
       const validation = validateWorkOrderTransition(
         current.state as WorkOrderState,
-        state as WorkOrderState
+        nextState as WorkOrderState
       )
 
       if (!validation.valid) {
@@ -130,7 +154,7 @@ export async function PATCH(
       }
 
       // Check if this transition requires Governor enforcement
-      const actionKind = STATE_TO_ACTION[state as string]
+      const actionKind = STATE_TO_ACTION[nextState as string]
       if (actionKind) {
         const governorResult = await enforceGovernor({
           actionKind,
@@ -149,7 +173,7 @@ export async function PATCH(
     if (stateActuallyChanging) {
       const result = await repos.workOrders.updateStateWithActivity(
         id,
-        state,
+        nextState as WorkOrderState,
         actorInfo.actor,
         actorInfo.actorType,
         actorInfo.actorType === 'agent' ? actorInfo.actorId ?? null : null
@@ -193,7 +217,7 @@ export async function PATCH(
     const data = await repos.workOrders.update(id, {
       title,
       goalMd,
-      state,
+      ...(hasState ? { state: nextState } : {}),
       priority,
       owner,
       ownerType,
@@ -211,6 +235,12 @@ export async function PATCH(
 
     return NextResponse.json({ data })
   } catch (error) {
+    if (error instanceof Error && error.message.startsWith('INVALID_WORK_ORDER_STATE')) {
+      return NextResponse.json(
+        { error: error.message, code: 'INVALID_STATE' },
+        { status: 400 }
+      )
+    }
     console.error('[api/work-orders/:id] PATCH error:', error)
     return NextResponse.json(
       { error: 'Failed to update work order' },

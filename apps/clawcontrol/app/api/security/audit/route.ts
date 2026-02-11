@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { enforceTypedConfirm } from '@/lib/with-governor'
+import { enforceActionPolicy } from '@/lib/with-governor'
 import { getRepos } from '@/lib/repo'
 import {
   runCommandJson,
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Enforce Governor gating (fix mode requires confirmation)
-  const result = await enforceTypedConfirm({
+  const result = await enforceActionPolicy({
     actionKind: auditConfig.actionKind,
     typedConfirmText,
   })
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
         error: result.errorType,
         policy: result.policy,
       },
-      { status: result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403 }
+      { status: result.status ?? (result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403) }
     )
   }
 

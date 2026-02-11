@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]', '::1'])
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+const CSRF_HEADER = 'x-clawcontrol-csrf'
+const INTERNAL_TOKEN_HEADER = 'x-clawcontrol-internal-token'
+const OPERATOR_SESSION_COOKIE = 'cc_operator_session'
+const CSRF_COOKIE = 'cc_csrf'
 
 function parseHost(hostHeader: string | null): string | null {
   if (!hostHeader) return null
@@ -24,6 +29,40 @@ export function proxy(req: NextRequest) {
       'clawcontrol is local-only. Access must be via 127.0.0.1/localhost (or SSH port-forward).',
       { status: 403 }
     )
+  }
+
+  if (MUTATING_METHODS.has(req.method) && req.nextUrl.pathname.startsWith('/api/')) {
+    if (req.nextUrl.pathname === '/api/auth/bootstrap') {
+      return NextResponse.next()
+    }
+
+    if (req.nextUrl.pathname === '/api/agents/completion') {
+      if (!req.headers.get(INTERNAL_TOKEN_HEADER)?.trim()) {
+        return NextResponse.json(
+          { error: 'Internal token is required', code: 'INTERNAL_TOKEN_REQUIRED' },
+          { status: 403 }
+        )
+      }
+      return NextResponse.next()
+    }
+
+    const sessionCookie = req.cookies.get(OPERATOR_SESSION_COOKIE)?.value ?? ''
+    const csrfCookie = req.cookies.get(CSRF_COOKIE)?.value ?? ''
+    const csrfHeader = req.headers.get(CSRF_HEADER)?.trim() ?? ''
+
+    if (!sessionCookie) {
+      return NextResponse.json(
+        { error: 'Operator session is required', code: 'AUTH_REQUIRED' },
+        { status: 401 }
+      )
+    }
+
+    if (!csrfCookie || !csrfHeader || csrfCookie !== csrfHeader) {
+      return NextResponse.json(
+        { error: 'Invalid CSRF token', code: 'CSRF_INVALID' },
+        { status: 403 }
+      )
+    }
   }
 
   return NextResponse.next()

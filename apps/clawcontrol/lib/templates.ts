@@ -23,7 +23,7 @@ import { decodeWorkspaceId, encodeWorkspaceId } from './fs/workspace-fs'
 // VALIDATOR
 // ============================================================================
 
-const ajv = new Ajv({ allErrors: true, strict: false })
+const ajv = new Ajv({ allErrors: true })
 const validateTemplateSchema = ajv.compile(AGENT_TEMPLATE_SCHEMA)
 
 /**
@@ -42,7 +42,9 @@ export function validateTemplateConfig(
   if (!valid && validateTemplateSchema.errors) {
     for (const err of validateTemplateSchema.errors) {
       errors.push({
-        path: err.instancePath || '(root)',
+        path: ((err as { instancePath?: string; dataPath?: string }).instancePath
+          || (err as { dataPath?: string }).dataPath
+          || '(root)'),
         message: err.message || 'Unknown validation error',
         code: 'SCHEMA_ERROR',
       })

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { advanceOnCompletion } from '@/lib/services/workflow-engine'
+import { asAuthErrorResponse, verifyInternalToken } from '@/lib/auth/operator-auth'
 
 type CompletionBody = {
   operationId?: string
@@ -11,6 +12,11 @@ type CompletionBody = {
 }
 
 export async function POST(request: Request) {
+  const auth = verifyInternalToken(request)
+  if (!auth.ok) {
+    return NextResponse.json(asAuthErrorResponse(auth), { status: auth.status })
+  }
+
   let body: CompletionBody
   try {
     body = await request.json()
@@ -44,5 +50,7 @@ export async function POST(request: Request) {
     success: true,
     duplicate: completed.duplicate,
     noop: completed.noop,
+    code: completed.code ?? null,
+    reason: completed.reason ?? null,
   })
 }

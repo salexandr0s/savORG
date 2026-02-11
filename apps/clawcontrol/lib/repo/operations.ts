@@ -5,7 +5,17 @@
  */
 
 import { prisma } from '../db'
+import type { OperationStatus } from '@clawcontrol/core'
 import type { OperationDTO, OperationFilters } from './types'
+
+const VALID_OPERATION_STATUSES = new Set<OperationStatus>([
+  'todo',
+  'in_progress',
+  'blocked',
+  'review',
+  'done',
+  'rework',
+])
 
 // ============================================================================
 // REPOSITORY INTERFACE
@@ -108,6 +118,9 @@ export function createDbOperationsRepo(): OperationsRepo {
     async update(id: string, input: UpdateOperationInput): Promise<OperationDTO | null> {
       const existing = await prisma.operation.findUnique({ where: { id } })
       if (!existing) return null
+      if (input.status !== undefined && !VALID_OPERATION_STATUSES.has(input.status as OperationStatus)) {
+        throw new Error(`INVALID_OPERATION_STATUS: ${input.status}`)
+      }
 
       const row = await prisma.operation.update({
         where: { id },
@@ -126,6 +139,9 @@ export function createDbOperationsRepo(): OperationsRepo {
       newStatus: string,
       actor: string
     ): Promise<StatusTransitionResult | null> {
+      if (!VALID_OPERATION_STATUSES.has(newStatus as OperationStatus)) {
+        throw new Error(`INVALID_OPERATION_STATUS: ${newStatus}`)
+      }
       return prisma.$transaction(async (tx) => {
         // Get current operation
         const existing = await tx.operation.findUnique({ where: { id } })

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { enforceTypedConfirm } from '@/lib/with-governor'
+import { enforceActionPolicy } from '@/lib/with-governor'
 import { getRepos } from '@/lib/repo'
 import { PluginUnsupportedError } from '@/lib/repo/plugins'
 import { classifyOpenClawError } from '@/lib/openclaw/error-shape'
@@ -30,7 +30,7 @@ export async function POST(
   }
 
   // Enforce Governor - plugin.doctor is caution level
-  const result = await enforceTypedConfirm({
+  const result = await enforceActionPolicy({
     actionKind: 'plugin.doctor',
     typedConfirmText,
   })
@@ -41,7 +41,7 @@ export async function POST(
         error: result.errorType,
         policy: result.policy,
       },
-      { status: result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403 }
+      { status: result.status ?? (result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403) }
     )
   }
 

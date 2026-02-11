@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   updateOperation: vi.fn(),
   enforceGovernor: vi.fn(),
   getRequestActor: vi.fn(),
+  verifyOperatorRequest: vi.fn(),
 }))
 
 vi.mock('@/lib/repo', () => ({
@@ -35,6 +36,14 @@ vi.mock('@/lib/request-actor', () => ({
   getRequestActor: mocks.getRequestActor,
 }))
 
+vi.mock('@/lib/auth/operator-auth', () => ({
+  verifyOperatorRequest: mocks.verifyOperatorRequest,
+  asAuthErrorResponse: (result: { error: string; code: string }) => ({
+    error: result.error,
+    code: result.code,
+  }),
+}))
+
 beforeEach(() => {
   vi.resetModules()
   mocks.getByIdWorkOrder.mockReset()
@@ -45,12 +54,22 @@ beforeEach(() => {
   mocks.updateOperation.mockReset()
   mocks.enforceGovernor.mockReset()
   mocks.getRequestActor.mockReset()
+  mocks.verifyOperatorRequest.mockReset()
 
   mocks.enforceGovernor.mockResolvedValue({ allowed: true })
   mocks.getRequestActor.mockReturnValue({
     actor: 'user',
     actorType: 'user',
     actorId: 'user',
+  })
+  mocks.verifyOperatorRequest.mockReturnValue({
+    ok: true,
+    principal: {
+      actor: 'user:operator',
+      actorType: 'user',
+      actorId: 'operator',
+      sessionId: 'sess_test',
+    },
   })
 })
 

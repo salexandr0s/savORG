@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listWorkspace, createWorkspaceFile, createWorkspaceFolder } from '@/lib/fs/workspace-fs'
-import { enforceTypedConfirm } from '@/lib/with-governor'
+import { enforceActionPolicy } from '@/lib/with-governor'
 import type { ActionKind } from '@clawcontrol/core'
 
 // Creating files is a caution-level action
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Enforce typed confirmation
-  const result = await enforceTypedConfirm({
+  const result = await enforceActionPolicy({
     actionKind: CREATE_ACTION,
     typedConfirmText,
   })
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
         error: result.errorType,
         policy: result.policy,
       },
-      { status: result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403 }
+      { status: result.status ?? (result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403) }
     )
   }
 

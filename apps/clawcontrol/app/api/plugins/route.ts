@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { enforceTypedConfirm } from '@/lib/with-governor'
+import { enforceActionPolicy } from '@/lib/with-governor'
 import { getRepos } from '@/lib/repo'
 import { PluginUnsupportedError } from '@/lib/repo/plugins'
 import type { PluginSourceType } from '@clawcontrol/core'
@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Enforce Governor - plugin.install is danger level
-  const result = await enforceTypedConfirm({
+  const result = await enforceActionPolicy({
     actionKind: 'plugin.install',
     typedConfirmText,
   })
@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
         error: result.errorType,
         policy: result.policy,
       },
-      { status: result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403 }
+      { status: result.status ?? (result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403) }
     )
   }
 

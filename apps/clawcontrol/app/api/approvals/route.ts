@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRepos } from '@/lib/repo'
 import type { ApprovalFilters, CreateApprovalInput } from '@/lib/repo'
+import { asAuthErrorResponse, verifyOperatorRequest } from '@/lib/auth/operator-auth'
 
 /**
  * GET /api/approvals
@@ -60,6 +61,11 @@ const VALID_APPROVAL_TYPES = ['ship_gate', 'risky_action', 'scope_change', 'cron
  */
 export async function POST(request: NextRequest) {
   try {
+    const auth = verifyOperatorRequest(request, { requireCsrf: true })
+    if (!auth.ok) {
+      return NextResponse.json(asAuthErrorResponse(auth), { status: auth.status })
+    }
+
     const body = await request.json()
     const { workOrderId, operationId, type, questionMd } = body
 
@@ -90,6 +96,26 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    if (operationId) {
+      const operation = await repos.operations.getById(operationId)
+      if (!operation) {
+        return NextResponse.json(
+          { error: 'Operation not found' },
+          { status: 404 }
+        )
+      }
+
+      if (operation.workOrderId !== workOrderId) {
+        return NextResponse.json(
+          {
+            error: 'Operation does not belong to the provided work order',
+            code: 'APPROVAL_OPERATION_WORKORDER_MISMATCH',
+          },
+          { status: 400 }
+        )
+      }
+    }
+
     // Check for existing pending approval of same type for this work order/operation
     // This ensures idempotency - only one pending approval per (workOrderId, operationId, type)
     const existingApprovals = await repos.approvals.list({
@@ -117,7 +143,7 @@ export async function POST(request: NextRequest) {
     // Write activity record
     await repos.activities.create({
       type: 'approval.requested',
-      actor: 'system',
+      actor: auth.principal.actor,
       entityType: 'approval',
       entityId: data.id,
       summary: `Approval requested: ${type.replace(/_/g, ' ')}`,
@@ -131,7 +157,7 @@ export async function POST(request: NextRequest) {
     // Also write activity for the work order
     await repos.activities.create({
       type: 'work_order.approval_requested',
-      actor: 'system',
+      actor: auth.principal.actor,
       entityType: 'work_order',
       entityId: workOrderId,
       summary: `Approval requested for ${type.replace(/_/g, ' ')}`,

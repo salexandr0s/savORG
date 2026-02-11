@@ -3,7 +3,7 @@ import { promises as fsp } from 'node:fs'
 import { join } from 'node:path'
 import { getRepos } from '@/lib/repo'
 import { generateIdenticonSvg } from '@/lib/avatar'
-import { enforceTypedConfirm } from '@/lib/with-governor'
+import { enforceActionPolicy } from '@/lib/with-governor'
 import { getWorkspaceRoot, validateWorkspacePath } from '@/lib/fs/path-policy'
 import type { ActionKind } from '@clawcontrol/core'
 
@@ -98,7 +98,7 @@ export async function POST(
   }
 
   // Enforce typed confirmation
-  const result = await enforceTypedConfirm({
+  const result = await enforceActionPolicy({
     actionKind: AVATAR_ACTION,
     typedConfirmText,
   })
@@ -109,7 +109,7 @@ export async function POST(
         error: result.errorType,
         policy: result.policy,
       },
-      { status: result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403 }
+      { status: result.status ?? (result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403) }
     )
   }
 
@@ -186,7 +186,7 @@ export async function DELETE(
   const { typedConfirmText } = body as { typedConfirmText?: string }
 
   // Enforce typed confirmation
-  const result = await enforceTypedConfirm({
+  const result = await enforceActionPolicy({
     actionKind: AVATAR_ACTION,
     typedConfirmText,
   })
@@ -197,7 +197,7 @@ export async function DELETE(
         error: result.errorType,
         policy: result.policy,
       },
-      { status: result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403 }
+      { status: result.status ?? (result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403) }
     )
   }
 

@@ -16,9 +16,9 @@ const WORKFLOW_CONFIG_DIR = 'workflows'
 const WORKFLOW_SELECTION_FILE = 'workflow-selection.yaml'
 const CACHE_TTL_MS = 30_000
 
-const ajv = new Ajv({ allErrors: true, strict: false })
-const validateWorkflow = ajv.compile<WorkflowConfig>(WORKFLOW_SCHEMA)
-const validateSelection = ajv.compile<WorkflowSelectionConfig>(WORKFLOW_SELECTION_SCHEMA)
+const ajv = new Ajv({ allErrors: true })
+const validateWorkflow = ajv.compile(WORKFLOW_SCHEMA)
+const validateSelection = ajv.compile(WORKFLOW_SELECTION_SCHEMA)
 
 interface RegistryCache {
   root: string
@@ -96,7 +96,9 @@ function formatAjvErrors(errors: ErrorObject[] | null | undefined): string {
   if (!errors || errors.length === 0) return 'unknown validation error'
   return errors
     .map((error) => {
-      const at = error.instancePath ? ` at ${error.instancePath}` : ''
+      const path = (error as { instancePath?: string; dataPath?: string }).instancePath
+        || (error as { dataPath?: string }).dataPath
+      const at = path ? ` at ${path}` : ''
       const msg = error.message ?? 'invalid value'
       return `${msg}${at}`
     })
@@ -211,6 +213,67 @@ function validateSelectionSemantics(
   }
 }
 
+function orderSelectionRulesByPrecedence(rules: WorkflowSelectionRule[]): WorkflowSelectionRule[] {
+  const ruleById = new Map<string, WorkflowSelectionRule>()
+  const originalIndex = new Map<string, number>()
+  const outgoing = new Map<string, Set<string>>()
+  const indegree = new Map<string, number>()
+
+  for (let index = 0; index < rules.length; index++) {
+    const rule = rules[index]
+    ruleById.set(rule.id, rule)
+    originalIndex.set(rule.id, index)
+    outgoing.set(rule.id, new Set())
+    indegree.set(rule.id, 0)
+  }
+
+  for (const rule of rules) {
+    const from = rule.id
+    for (const target of rule.precedes ?? []) {
+      const edges = outgoing.get(from)
+      if (!edges) continue
+      if (edges.has(target)) continue
+      edges.add(target)
+      indegree.set(target, (indegree.get(target) ?? 0) + 1)
+    }
+  }
+
+  const zero: string[] = []
+  for (const [ruleId, degree] of indegree.entries()) {
+    if (degree === 0) zero.push(ruleId)
+  }
+
+  zero.sort((a, b) => (originalIndex.get(a) ?? 0) - (originalIndex.get(b) ?? 0))
+
+  const orderedIds: string[] = []
+  while (zero.length > 0) {
+    const nextId = zero.shift() as string
+    orderedIds.push(nextId)
+
+    const targets = outgoing.get(nextId)
+    if (!targets) continue
+    for (const targetId of targets) {
+      const remaining = (indegree.get(targetId) ?? 0) - 1
+      indegree.set(targetId, remaining)
+      if (remaining === 0) {
+        zero.push(targetId)
+      }
+    }
+    zero.sort((a, b) => (originalIndex.get(a) ?? 0) - (originalIndex.get(b) ?? 0))
+  }
+
+  if (orderedIds.length !== rules.length) {
+    const unresolved = rules
+      .map((rule) => rule.id)
+      .filter((ruleId) => !orderedIds.includes(ruleId))
+    throw new Error(
+      `Workflow selection precedence contains a cycle among: ${unresolved.join(', ')}`
+    )
+  }
+
+  return orderedIds.map((ruleId) => ruleById.get(ruleId) as WorkflowSelectionRule)
+}
+
 function matchRule(input: WorkflowSelectionInput, rule: WorkflowSelectionRule): boolean {
   const normalizedPriority = normalizeText(input.priority)
   if (rule.priority && rule.priority.length > 0) {
@@ -261,8 +324,13 @@ async function buildRegistry(root: string): Promise<RegistryCache> {
     )
   }
 
-  const selection = rawSelection as WorkflowSelectionConfig
-  validateSelectionSemantics(selection, new Set(workflowsById.keys()))
+  const rawSelectionConfig = rawSelection as WorkflowSelectionConfig
+  validateSelectionSemantics(rawSelectionConfig, new Set(workflowsById.keys()))
+
+  const selection: WorkflowSelectionConfig = {
+    ...rawSelectionConfig,
+    rules: orderSelectionRulesByPrecedence(rawSelectionConfig.rules),
+  }
 
   const versions = await Promise.all(
     [...workflowFiles, selectionPath].map((file) => fileVersion(file))

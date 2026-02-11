@@ -135,12 +135,13 @@
 html,
 body {
   height: 100%;
-  overflow: hidden;
 }
 
 body {
   background-color: var(--bg0);
   color: var(--fg0);
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 /* Scrollbar styling for dark theme */

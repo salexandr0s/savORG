@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { enforceTypedConfirm } from '@/lib/with-governor'
+import { enforceActionPolicy } from '@/lib/with-governor'
 import { getRepos } from '@/lib/repo'
 import type { ActionKind } from '@clawcontrol/core'
 import type { SkillScope } from '@/lib/repo'
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
 
   // Enforce Governor - skill.install is danger level
   const ACTION_KIND: ActionKind = 'skill.install'
-  const result = await enforceTypedConfirm({
+  const result = await enforceActionPolicy({
     actionKind: ACTION_KIND,
     typedConfirmText,
   })
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
         error: result.errorType,
         policy: result.policy,
       },
-      { status: result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403 }
+      { status: result.status ?? (result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403) }
     )
   }
 

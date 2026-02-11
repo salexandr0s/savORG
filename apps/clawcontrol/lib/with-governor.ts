@@ -406,43 +406,95 @@ export async function enforceGovernor(params: {
 }
 
 // ============================================================================
-// HELPER: Typed Confirm Only (no approval gate)
+// HELPER: Route-level action policy enforcement
 // ============================================================================
 
+export type ActionPolicyEnforcementResult =
+  | {
+      allowed: true
+      policy: typeof ACTION_POLICIES[ActionKind]
+      gateResult?: ApprovalGateResult
+    }
+  | {
+      allowed: false
+      errorType: string
+      policy: typeof ACTION_POLICIES[ActionKind]
+      status: number
+      details?: Record<string, unknown>
+    }
+
 /**
- * Simplified enforcement for actions that only need typed confirmation
- * but don't require work order approval gates (e.g., config file edits).
+ * Enforce action policy for route handlers.
+ *
+ * - If policy.requiresApproval=true, this enforces approval gate + typed confirm.
+ * - Otherwise, this enforces typed confirm only (when confirmMode !== NONE).
+ * - Global actions can use fallbackWorkOrderId="system" for approval linkage.
  */
-export async function enforceTypedConfirm(params: {
+export async function enforceActionPolicy(params: {
   actionKind: ActionKind
   typedConfirmText?: string
-}): Promise<{ allowed: true; policy: typeof ACTION_POLICIES[ActionKind] } | { allowed: false; errorType: string; policy: typeof ACTION_POLICIES[ActionKind] }> {
-  const { actionKind, typedConfirmText } = params
+  actor?: string
+  workOrderId?: string | null
+  operationId?: string | null
+  fallbackWorkOrderId?: string
+}): Promise<ActionPolicyEnforcementResult> {
+  const {
+    actionKind,
+    typedConfirmText,
+    actor = 'user',
+    workOrderId,
+    operationId,
+    fallbackWorkOrderId = 'system',
+  } = params
   const policy = ACTION_POLICIES[actionKind]
 
-  // For actions with no confirmation required, allow immediately
+  if (policy.requiresApproval) {
+    const resolvedWorkOrderId = workOrderId ?? fallbackWorkOrderId
+    const result = await enforceGovernor({
+      actionKind,
+      workOrderId: resolvedWorkOrderId,
+      operationId,
+      actor,
+      typedConfirmText,
+    })
+
+    if (!result.allowed) {
+      return {
+        allowed: false,
+        errorType: result.error.code,
+        policy,
+        status: result.status,
+        details: result.error.details,
+      }
+    }
+
+    return {
+      allowed: true,
+      policy,
+      gateResult: result.gateResult,
+    }
+  }
+
   if (policy.confirmMode === 'NONE') {
     return { allowed: true, policy }
   }
 
-  // Check typed confirmation
   if (!typedConfirmText) {
     return {
       allowed: false,
       errorType: 'TYPED_CONFIRM_REQUIRED',
       policy,
+      status: 428,
     }
   }
 
-  // Validate - for CONFIRM mode, just check if it matches
-  if (policy.confirmMode === 'CONFIRM') {
-    const validation = validateTypedConfirm('CONFIRM', typedConfirmText)
-    if (!validation.valid) {
-      return {
-        allowed: false,
-        errorType: 'TYPED_CONFIRM_INVALID',
-        policy,
-      }
+  const validation = validateTypedConfirm(policy.confirmMode, typedConfirmText)
+  if (!validation.valid) {
+    return {
+      allowed: false,
+      errorType: 'TYPED_CONFIRM_INVALID',
+      policy,
+      status: 403,
     }
   }
 

@@ -59,6 +59,14 @@ model WorkOrder {
   @@map("work_orders")
 }
 
+model WorkOrderSequence {
+  id        Int      @id
+  nextValue Int      @default(1) @map("next_value")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("work_order_sequences")
+}
+
 // ============================================================================
 // OPERATIONS
 // ============================================================================
@@ -370,12 +378,14 @@ model IngestionLease {
 
 model OperationCompletionToken {
   id          String   @id @default(cuid())
-  token       String   @unique
+  token       String
   operationId String   @map("operation_id")
   workOrderId String?  @map("work_order_id")
   createdAt   DateTime @default(now()) @map("created_at")
 
   @@index([operationId])
+  @@index([token])
+  @@unique([operationId, token])
   @@map("operation_completion_tokens")
 }
 

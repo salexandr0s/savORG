@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRepos } from '@/lib/repo'
-import { getRequestActor } from '@/lib/request-actor'
+import { asAuthErrorResponse, verifyOperatorRequest } from '@/lib/auth/operator-auth'
 import {
-  validateOperationTransition,
   getValidOperationTransitions,
   type OperationStatus,
 } from '@clawcontrol/core'
@@ -11,12 +10,14 @@ interface RouteContext {
   params: Promise<{ id: string }>
 }
 
-function isManagerActor(request: NextRequest): boolean {
-  const actorType = request.headers.get('x-clawcontrol-actor-type')?.trim().toLowerCase()
-  const actorId = request.headers.get('x-clawcontrol-actor-id')?.trim().toLowerCase()
-  if (actorType !== 'system') return false
-  return actorId === 'manager' || actorId === 'manager-engine' || actorId === 'workflow-engine'
-}
+const OPERATION_STATUSES = new Set<OperationStatus>([
+  'todo',
+  'in_progress',
+  'blocked',
+  'review',
+  'done',
+  'rework',
+])
 
 /**
  * GET /api/operations/:id
@@ -65,12 +66,17 @@ export async function PATCH(
   const { id } = await context.params
 
   try {
+    const auth = verifyOperatorRequest(request, { requireCsrf: true })
+    if (!auth.ok) {
+      return NextResponse.json(asAuthErrorResponse(auth), { status: auth.status })
+    }
+
     const body = await request.json()
     const { status, notes, blockedReason } = body
 
     const repos = getRepos()
-    const { actor } = getRequestActor(request)
-
+    const hasStatus = Object.prototype.hasOwnProperty.call(body, 'status')
+    const nextStatus = hasStatus ? String(status ?? '').trim() : undefined
     // Always fetch current for comparison
     const current = await repos.operations.getById(id)
     if (!current) {
@@ -80,62 +86,25 @@ export async function PATCH(
       )
     }
 
-    // If status is being changed to a different value, validate the transition
-    const statusActuallyChanging = status && status !== current.status
-    if (statusActuallyChanging) {
-      if (!isManagerActor(request)) {
-        return NextResponse.json(
-          {
-            error: 'Operation status transitions are manager-controlled',
-            code: 'MANAGER_CONTROLLED_OPERATION_STATUS',
-          },
-          { status: 403 }
-        )
-      }
-
-      const validation = validateOperationTransition(
-        current.status as OperationStatus,
-        status as OperationStatus
+    if (hasStatus && (!nextStatus || !OPERATION_STATUSES.has(nextStatus as OperationStatus))) {
+      return NextResponse.json(
+        { error: `Invalid status: ${status}`, code: 'INVALID_STATUS' },
+        { status: 400 }
       )
-
-      if (!validation.valid) {
-        return NextResponse.json(
-          { error: validation.error, code: 'INVALID_TRANSITION' },
-          { status: 400 }
-        )
-      }
     }
 
-    // If status is actually changing, use atomic transaction
-    if (statusActuallyChanging) {
-      const result = await repos.operations.updateStatusWithActivity(
-        id,
-        status,
-        actor
+    if (hasStatus) {
+      return NextResponse.json(
+        {
+          error: 'Operation status transitions are manager-controlled',
+          code: 'MANAGER_CONTROLLED_OPERATION_STATUS',
+        },
+        { status: 403 }
       )
-
-      if (!result) {
-        return NextResponse.json(
-          { error: 'Failed to update operation' },
-          { status: 500 }
-        )
-      }
-
-      // If there are other updates beyond status, apply them separately
-      if (notes !== undefined || blockedReason !== undefined) {
-        const updated = await repos.operations.update(id, {
-          notes,
-          blockedReason,
-        })
-        return NextResponse.json({ data: updated })
-      }
-
-      return NextResponse.json({ data: result.operation })
     }
 
     // No status change - regular update without activity
     const data = await repos.operations.update(id, {
-      status,
       notes,
       blockedReason,
     })
@@ -149,6 +118,12 @@ export async function PATCH(
 
     return NextResponse.json({ data })
   } catch (error) {
+    if (error instanceof Error && error.message.startsWith('INVALID_OPERATION_STATUS')) {
+      return NextResponse.json(
+        { error: error.message, code: 'INVALID_STATUS' },
+        { status: 400 }
+      )
+    }
     console.error('[api/operations/:id] PATCH error:', error)
     return NextResponse.json(
       { error: 'Failed to update operation' },

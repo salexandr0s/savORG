@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server'
 
 const mocks = vi.hoisted(() => ({
   getRepos: vi.fn(),
-  enforceTypedConfirm: vi.fn(),
+  enforceActionPolicy: vi.fn(),
 }))
 
 vi.mock('@/lib/repo', () => ({
@@ -11,14 +11,14 @@ vi.mock('@/lib/repo', () => ({
 }))
 
 vi.mock('@/lib/with-governor', () => ({
-  enforceTypedConfirm: mocks.enforceTypedConfirm,
+  enforceActionPolicy: mocks.enforceActionPolicy,
 }))
 
 describe('stations route lock', () => {
   beforeEach(() => {
     vi.resetModules()
     mocks.getRepos.mockReset()
-    mocks.enforceTypedConfirm.mockReset()
+    mocks.enforceActionPolicy.mockReset()
   })
 
   it('blocks station create when mutations are disabled', async () => {
@@ -36,7 +36,7 @@ describe('stations route lock', () => {
 
     expect(response.status).toBe(403)
     expect(payload.error).toBe('STATION_MUTATIONS_DISABLED')
-    expect(mocks.enforceTypedConfirm).not.toHaveBeenCalled()
+    expect(mocks.enforceActionPolicy).not.toHaveBeenCalled()
     expect(mocks.getRepos).not.toHaveBeenCalled()
   })
 
@@ -69,8 +69,7 @@ describe('stations route lock', () => {
     expect(patchPayload.error).toBe('STATION_MUTATIONS_DISABLED')
     expect(deleteResponse.status).toBe(403)
     expect(deletePayload.error).toBe('STATION_MUTATIONS_DISABLED')
-    expect(mocks.enforceTypedConfirm).not.toHaveBeenCalled()
+    expect(mocks.enforceActionPolicy).not.toHaveBeenCalled()
     expect(mocks.getRepos).not.toHaveBeenCalled()
   })
 })
-

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getRepos } from '@/lib/repo'
-import { enforceTypedConfirm } from '@/lib/with-governor'
+import { enforceActionPolicy } from '@/lib/with-governor'
 import { getConsoleClient, checkGatewayAvailability } from '@/lib/openclaw/console-client'
 import { getRequestActor } from '@/lib/request-actor'
+import { withToolPolicy } from '@/lib/policies/tool-policy'
 
 // ============================================================================
 // TYPES
@@ -37,10 +38,10 @@ interface SendRequestBody {
  * - text: Message to send (required, 1-10000 chars)
  * - typedConfirmText: Confirmation text (required, must be "CONFIRM")
  */
-export async function POST(
+const postHandler = async (
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   const { id: sessionId } = await params
   const { actor } = getRequestActor(request)
 
@@ -99,7 +100,7 @@ export async function POST(
   }
 
   // Enforce typed confirmation (governor-gated)
-  const enforcement = await enforceTypedConfirm({
+  const enforcement = await enforceActionPolicy({
     actionKind: 'console.agent.chat',
     typedConfirmText,
   })
@@ -112,7 +113,7 @@ export async function POST(
         code: enforcement.errorType,
         confirmMode: enforcement.policy.confirmMode,
       },
-      { status: enforcement.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403 }
+      { status: enforcement.status ?? (enforcement.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403) }
     )
   }
 
@@ -244,3 +245,27 @@ export async function POST(
     },
   })
 }
+
+export const POST = withToolPolicy(postHandler, {
+  resolveRequest: async (_request, context, _body) => {
+    const routeContext = context as { params: Promise<{ id: string }> }
+    const { id: sessionId } = await routeContext.params
+    const session = await prisma.agentSession.findUnique({
+      where: { sessionId },
+      select: { agentId: true, operationId: true, workOrderId: true },
+    })
+
+    if (!session) return null
+
+    return {
+      agentId: session.agentId,
+      tool: 'message',
+      args: {
+        command: 'console.agent.chat',
+        sessionId,
+      },
+      operationId: session.operationId ?? undefined,
+      workOrderId: session.workOrderId ?? 'console',
+    }
+  },
+})

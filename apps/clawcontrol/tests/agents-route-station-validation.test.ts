@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server'
 
 const mocks = vi.hoisted(() => ({
   getRepos: vi.fn(),
-  enforceTypedConfirm: vi.fn(),
+  enforceActionPolicy: vi.fn(),
   upsertAgentToOpenClaw: vi.fn(),
   repos: {
     agents: {
@@ -21,7 +21,7 @@ vi.mock('@/lib/repo', () => ({
 }))
 
 vi.mock('@/lib/with-governor', () => ({
-  enforceTypedConfirm: mocks.enforceTypedConfirm,
+  enforceActionPolicy: mocks.enforceActionPolicy,
 }))
 
 vi.mock('@/lib/services/openclaw-config', () => ({
@@ -33,14 +33,14 @@ describe('agents route station validation', () => {
     vi.resetModules()
 
     mocks.getRepos.mockReset()
-    mocks.enforceTypedConfirm.mockReset()
+    mocks.enforceActionPolicy.mockReset()
     mocks.upsertAgentToOpenClaw.mockReset()
     mocks.repos.agents.getById.mockReset()
     mocks.repos.agents.update.mockReset()
     mocks.repos.activities.create.mockReset()
 
     mocks.getRepos.mockReturnValue(mocks.repos)
-    mocks.enforceTypedConfirm.mockResolvedValue({ allowed: true })
+    mocks.enforceActionPolicy.mockResolvedValue({ allowed: true })
     mocks.repos.agents.getById.mockResolvedValue({
       id: 'agent_1',
       name: 'Agent One',
@@ -86,7 +86,7 @@ describe('agents route station validation', () => {
     expect(response.status).toBe(400)
     expect(payload.error).toBe('INVALID_STATION')
     expect(payload.message).toContain('not canonical')
-    expect(mocks.enforceTypedConfirm).not.toHaveBeenCalled()
+    expect(mocks.enforceActionPolicy).not.toHaveBeenCalled()
     expect(mocks.repos.agents.update).not.toHaveBeenCalled()
   })
 
@@ -114,4 +114,3 @@ describe('agents route station validation', () => {
     )
   })
 })
-

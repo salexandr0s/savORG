@@ -26,6 +26,7 @@ const ACTIVE_SESSION_MAX_AGE_MS = 5 * 60 * 1000
 const STALE_OPERATION_AGE_MS = 20 * 60 * 1000
 const DEFAULT_TICK_LIMIT = 25
 const MAX_TICK_LIMIT = 100
+const SECURITY_VETO_REASON = 'security_veto'
 
 const OPEN_OPERATION_STATUSES = ['todo', 'in_progress', 'review', 'rework'] as const
 const CLAIMABLE_OPERATION_STATUSES = ['todo', 'rework'] as const
@@ -61,6 +62,8 @@ export interface CompletionResult {
   operationId: string
   duplicate: boolean
   noop: boolean
+  code?: 'COMPLETION_STALE_IGNORED' | 'COMPLETION_INVALID_STATE'
+  reason?: string
 }
 
 export interface QueueTickResult {
@@ -156,6 +159,10 @@ function inferArtifactType(pathOrUrl: string): string {
 
 function isCompletionSuccess(status: StageResult['status']): boolean {
   return status === 'approved' || status === 'completed'
+}
+
+function isSecurityVetoReason(value: string | null | undefined): boolean {
+  return (value ?? '').toLowerCase().includes(SECURITY_VETO_REASON)
 }
 
 function evaluateCondition(condition: string, context: Record<string, unknown>): boolean {
@@ -1616,25 +1623,56 @@ async function handleSingleStageCompletionTx(
   }
 ): Promise<CompletionTxOutcome> {
   if (input.result.status === 'vetoed' && input.stage.canVeto) {
-    const message = await escalateOperationTx(tx, {
-      operationId: input.operation.id,
-      workOrderId: input.operation.workOrderId,
-      workflowId: input.workflowId,
-      stageIndex: input.operation.workflowStageIndex,
-      stageLabel: input.stage.ref,
-      totalStages: input.workflow.stages.length,
-      iterationCount: input.operation.iterationCount,
-      maxIterations: input.stage.maxIterations ?? null,
-      reason: 'security_veto',
-      feedback: input.result.feedback ?? null,
-      approvalType: 'risky_action',
+    const reason = input.result.feedback?.trim()
+      ? `${SECURITY_VETO_REASON}: ${input.result.feedback.trim()}`
+      : SECURITY_VETO_REASON
+
+    await tx.operation.update({
+      where: { id: input.operation.id },
+      data: {
+        status: 'blocked',
+        notes: input.result.feedback ?? null,
+        blockedReason: reason,
+        escalationReason: SECURITY_VETO_REASON,
+        escalatedAt: new Date(),
+        claimedBy: null,
+        claimExpiresAt: null,
+      },
+    })
+
+    await tx.workOrder.update({
+      where: { id: input.operation.workOrderId },
+      data: {
+        state: 'blocked',
+        blockedReason: reason,
+      },
+    })
+
+    await tx.activity.create({
+      data: {
+        type: 'workflow.security_veto',
+        actor: MANAGER_ACTIVITY_ACTOR,
+        actorType: 'system',
+        actorAgentId: null,
+        entityType: 'work_order',
+        entityId: input.operation.workOrderId,
+        summary: `Security veto at stage ${input.stage.ref} permanently blocked the run`,
+        payloadJson: JSON.stringify({
+          workflowId: input.workflowId,
+          stageIndex: input.operation.workflowStageIndex,
+          stageRef: input.stage.ref,
+          operationId: input.operation.id,
+          feedback: input.result.feedback ?? null,
+          final: true,
+        }),
+      },
     })
 
     return {
       workOrderId: input.operation.workOrderId,
       workflowId: input.workflowId,
       dispatchOperationId: null,
-      notifyCeoMessage: message,
+      notifyCeoMessage: `Security Veto Finalized: ${input.operation.workOrderId}\n\nStage: ${input.stage.ref}\nReason: ${input.result.feedback ?? 'Security veto issued'}`,
       notifyCeoType: 'escalation',
     }
   }
@@ -1936,7 +1974,15 @@ export async function startWorkOrder(
     throw new Error(`Work order not found: ${workOrderId}`)
   }
 
-  if (!options?.force && workOrder.state !== 'planned' && workOrder.state !== 'blocked') {
+  if (workOrder.state === 'blocked') {
+    throw new Error(`Work order ${workOrderId} is blocked; use resume flow instead of start`)
+  }
+
+  if (isSecurityVetoReason(workOrder.blockedReason)) {
+    throw new Error(`Work order ${workOrderId} is permanently blocked by security veto`)
+  }
+
+  if (!options?.force && workOrder.state !== 'planned') {
     throw new Error(`Work order ${workOrderId} is not startable from state ${workOrder.state}`)
   }
 
@@ -2047,6 +2093,14 @@ export async function startWorkOrder(
 
   const dispatch = await dispatchOperation(operation.id)
   if (!dispatch.dispatched) {
+    const dispatchError = dispatch.error ?? 'Failed to dispatch workflow start operation'
+    await prisma.workOrder.update({
+      where: { id: workOrderId },
+      data: {
+        state: 'blocked',
+        blockedReason: dispatchError,
+      },
+    })
     throw new Error(dispatch.error ?? 'Failed to dispatch workflow start operation')
   }
 
@@ -2067,19 +2121,94 @@ export async function advanceOnCompletion(
   result: StageResult,
   options?: { completionToken?: string | null }
 ): Promise<CompletionResult> {
+  const operation = await prisma.operation.findUnique({
+    where: { id: operationId },
+    select: {
+      status: true,
+      workOrderId: true,
+      workOrder: {
+        select: {
+          state: true,
+        },
+      },
+    },
+  })
+  if (!operation) throw new Error(`Operation not found: ${operationId}`)
+
+  if (operation.status === 'done') {
+    return {
+      success: true,
+      operationId,
+      duplicate: false,
+      noop: true,
+      code: 'COMPLETION_STALE_IGNORED',
+      reason: 'Operation already completed',
+    }
+  }
+
+  if (operation.status !== 'in_progress') {
+    await prisma.activity.create({
+      data: {
+        type: 'workflow.completion_ignored',
+        actor: MANAGER_ACTIVITY_ACTOR,
+        actorType: 'system',
+        actorAgentId: null,
+        entityType: 'operation',
+        entityId: operationId,
+        summary: `Ignored completion: operation not in_progress (${operation.status})`,
+        payloadJson: JSON.stringify({
+          operationId,
+          status: operation.status,
+          resultStatus: result.status,
+        }),
+      },
+    })
+    return {
+      success: true,
+      operationId,
+      duplicate: false,
+      noop: true,
+      code: 'COMPLETION_INVALID_STATE',
+      reason: `Operation is ${operation.status}, expected in_progress`,
+    }
+  }
+
+  if (operation.workOrder.state !== 'active') {
+    await prisma.activity.create({
+      data: {
+        type: 'workflow.completion_stale',
+        actor: MANAGER_ACTIVITY_ACTOR,
+        actorType: 'system',
+        actorAgentId: null,
+        entityType: 'operation',
+        entityId: operationId,
+        summary: `Ignored stale completion for non-active work order (${operation.workOrder.state})`,
+        payloadJson: JSON.stringify({
+          operationId,
+          workOrderId: operation.workOrderId,
+          workOrderState: operation.workOrder.state,
+          resultStatus: result.status,
+        }),
+      },
+    })
+    return {
+      success: true,
+      operationId,
+      duplicate: false,
+      noop: true,
+      code: 'COMPLETION_STALE_IGNORED',
+      reason: `Work order is ${operation.workOrder.state}, expected active`,
+    }
+  }
+
   const completionToken = options?.completionToken?.trim()
   if (completionToken) {
     try {
-      const op = await prisma.operation.findUnique({
-        where: { id: operationId },
-        select: { workOrderId: true },
-      })
-
       await prisma.operationCompletionToken.create({
         data: {
           token: completionToken,
           operationId,
-          workOrderId: op?.workOrderId ?? null,
+          workOrderId: operation.workOrderId,
         },
       })
     } catch (error) {
@@ -2089,24 +2218,11 @@ export async function advanceOnCompletion(
           operationId,
           duplicate: true,
           noop: true,
+          code: 'COMPLETION_STALE_IGNORED',
+          reason: 'Duplicate completion token for operation',
         }
       }
       throw error
-    }
-  }
-
-  const operation = await prisma.operation.findUnique({
-    where: { id: operationId },
-    select: { status: true },
-  })
-  if (!operation) throw new Error(`Operation not found: ${operationId}`)
-
-  if (operation.status === 'done') {
-    return {
-      success: true,
-      operationId,
-      duplicate: Boolean(completionToken),
-      noop: true,
     }
   }
 
@@ -2305,6 +2421,9 @@ export async function resumeWorkOrder(
     },
   })
   if (!workOrder) throw new Error(`Work order not found: ${workOrderId}`)
+  if (isSecurityVetoReason(workOrder.blockedReason)) {
+    throw new Error(`Work order ${workOrderId} is permanently blocked by security veto`)
+  }
 
   if (workOrder.state === 'planned') {
     return startWorkOrder(workOrderId, {
@@ -2365,6 +2484,13 @@ export async function resumeWorkOrder(
 
   const dispatch = await dispatchOperation(candidate.id)
   if (!dispatch.dispatched) {
+    await prisma.workOrder.update({
+      where: { id: workOrderId },
+      data: {
+        state: 'blocked',
+        blockedReason: dispatch.error ?? 'Failed to dispatch resumed operation',
+      },
+    })
     throw new Error(dispatch.error ?? 'Failed to dispatch resumed operation')
   }
 

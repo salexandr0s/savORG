@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getRepos } from '@/lib/repo'
-import { enforceTypedConfirm } from '@/lib/with-governor'
+import { enforceActionPolicy } from '@/lib/with-governor'
 import { getConsoleClient, checkGatewayAvailability } from '@/lib/openclaw/console-client'
 import { getRequestActor } from '@/lib/request-actor'
 import { extractAgentIdFromSessionKey } from '@/lib/agent-identity'
+import { withToolPolicy } from '@/lib/policies/tool-policy'
 
 // ============================================================================
 // TYPES
@@ -40,7 +41,7 @@ interface AgentTurnRequestBody {
  * - timeoutSeconds: Optional timeout
  * - typedConfirmText: Confirmation text (required, must be "CONFIRM")
  */
-export async function POST(request: NextRequest) {
+const postHandler = async (request: NextRequest) => {
   const { actor } = getRequestActor(request)
 
   // Parse and validate request body
@@ -129,7 +130,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Enforce typed confirmation (governor-gated)
-  const enforcement = await enforceTypedConfirm({
+  const enforcement = await enforceActionPolicy({
     actionKind: 'console.agent.turn',
     typedConfirmText,
   })
@@ -142,7 +143,7 @@ export async function POST(request: NextRequest) {
         code: enforcement.errorType,
         confirmMode: enforcement.policy.confirmMode,
       },
-      { status: enforcement.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403 }
+      { status: enforcement.status ?? (enforcement.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403) }
     )
   }
 
@@ -264,3 +265,22 @@ export async function POST(request: NextRequest) {
     },
   })
 }
+
+export const POST = withToolPolicy(postHandler, {
+  resolveRequest: (_request, _context, body) => {
+    const parsed = body as Partial<AgentTurnRequestBody> | null
+    if (!parsed || typeof parsed.agentId !== 'string' || parsed.agentId.trim().length === 0) {
+      return null
+    }
+
+    return {
+      agentId: parsed.agentId,
+      tool: 'sessions_spawn',
+      args: {
+        command: 'console.agent.turn',
+        message: typeof parsed.message === 'string' ? parsed.message : '',
+      },
+      workOrderId: 'console',
+    }
+  },
+})

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { enforceTypedConfirm } from '@/lib/with-governor'
+import { enforceActionPolicy } from '@/lib/with-governor'
 import type { ActionKind } from '@clawcontrol/core'
 import { readWorkspaceFileById, writeWorkspaceFileById, deleteWorkspaceEntry, decodeWorkspaceId } from '@/lib/fs/workspace-fs'
 
@@ -61,7 +61,7 @@ export async function PUT(
   const actionKind = fileName ? PROTECTED_FILES[fileName] : undefined
 
   if (actionKind) {
-    const result = await enforceTypedConfirm({
+    const result = await enforceActionPolicy({
       actionKind,
       typedConfirmText,
     })
@@ -72,7 +72,7 @@ export async function PUT(
           error: result.errorType,
           policy: result.policy,
         },
-        { status: result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403 }
+        { status: result.status ?? (result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403) }
       )
     }
   }
@@ -114,7 +114,7 @@ export async function DELETE(
   }
 
   // Enforce typed confirmation for deletion
-  const result = await enforceTypedConfirm({
+  const result = await enforceActionPolicy({
     actionKind: DELETE_ACTION,
     typedConfirmText,
   })
@@ -125,7 +125,7 @@ export async function DELETE(
         error: result.errorType,
         policy: result.policy,
       },
-      { status: result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403 }
+      { status: result.status ?? (result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403) }
     )
   }
 

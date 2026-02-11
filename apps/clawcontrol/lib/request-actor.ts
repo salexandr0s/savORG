@@ -1,8 +1,8 @@
 /**
  * Request Actor Extraction
  *
- * Extract actor information from request headers for attribution.
- * Used until a full auth system is implemented.
+ * Extract actor information for attribution.
+ * Header-based actor overrides are trusted only when explicitly enabled.
  */
 
 import type { NextRequest } from 'next/server'
@@ -12,6 +12,19 @@ export interface ActorInfo {
   actor: string
   actorType: 'user' | 'system' | 'agent'
   actorId?: string
+}
+
+export interface GetRequestActorOptions {
+  /**
+   * Trust x-clawcontrol-actor-* headers.
+   * Only enable this after request authentication has already passed.
+   */
+  trustHeaders?: boolean
+  /**
+   * Actor to return when header overrides are not trusted/present.
+   * Defaults to user/operator context.
+   */
+  fallback?: ActorInfo
 }
 
 /**
@@ -26,15 +39,20 @@ export interface ActorInfo {
  * - type='system' -> 'system'
  * - type='agent' -> 'agent:<actorId>'
  *
- * Falls back to 'system' if no headers provided.
+ * Falls back to user/operator attribution unless configured otherwise.
  */
-export function getRequestActor(request: NextRequest): ActorInfo {
+export function getRequestActor(request: NextRequest, options?: GetRequestActorOptions): ActorInfo {
+  const fallback = options?.fallback ?? { actor: 'user', actorType: 'user', actorId: 'operator' }
+  if (!options?.trustHeaders) {
+    return fallback
+  }
+
   const actorId = request.headers.get('x-clawcontrol-actor-id')
   const actorType = request.headers.get('x-clawcontrol-actor-type') as 'user' | 'system' | 'agent' | null
 
-  // Default to system for automated/API calls without headers
+  // Default to the authenticated caller context when no trusted actor headers are provided.
   if (!actorType && !actorId) {
-    return { actor: 'system', actorType: 'system' }
+    return fallback
   }
 
   // If only actorId is provided, assume it's a user
@@ -54,6 +72,6 @@ export function getRequestActor(request: NextRequest): ActorInfo {
       return { actor: 'system', actorType: 'system' }
     case 'user':
     default:
-      return { actor: 'user', actorType: 'user', actorId: actorId ?? undefined }
+      return { actor: 'user', actorType: 'user', actorId: actorId ?? fallback.actorId }
   }
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRepos } from '@/lib/repo'
-import { enforceTypedConfirm } from '@/lib/with-governor'
+import { enforceActionPolicy } from '@/lib/with-governor'
 import { getPlaybook } from '@/lib/fs/playbooks-fs'
 import type { ActionKind } from '@clawcontrol/core'
 
@@ -41,7 +41,7 @@ export async function POST(
     : PLAYBOOK_RUN_ACTION
 
   // Enforce typed confirmation for playbook execution
-  const result = await enforceTypedConfirm({
+  const result = await enforceActionPolicy({
     actionKind,
     typedConfirmText,
   })
@@ -52,7 +52,7 @@ export async function POST(
         error: result.errorType,
         policy: result.policy,
       },
-      { status: result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403 }
+      { status: result.status ?? (result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403) }
     )
   }
 

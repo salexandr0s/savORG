@@ -95,7 +95,7 @@ export function AppShell({
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
         {/* Top Bar */}
         <TopBar
           title={title}
@@ -106,13 +106,13 @@ export function AppShell({
 
         {/* Content + Drawer Container */}
         <div className={cn(
-          'flex-1 flex overflow-hidden',
+          'flex-1 flex min-h-0 overflow-hidden',
           // Vertical layout: drawer goes full width
           resolved === 'vertical' && 'flex-col'
         )}>
           {/* Main Content */}
           <main className={cn(
-            'flex-1 overflow-y-auto min-w-0',
+            'flex-1 min-h-0 min-w-0 overflow-y-auto overscroll-contain',
             // Responsive padding
             contentPadding === 'default' && 'p-3 sm:p-4',
             // Prevent content from being too wide

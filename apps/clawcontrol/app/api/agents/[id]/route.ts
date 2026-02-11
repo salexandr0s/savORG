@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRepos } from '@/lib/repo'
-import { enforceTypedConfirm } from '@/lib/with-governor'
+import { enforceActionPolicy } from '@/lib/with-governor'
 import { upsertAgentToOpenClaw } from '@/lib/services/openclaw-config'
 import { isCanonicalStationId, normalizeStationId, type ActionKind } from '@clawcontrol/core'
 
@@ -138,7 +138,7 @@ export async function PATCH(
     }
 
     if (protectedAction) {
-      const result = await enforceTypedConfirm({
+      const result = await enforceActionPolicy({
         actionKind: protectedAction,
         typedConfirmText,
       })
@@ -149,7 +149,7 @@ export async function PATCH(
             error: result.errorType,
             policy: result.policy,
           },
-          { status: result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403 }
+          { status: result.status ?? (result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403) }
         )
       }
 

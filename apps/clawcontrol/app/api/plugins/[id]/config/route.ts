@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { enforceTypedConfirm } from '@/lib/with-governor'
+import { enforceActionPolicy } from '@/lib/with-governor'
 import { getRepos } from '@/lib/repo'
 import { PluginUnsupportedError } from '@/lib/repo/plugins'
 import Ajv from 'ajv'
 import { classifyOpenClawError } from '@/lib/openclaw/error-shape'
 
-const ajv = new Ajv({ allErrors: true, strict: false })
+const ajv = new Ajv({ allErrors: true })
 
 /**
  * Validate config against schema if available
@@ -25,7 +25,9 @@ function validateConfig(
 
     if (!valid && validate.errors) {
       const errors = validate.errors.map((e) => {
-        const path = e.instancePath || '(root)'
+        const path = ((e as { instancePath?: string; dataPath?: string }).instancePath
+          || (e as { dataPath?: string }).dataPath
+          || '(root)')
         return `${path}: ${e.message}`
       })
       return { valid: false, errors }
@@ -79,7 +81,7 @@ export async function PUT(
   }
 
   // Enforce Governor - plugin.edit_config is danger level
-  const result = await enforceTypedConfirm({
+  const result = await enforceActionPolicy({
     actionKind: 'plugin.edit_config',
     typedConfirmText,
   })
@@ -90,7 +92,7 @@ export async function PUT(
         error: result.errorType,
         policy: result.policy,
       },
-      { status: result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403 }
+      { status: result.status ?? (result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403) }
     )
   }
 

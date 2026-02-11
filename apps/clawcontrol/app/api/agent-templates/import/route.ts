@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { promises as fsp } from 'node:fs'
 import { dirname } from 'node:path'
-import { enforceTypedConfirm } from '@/lib/with-governor'
+import { enforceActionPolicy } from '@/lib/with-governor'
 import { getRepos } from '@/lib/repo'
 import { validateWorkspacePath } from '@/lib/fs/path-policy'
 import { scanTemplates } from '@/lib/templates'
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
   const { bundle, typedConfirmText } = parsed
 
   // Enforce Governor - template.import
-  const result = await enforceTypedConfirm({
+  const result = await enforceActionPolicy({
     actionKind: 'template.import',
     typedConfirmText,
   })
@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
         error: result.errorType,
         policy: result.policy,
       },
-      { status: result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403 }
+      { status: result.status ?? (result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403) }
     )
   }
 

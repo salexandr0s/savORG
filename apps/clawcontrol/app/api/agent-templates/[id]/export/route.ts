@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { enforceTypedConfirm } from '@/lib/with-governor'
+import { enforceActionPolicy } from '@/lib/with-governor'
 import { getRepos } from '@/lib/repo'
 import { getTemplateById, getTemplateFiles, getTemplateFileContent } from '@/lib/templates'
 
@@ -24,7 +24,7 @@ export async function GET(
   const typedConfirmText = searchParams.get('confirm') || undefined
 
   // Enforce Governor - template.export
-  const result = await enforceTypedConfirm({
+  const result = await enforceActionPolicy({
     actionKind: 'template.export',
     typedConfirmText,
   })
@@ -35,7 +35,7 @@ export async function GET(
         error: result.errorType,
         policy: result.policy,
       },
-      { status: result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403 }
+      { status: result.status ?? (result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403) }
     )
   }
 

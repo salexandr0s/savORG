@@ -133,7 +133,7 @@ async function loadRouteModule(): Promise<{ route: RouteModule; repos: MockRepos
   }))
 
   vi.doMock('@/lib/with-governor', () => ({
-    enforceTypedConfirm: vi.fn(async ({ typedConfirmText }: { typedConfirmText?: string }) => {
+    enforceActionPolicy: vi.fn(async ({ typedConfirmText }: { typedConfirmText?: string }) => {
       if (typedConfirmText === 'CONFIRM') {
         return { allowed: true, policy: {} }
       }

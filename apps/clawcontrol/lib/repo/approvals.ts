@@ -20,7 +20,7 @@ export interface CreateApprovalInput {
 
 export interface UpdateApprovalInput {
   status: 'approved' | 'rejected'
-  resolvedBy?: string
+  resolvedBy: string
 }
 
 export interface ApprovalsRepo {
@@ -65,6 +65,23 @@ export function createDbApprovalsRepo(): ApprovalsRepo {
     },
 
     async create(input: CreateApprovalInput): Promise<ApprovalDTO> {
+      if (input.operationId) {
+        const operation = await prisma.operation.findUnique({
+          where: { id: input.operationId },
+          select: { id: true, workOrderId: true },
+        })
+
+        if (!operation) {
+          throw new Error(`APPROVAL_OPERATION_NOT_FOUND: ${input.operationId}`)
+        }
+
+        if (operation.workOrderId !== input.workOrderId) {
+          throw new Error(
+            `APPROVAL_OPERATION_WORKORDER_MISMATCH: ${input.operationId}:${input.workOrderId}`
+          )
+        }
+      }
+
       const row = await prisma.approval.create({
         data: {
           workOrderId: input.workOrderId,
@@ -85,7 +102,7 @@ export function createDbApprovalsRepo(): ApprovalsRepo {
         where: { id },
         data: {
           status: input.status,
-          resolvedBy: input.resolvedBy || 'user',
+          resolvedBy: input.resolvedBy,
           resolvedAt: new Date(),
         },
       })

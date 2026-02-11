@@ -7,11 +7,21 @@
 import { prisma, RESERVED_WORK_ORDER_IDS } from '../db'
 import { indexWorkOrder } from '../db/fts'
 import { formatOwnerLabel, normalizeActorRef, normalizeOwnerRef, type ActorType, type OwnerType } from '../agent-identity'
+import type { WorkOrderState } from '@clawcontrol/core'
 import type {
   WorkOrderDTO,
   WorkOrderWithOpsDTO,
   WorkOrderFilters,
 } from './types'
+
+const VALID_WORK_ORDER_STATES = new Set<WorkOrderState>([
+  'planned',
+  'active',
+  'blocked',
+  'review',
+  'shipped',
+  'cancelled',
+])
 
 // ============================================================================
 // REPOSITORY INTERFACE
@@ -176,44 +186,48 @@ export function createDbWorkOrdersRepo(): WorkOrdersRepo {
     },
 
     async create(input: CreateWorkOrderInput): Promise<WorkOrderDTO> {
-      // Generate next code (ignore reserved/system work orders and any non-numeric codes)
-      const existingCodes = await prisma.workOrder.findMany({
-        where: {
-          id: { notIn: RESERVED_WORK_ORDER_IDS },
-          code: { startsWith: 'WO-' },
-        },
-        select: { code: true },
-      })
-
-      let maxNum = 0
-      for (const c of existingCodes) {
-        const match = /^WO-(\d+)$/.exec(c.code)
-        if (!match) continue
-        const n = parseInt(match[1], 10)
-        if (Number.isFinite(n) && n > maxNum) maxNum = n
-      }
-
-      const code = `WO-${String(maxNum + 1).padStart(3, '0')}`
       const ownerRef = normalizeOwnerRef({
         owner: input.owner,
         ownerType: input.ownerType,
         ownerAgentId: input.ownerAgentId,
       })
 
-      const row = await prisma.workOrder.create({
-        data: {
-          code,
-          title: input.title,
-          goalMd: input.goalMd,
-          state: 'planned',
-          priority: input.priority || 'P2',
-          owner: ownerRef.owner,
-          ownerType: ownerRef.ownerType,
-          ownerAgentId: ownerRef.ownerAgentId,
-          tags: serializeTags(input.tags),
-          workflowId: input.workflowId ?? null,
-          currentStage: 0,
-        },
+      const row = await prisma.$transaction(async (tx) => {
+        await tx.workOrderSequence.upsert({
+          where: { id: 1 },
+          create: { id: 1, nextValue: 1 },
+          update: {},
+        })
+
+        const sequenceRows = await tx.$queryRaw<Array<{ allocated: number }>>`
+          UPDATE work_order_sequences
+          SET next_value = next_value + 1
+          WHERE id = 1
+          RETURNING next_value - 1 AS allocated
+        `
+
+        const allocated = Number(sequenceRows[0]?.allocated ?? 0)
+        if (!Number.isFinite(allocated) || allocated <= 0) {
+          throw new Error('Failed to allocate work order code sequence')
+        }
+
+        const code = `WO-${String(allocated).padStart(3, '0')}`
+
+        return tx.workOrder.create({
+          data: {
+            code,
+            title: input.title,
+            goalMd: input.goalMd,
+            state: 'planned',
+            priority: input.priority || 'P2',
+            owner: ownerRef.owner,
+            ownerType: ownerRef.ownerType,
+            ownerAgentId: ownerRef.ownerAgentId,
+            tags: serializeTags(input.tags),
+            workflowId: input.workflowId ?? null,
+            currentStage: 0,
+          },
+        })
       })
 
       // Index for search
@@ -229,6 +243,9 @@ export function createDbWorkOrdersRepo(): WorkOrdersRepo {
     async update(id: string, input: UpdateWorkOrderInput): Promise<WorkOrderDTO | null> {
       const existing = await prisma.workOrder.findUnique({ where: { id } })
       if (!existing) return null
+      if (input.state !== undefined && !VALID_WORK_ORDER_STATES.has(input.state as WorkOrderState)) {
+        throw new Error(`INVALID_WORK_ORDER_STATE: ${input.state}`)
+      }
 
       const ownerRef = normalizeOwnerRef({
         owner: input.owner !== undefined ? input.owner : existing.owner,
@@ -275,6 +292,9 @@ export function createDbWorkOrdersRepo(): WorkOrdersRepo {
       actorType?: ActorType,
       actorAgentId?: string | null
     ): Promise<StateTransitionResult | null> {
+      if (!VALID_WORK_ORDER_STATES.has(newState as WorkOrderState)) {
+        throw new Error(`INVALID_WORK_ORDER_STATE: ${newState}`)
+      }
       return prisma.$transaction(async (tx) => {
         // Get current state
         const existing = await tx.workOrder.findUnique({ where: { id } })

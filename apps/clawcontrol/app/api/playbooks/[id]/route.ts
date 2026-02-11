@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { enforceTypedConfirm } from '@/lib/with-governor'
+import { enforceActionPolicy } from '@/lib/with-governor'
 import { getPlaybook, updatePlaybook } from '@/lib/fs/playbooks-fs'
 import type { ActionKind } from '@clawcontrol/core'
 
@@ -46,7 +46,7 @@ export async function PUT(
   }
 
   // Enforce typed confirmation for playbook edits
-  const result = await enforceTypedConfirm({
+  const result = await enforceActionPolicy({
     actionKind: PLAYBOOK_ACTION,
     typedConfirmText,
   })
@@ -57,7 +57,7 @@ export async function PUT(
         error: result.errorType,
         policy: result.policy,
       },
-      { status: result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403 }
+      { status: result.status ?? (result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403) }
     )
   }
 

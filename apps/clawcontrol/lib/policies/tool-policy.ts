@@ -183,7 +183,16 @@ export function withToolPolicy<
   TRequest extends Request,
   TContext = unknown,
   TResult extends Response | Promise<Response> = Promise<Response>
->(handler: (req: TRequest, ctx: TContext) => TResult) {
+>(
+  handler: (req: TRequest, ctx: TContext) => TResult,
+  options?: {
+    resolveRequest?: (
+      req: TRequest,
+      ctx: TContext,
+      body: unknown
+    ) => ToolRequest | null | Promise<ToolRequest | null>
+  }
+) {
   return async (req: TRequest, ctx: TContext): Promise<Response> => {
     let body: unknown = null
 
@@ -193,23 +202,28 @@ export function withToolPolicy<
       // Ignore non-JSON
     }
 
-    const maybe = body as Partial<ToolRequest> | null
+    const fallbackBody = body as Partial<ToolRequest> | null
+    const resolved = options?.resolveRequest
+      ? await options.resolveRequest(req, ctx, body)
+      : (fallbackBody?.tool
+        ? {
+            agentId: fallbackBody.agentId ? String(fallbackBody.agentId) : undefined,
+            agentName: fallbackBody.agentName ? String(fallbackBody.agentName) : undefined,
+            tool: String(fallbackBody.tool),
+            args: (fallbackBody as { args?: unknown }).args as Record<string, unknown> | undefined,
+            operationId: fallbackBody.operationId ? String(fallbackBody.operationId) : undefined,
+            workOrderId: fallbackBody.workOrderId ? String(fallbackBody.workOrderId) : undefined,
+          }
+        : null)
 
-    if ((maybe?.agentId || maybe?.agentName) && maybe?.tool) {
-      const result = await checkToolPolicy({
-        agentId: maybe.agentId ? String(maybe.agentId) : undefined,
-        agentName: maybe.agentName ? String(maybe.agentName) : undefined,
-        tool: String(maybe.tool),
-        args: (maybe as { args?: unknown }).args as Record<string, unknown> | undefined,
-        operationId: maybe.operationId ? String(maybe.operationId) : undefined,
-        workOrderId: maybe.workOrderId ? String(maybe.workOrderId) : undefined,
-      })
+    if (resolved && (resolved.agentId || resolved.agentName) && resolved.tool) {
+      const result = await checkToolPolicy(resolved)
 
       if (!result.allowed) {
         const resolvedAgentId = result.resolvedAgentId
-        const actorToken = resolvedAgentId ?? String(maybe.agentId ?? maybe.agentName ?? 'unknown')
-        const entityType = maybe.operationId ? 'operation' : 'agent'
-        const entityId = maybe.operationId ? String(maybe.operationId) : actorToken
+        const actorToken = resolvedAgentId ?? String(resolved.agentId ?? resolved.agentName ?? 'unknown')
+        const entityType = resolved.operationId ? 'operation' : 'agent'
+        const entityId = resolved.operationId ? String(resolved.operationId) : actorToken
 
         await prisma.activity
           .create({
@@ -220,12 +234,12 @@ export function withToolPolicy<
               actorAgentId: resolvedAgentId ?? null,
               entityType,
               entityId,
-              summary: `Tool policy denied: ${maybe.tool}`,
+              summary: `Tool policy denied: ${resolved.tool}`,
               payloadJson: JSON.stringify({
-                agentId: resolvedAgentId ?? maybe.agentId ?? null,
-                agentName: maybe.agentName ?? result.resolvedAgentName ?? null,
-                tool: maybe.tool,
-                args: (maybe as { args?: unknown }).args ?? null,
+                agentId: resolvedAgentId ?? resolved.agentId ?? null,
+                agentName: resolved.agentName ?? result.resolvedAgentName ?? null,
+                tool: resolved.tool,
+                args: resolved.args ?? null,
                 reason: result.reason ?? null,
               }),
             },

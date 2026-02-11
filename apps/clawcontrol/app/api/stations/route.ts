@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRepos } from '@/lib/repo'
-import { enforceTypedConfirm } from '@/lib/with-governor'
+import { enforceActionPolicy } from '@/lib/with-governor'
 import { STATION_ICON_SET } from '@/lib/stations/icon-map'
 import {
   areStationMutationsEnabled,
@@ -88,14 +88,14 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}))
   const typedConfirmText = typeof body?.typedConfirmText === 'string' ? body.typedConfirmText : undefined
 
-  const enforcement = await enforceTypedConfirm({
+  const enforcement = await enforceActionPolicy({
     actionKind: 'station.create',
     typedConfirmText,
   })
   if (!enforcement.allowed) {
     return NextResponse.json(
       { error: enforcement.errorType, policy: enforcement.policy },
-      { status: enforcement.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403 }
+      { status: enforcement.status ?? (enforcement.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403) }
     )
   }
 

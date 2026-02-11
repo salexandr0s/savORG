@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { enforceTypedConfirm } from '@/lib/with-governor'
+import { enforceActionPolicy } from '@/lib/with-governor'
 import { getRepos } from '@/lib/repo'
 import { PluginUnsupportedError } from '@/lib/repo/plugins'
 import type { ActionKind } from '@clawcontrol/core'
@@ -50,7 +50,7 @@ export async function PATCH(
   }
 
   // Enforce Governor
-  const result = await enforceTypedConfirm({
+  const result = await enforceActionPolicy({
     actionKind,
     typedConfirmText,
   })
@@ -61,7 +61,7 @@ export async function PATCH(
         error: result.errorType,
         policy: result.policy,
       },
-      { status: result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403 }
+      { status: result.status ?? (result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403) }
     )
   }
 
@@ -140,7 +140,7 @@ export async function DELETE(
   }
 
   // Enforce Governor - plugin.uninstall is danger level
-  const result = await enforceTypedConfirm({
+  const result = await enforceActionPolicy({
     actionKind: 'plugin.uninstall',
     typedConfirmText,
   })
@@ -151,7 +151,7 @@ export async function DELETE(
         error: result.errorType,
         policy: result.policy,
       },
-      { status: result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403 }
+      { status: result.status ?? (result.errorType === 'TYPED_CONFIRM_REQUIRED' ? 428 : 403) }
     )
   }
 
