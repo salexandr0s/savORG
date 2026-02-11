@@ -11,7 +11,7 @@ Thank you for your interest in contributing! This document provides guidelines f
 3. Install dependencies: `npm install`
 4. Create a branch: `git checkout -b feature/your-feature`
 
-See [docs/SETUP.md](docs/SETUP.md) for detailed setup instructions.
+See [README.md](README.md) for setup instructions and [mintlify/quickstart/first-run-setup.mdx](mintlify/quickstart/first-run-setup.mdx) for first-run details.
 
 ---
 
@@ -152,7 +152,7 @@ spawn('command', ['arg1', 'arg2'])
 exec(`command ${arg1} ${arg2}`)
 ```
 
-See [docs/SECURITY.md](docs/SECURITY.md) for full security guidelines.
+See [mintlify/security/approvals-typed-confirm.mdx](mintlify/security/approvals-typed-confirm.mdx) and [mintlify/security/path-safety-allowlist.mdx](mintlify/security/path-safety-allowlist.mdx) for full security guidelines.
 
 ---
 
@@ -204,13 +204,13 @@ Include:
 1. Add action kind to `packages/core/src/governor/index.ts`
 2. Set appropriate policy level
 3. Add prompts for CONFIRM actions
-4. Document in `docs/SECURITY.md`
+4. Document in `mintlify/security/approvals-typed-confirm.mdx`
 
 ### Workspace Directories
 
 1. Update allowlisted directories in `apps/clawcontrol/lib/fs/path-policy.ts`
 2. If needed, update root-level allowlisted files in the same module
-3. Update `docs/PATH_POLICY.md`
+3. Update `mintlify/security/path-safety-allowlist.mdx`
 
 ---
 
@@ -237,8 +237,8 @@ Automated tests use Vitest (workspace-managed via Turbo).
 
 - New features → Update README and relevant docs
 - API changes → Update API documentation
-- Security changes → Update SECURITY.md
-- Path policy changes → Update PATH_POLICY.md
+- Security changes → Update relevant files under `mintlify/security/`
+- Path policy changes → Update `mintlify/security/path-safety-allowlist.mdx`
 
 ### Documentation Style
 
