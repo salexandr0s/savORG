@@ -209,14 +209,64 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>
 }
 
-function resolveHierarchyRoot(): string {
+function pathKey(value: string): string {
+  return process.platform === 'win32' ? value.toLowerCase() : value
+}
+
+function uniquePaths(paths: string[]): string[] {
+  const seen = new Set<string>()
+  const output: string[] = []
+
+  for (const rawPath of paths) {
+    const normalized = resolve(rawPath)
+    const key = pathKey(normalized)
+    if (seen.has(key)) continue
+    seen.add(key)
+    output.push(normalized)
+  }
+
+  return output
+}
+
+function firstExistingPath(candidates: string[]): string | null {
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate
+  }
+  return null
+}
+
+function isMissingFileError(message: string): boolean {
+  const lowered = message.toLowerCase()
+  return lowered.includes('enoent') || lowered.includes('no such file or directory')
+}
+
+function isRuntimeCliUnavailableError(message: string): boolean {
+  const lowered = message.toLowerCase()
+  return (
+    lowered.includes('cli not found')
+    || lowered.includes('openclaw cli not available')
+    || lowered.includes('command not found')
+    || lowered.includes('spawn enoent')
+    || lowered.includes('enoent')
+  )
+}
+
+interface ResolveHierarchySourcePathsOptions {
+  cwd?: string
+  env?: Partial<Record<'OPENCLAW_WORKSPACE' | 'CLAWCONTROL_WORKSPACE_ROOT' | 'WORKSPACE_ROOT', string | undefined>>
+}
+
+export function resolveHierarchySourcePaths(
+  options: ResolveHierarchySourcePathsOptions = {}
+): { workspaceRoot: string; yamlPath: string; fallbackPath: string } {
+  const env = options.env ?? process.env
   const envCandidates = [
-    process.env.OPENCLAW_WORKSPACE,
-    process.env.CLAWCONTROL_WORKSPACE_ROOT,
-    process.env.WORKSPACE_ROOT,
+    env.OPENCLAW_WORKSPACE,
+    env.CLAWCONTROL_WORKSPACE_ROOT,
+    env.WORKSPACE_ROOT,
   ].filter((value): value is string => Boolean(compactString(value)))
 
-  const cwd = process.cwd()
+  const cwd = options.cwd ?? process.cwd()
   const cwdCandidates = [
     cwd,
     resolve(cwd, '..'),
@@ -226,21 +276,38 @@ function resolveHierarchyRoot(): string {
     resolve(cwd, '../../../../..'),
   ]
 
-  const candidates = [...envCandidates, ...cwdCandidates]
+  const nestedProjectCandidates = envCandidates.flatMap((candidate) => [
+    join(candidate, 'projects', 'ClawControl'),
+    join(candidate, 'projects', 'clawcontrol'),
+  ])
+  const candidates = uniquePaths([...envCandidates, ...nestedProjectCandidates, ...cwdCandidates])
 
-  for (const candidate of candidates) {
-    if (existsSync(join(candidate, 'clawcontrol.config.yaml'))) {
-      return candidate
-    }
+  const workspaceRoot = candidates[0] ?? cwd
+  const yamlCandidates = uniquePaths(
+    candidates.flatMap((candidate) => [
+      join(candidate, 'clawcontrol.config.yaml'),
+      join(candidate, 'config', 'clawcontrol.config.yaml'),
+    ])
+  )
+  const fallbackCandidates = uniquePaths(
+    candidates.flatMap((candidate) => [
+      join(candidate, 'openclaw', 'openclaw.json5'),
+      join(candidate, 'openclaw', 'openclaw.json'),
+      join(candidate, 'openclaw.json5'),
+      join(candidate, 'openclaw.json'),
+      join(candidate, '.openclaw', 'openclaw.json5'),
+      join(candidate, '.openclaw', 'openclaw.json'),
+    ])
+  )
+
+  const yamlPath = firstExistingPath(yamlCandidates) ?? join(workspaceRoot, 'clawcontrol.config.yaml')
+  const fallbackPath = firstExistingPath(fallbackCandidates) ?? join(workspaceRoot, 'openclaw', 'openclaw.json5')
+
+  return {
+    workspaceRoot,
+    yamlPath,
+    fallbackPath,
   }
-
-  for (const candidate of candidates) {
-    if (existsSync(join(candidate, 'AGENTS.md'))) {
-      return candidate
-    }
-  }
-
-  return cwd
 }
 
 function hasAnyToken(tokens: Set<string>, checks: string[]): boolean {
@@ -872,9 +939,7 @@ export function buildAgentHierarchyGraph(input: BuildAgentHierarchyInput): Agent
 }
 
 export async function getAgentHierarchyData(): Promise<AgentHierarchyData> {
-  const workspaceRoot = resolveHierarchyRoot()
-  const yamlPath = join(workspaceRoot, 'clawcontrol.config.yaml')
-  const fallbackPath = join(workspaceRoot, 'openclaw', 'openclaw.json5')
+  const { yamlPath, fallbackPath } = resolveHierarchySourcePaths()
 
   const sourceStatus: AgentHierarchySourceStatus = {
     yaml: {
@@ -933,23 +998,28 @@ export async function getAgentHierarchyData(): Promise<AgentHierarchyData> {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     sourceStatus.yaml.error = message
-    initialWarnings.push({
-      code: 'source_unavailable',
-      source: 'clawcontrol_config_yaml',
-      message: `YAML source unavailable: ${message}`,
-    })
+    if (!isMissingFileError(message)) {
+      initialWarnings.push({
+        code: 'source_unavailable',
+        source: 'clawcontrol_config_yaml',
+        message: `YAML source unavailable: ${message}`,
+      })
+    }
   }
 
   let runtimeExtract: ToolOverlayResult | null = null
   const runtimeRes = await runCommandJson<unknown>('config.agents.list.json', { timeout: 30_000 })
+  const runtimeMissingCli = runtimeRes.error ? isRuntimeCliUnavailableError(runtimeRes.error) : false
 
   if (runtimeRes.error) {
     sourceStatus.runtime.error = runtimeRes.error
-    initialWarnings.push({
-      code: 'source_unavailable',
-      source: 'runtime_openclaw_agents_list',
-      message: `Runtime OpenClaw source unavailable: ${runtimeRes.error}`,
-    })
+    if (!runtimeMissingCli) {
+      initialWarnings.push({
+        code: 'source_unavailable',
+        source: 'runtime_openclaw_agents_list',
+        message: `Runtime OpenClaw source unavailable: ${runtimeRes.error}`,
+      })
+    }
   } else {
     sourceStatus.runtime.available = true
     runtimeExtract = extractRuntimeToolOverlay(runtimeRes.data)
@@ -964,19 +1034,23 @@ export async function getAgentHierarchyData(): Promise<AgentHierarchyData> {
       sourceStatus.fallback.available = true
       sourceStatus.fallback.used = true
 
-      initialWarnings.push({
-        code: 'runtime_unavailable_fallback_used',
-        source: 'openclaw_template_policy',
-        message: 'Runtime OpenClaw source unavailable, using fallback openclaw template policy',
-      })
+      if (!runtimeMissingCli) {
+        initialWarnings.push({
+          code: 'runtime_unavailable_fallback_used',
+          source: 'openclaw_template_policy',
+          message: 'Runtime OpenClaw source unavailable, using fallback openclaw template policy',
+        })
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       sourceStatus.fallback.error = message
-      initialWarnings.push({
-        code: 'source_unavailable',
-        source: 'openclaw_template_policy',
-        message: `Fallback template source unavailable: ${message}`,
-      })
+      if (!isMissingFileError(message)) {
+        initialWarnings.push({
+          code: 'source_unavailable',
+          source: 'openclaw_template_policy',
+          message: `Fallback template source unavailable: ${message}`,
+        })
+      }
     }
   }
 
