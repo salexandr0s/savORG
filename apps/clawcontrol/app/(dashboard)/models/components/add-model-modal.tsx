@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { Button, SegmentedToggle } from '@clawcontrol/ui'
 import { Modal } from '@/components/ui/modal'
 import {
   openclawModelsApi,
@@ -8,21 +9,32 @@ import {
   type ModelAuthMethod,
   HttpError,
 } from '@/lib/http'
-import { cn } from '@/lib/utils'
-import { ArrowLeft, KeyRound, Terminal } from 'lucide-react'
+import { ArrowLeft, KeyRound, Terminal, Copy, Check, Play } from 'lucide-react'
 import { LoadingSpinner } from '@/components/ui/loading-state'
 import { ProviderCard } from './provider-card'
 
 type Step = 'provider' | 'auth'
 
+declare global {
+  interface Window {
+    clawcontrolDesktop?: {
+      runModelAuthLogin?: (providerId: string) => Promise<{ ok: boolean; message?: string }>
+    }
+  }
+}
+
 export function AddModelModal({
   open,
   onClose,
   onAdded,
+  initialProviderId,
+  initialAuthMethod,
 }: {
   open: boolean
   onClose: () => void
   onAdded: () => void | Promise<void>
+  initialProviderId?: string | null
+  initialAuthMethod?: ModelAuthMethod | null
 }) {
   const [step, setStep] = useState<Step>('provider')
   const [providers, setProviders] = useState<AvailableModelProvider[]>([])
@@ -33,6 +45,10 @@ export function AddModelModal({
   const [authMethod, setAuthMethod] = useState<ModelAuthMethod>('apiKey')
   const [apiKey, setApiKey] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isRunningOauthCommand, setIsRunningOauthCommand] = useState(false)
+  const [canRunOauthCommand, setCanRunOauthCommand] = useState(false)
+  const [oauthCommandCopied, setOauthCommandCopied] = useState(false)
+  const [oauthNotice, setOauthNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const selectedProvider = useMemo(
@@ -48,16 +64,42 @@ export function AddModelModal({
     setAuthMethod('apiKey')
     setApiKey('')
     setProviderSearch('')
+    setIsRunningOauthCommand(false)
+    setOauthCommandCopied(false)
+    setOauthNotice(null)
     setError(null)
+    setCanRunOauthCommand(
+      typeof window !== 'undefined'
+      && typeof window.clawcontrolDesktop?.runModelAuthLogin === 'function'
+    )
 
     let cancelled = false
+
+    const resolveAuthMethod = (
+      provider: AvailableModelProvider,
+      preferredMethod?: ModelAuthMethod | null
+    ): ModelAuthMethod => {
+      if (preferredMethod === 'oauth' && provider.auth.oauth) return 'oauth'
+      if (preferredMethod === 'apiKey') return 'apiKey'
+      return provider.auth.oauth ? 'oauth' : 'apiKey'
+    }
 
     async function load() {
       setIsLoadingProviders(true)
       try {
         const res = await openclawModelsApi.getAvailable()
         if (cancelled) return
-        setProviders(res.data.providers ?? [])
+        const nextProviders = res.data.providers ?? []
+        setProviders(nextProviders)
+
+        if (initialProviderId) {
+          const initialProvider = nextProviders.find((provider) => provider.id === initialProviderId)
+          if (initialProvider?.supported) {
+            setSelectedProviderId(initialProvider.id)
+            setStep('auth')
+            setAuthMethod(resolveAuthMethod(initialProvider, initialAuthMethod))
+          }
+        }
       } catch (err) {
         if (cancelled) return
         setProviders([])
@@ -72,7 +114,13 @@ export function AddModelModal({
     return () => {
       cancelled = true
     }
-  }, [open])
+  }, [open, initialProviderId, initialAuthMethod])
+
+  useEffect(() => {
+    if (!oauthCommandCopied) return
+    const timeoutId = window.setTimeout(() => setOauthCommandCopied(false), 1200)
+    return () => window.clearTimeout(timeoutId)
+  }, [oauthCommandCopied])
 
   const supportedProviders = useMemo(
     () => providers.filter((p) => p.supported),
@@ -110,8 +158,35 @@ export function AddModelModal({
     if (!oauthCommand) return
     try {
       await navigator.clipboard.writeText(oauthCommand)
+      setOauthCommandCopied(true)
+      setOauthNotice(null)
     } catch {
-      // Ignore clipboard failures; user can copy manually.
+      setError('Failed to copy command')
+    }
+  }
+
+  const handleRunOauthCommand = async () => {
+    if (!selectedProvider) return
+    const runLogin = window.clawcontrolDesktop?.runModelAuthLogin
+    if (typeof runLogin !== 'function') {
+      setError('Run in Terminal is only available in the desktop app.')
+      return
+    }
+
+    setIsRunningOauthCommand(true)
+    setError(null)
+    setOauthNotice(null)
+    try {
+      const result = await runLogin(selectedProvider.id)
+      if (!result.ok) {
+        setError(result.message ?? 'Failed to launch terminal command.')
+        return
+      }
+      setOauthNotice(result.message ?? 'Opened terminal. Complete OAuth there, then return and click Refresh.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to launch terminal command.')
+    } finally {
+      setIsRunningOauthCommand(false)
     }
   }
 
@@ -203,45 +278,30 @@ export function AddModelModal({
       {step === 'auth' && selectedProvider && (
         <div className="space-y-4">
           <div className="flex items-center gap-2">
-            <button
+            <Button
               type="button"
               onClick={handleBack}
-              disabled={isSubmitting}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-[var(--radius-md)] border border-bd-0 bg-bg-3 hover:bg-bg-2 text-fg-1 hover:text-fg-0 disabled:opacity-50"
+              disabled={isSubmitting || isRunningOauthCommand}
+              variant="secondary"
+              size="sm"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               Back
-            </button>
+            </Button>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setAuthMethod('apiKey')}
-              className={cn(
-                'px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] border transition-colors',
-                authMethod === 'apiKey'
-                  ? 'bg-status-info/10 text-status-info border-status-info/30'
-                  : 'bg-bg-3 text-fg-1 border-bd-0 hover:bg-bg-2 hover:text-fg-0'
-              )}
-            >
-              API Key
-            </button>
-            {selectedProvider.auth.oauth && (
-              <button
-                type="button"
-                onClick={() => setAuthMethod('oauth')}
-                className={cn(
-                  'px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] border transition-colors',
-                  authMethod === 'oauth'
-                    ? 'bg-status-info/10 text-status-info border-status-info/30'
-                    : 'bg-bg-3 text-fg-1 border-bd-0 hover:bg-bg-2 hover:text-fg-0'
-                )}
-              >
-                OAuth
-              </button>
-            )}
-          </div>
+          <SegmentedToggle
+            value={authMethod}
+            onChange={setAuthMethod}
+            tone="neutral"
+            size="sm"
+            className="w-fit"
+            ariaLabel="Auth method"
+            items={[
+              { value: 'apiKey', label: 'API Key' },
+              ...(selectedProvider.auth.oauth ? [{ value: 'oauth' as const, label: 'OAuth' }] : []),
+            ]}
+          />
 
           {authMethod === 'apiKey' && (
             <div className="space-y-3">
@@ -261,15 +321,16 @@ export function AddModelModal({
                     autoFocus
                   />
                 </div>
-                <button
+                <Button
                   type="button"
                   onClick={handleSubmitApiKey}
                   disabled={isSubmitting || !apiKey.trim()}
-                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-[var(--radius-md)] bg-status-info text-bg-0 hover:bg-status-info/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                  variant="primary"
+                  size="md"
                 >
                   {isSubmitting && <LoadingSpinner size="sm" />}
                   Add
-                </button>
+                </Button>
               </div>
               <p className="text-xs text-fg-3">
                 The key is written via OpenClaw&apos;s `models auth paste-token` and never stored by the UI.
@@ -283,26 +344,46 @@ export function AddModelModal({
                 <div className="flex items-start gap-2">
                   <Terminal className="w-4 h-4 text-fg-3 mt-0.5" />
                   <div className="min-w-0">
-                    <div className="text-sm text-fg-1">
+                    <div className="text-sm text-fg-1 mb-2">
                       OAuth login requires an interactive terminal.
                     </div>
-                    <div className="text-xs text-fg-3 mt-1 font-mono break-all">
+                    <pre className="text-xs text-fg-1 font-mono bg-bg-1 border border-bd-1 rounded-[var(--radius-md)] px-3 py-2 overflow-x-auto whitespace-pre-wrap break-all">
                       {oauthCommand}
-                    </div>
+                    </pre>
                   </div>
                 </div>
-                <div className="flex justify-end mt-3">
-                  <button
+                <div className="flex justify-end items-center gap-2 mt-3">
+                  {canRunOauthCommand && (
+                    <Button
+                      type="button"
+                      onClick={handleRunOauthCommand}
+                      variant="secondary"
+                      size="sm"
+                      disabled={isRunningOauthCommand}
+                    >
+                      {isRunningOauthCommand ? <LoadingSpinner size="sm" /> : <Play className="w-3.5 h-3.5" />}
+                      Run in Terminal
+                    </Button>
+                  )}
+                  <Button
                     type="button"
                     onClick={handleCopyOauthCommand}
-                    className="px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] border border-bd-0 bg-bg-3 hover:bg-bg-2 text-fg-1 hover:text-fg-0"
+                    variant="secondary"
+                    size="icon"
+                    title={oauthCommandCopied ? 'Copied' : 'Copy command'}
+                    aria-label={oauthCommandCopied ? 'Copied command' : 'Copy command'}
                   >
-                    Copy command
-                  </button>
+                    {oauthCommandCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  </Button>
                 </div>
               </div>
+              {oauthNotice && (
+                <p className="text-xs text-status-success">{oauthNotice}</p>
+              )}
               <p className="text-xs text-fg-3">
-                After completing OAuth, return here and click Refresh.
+                {canRunOauthCommand
+                  ? 'After completing OAuth, return here and click Refresh.'
+                  : 'Run this command in your terminal, then return here and click Refresh.'}
               </p>
             </div>
           )}

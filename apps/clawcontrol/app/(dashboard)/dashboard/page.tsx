@@ -67,7 +67,7 @@ export default async function DashboardPage() {
   }))
 
   return (
-    <Suspense fallback={<LoadingState height="md" />}>
+    <Suspense fallback={<LoadingState height="viewport" />}>
       <Dashboard
         workOrders={transformedWorkOrders}
         approvals={transformedApprovals}

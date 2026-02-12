@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { AlertTriangle, ShieldAlert, ShieldCheck, X, Terminal } from 'lucide-react'
+import { Button } from './button'
 
 // ============================================================================
 // TYPES
@@ -236,26 +237,22 @@ export function TypedConfirmModal({
 
         {/* Footer */}
         <div className="flex justify-end gap-2 p-4 border-t border-bd-0">
-          <button
+          <Button
             onClick={onClose}
             disabled={isLoading}
-            className="px-4 py-2 text-sm font-medium text-fg-1 bg-bg-3 rounded-[var(--radius-md)] hover:bg-bg-2 transition-colors disabled:opacity-50"
+            variant="secondary"
+            size="md"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={handleConfirm}
             disabled={isLoading || (confirmMode !== 'NONE' && !isValid())}
-            className={`px-4 py-2 text-sm font-medium rounded-[var(--radius-md)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-              riskLevel === 'danger'
-                ? 'bg-status-error text-white hover:bg-status-error/80'
-                : riskLevel === 'caution'
-                ? 'bg-status-warning text-black hover:bg-status-warning/80'
-                : 'bg-status-success text-white hover:bg-status-success/80'
-            }`}
+            variant={riskLevel === 'danger' ? 'danger' : 'primary'}
+            size="md"
           >
             {isLoading ? 'Processing...' : 'Confirm'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

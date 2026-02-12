@@ -1,18 +1,26 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { PageHeader, PageSection } from '@clawcontrol/ui'
+import { PageHeader, PageSection, Button } from '@clawcontrol/ui'
 import {
   modelsApi,
+  openclawModelsApi,
   type ModelListItem,
   type ModelStatusResponse,
   type AuthProfile,
-  type ProviderAuth,
+  type AvailableModelProvider,
+  type ModelAuthMethod,
   HttpError,
 } from '@/lib/http'
 import { LoadingState } from '@/components/ui/loading-state'
 import { cn } from '@/lib/utils'
 import { usePageReadyTiming } from '@/lib/perf/client-timing'
+import { ProviderLogo } from '@/components/provider-logo'
+import {
+  getAuthAction,
+  normalizeProviderAuthStates,
+  type NormalizedProviderAuth,
+} from './provider-auth-state'
 import {
   Cpu,
   Plus,
@@ -36,6 +44,7 @@ type ModelsState = {
   isRefreshing: boolean
   status: ModelStatusResponse | null
   models: ModelListItem[] | null
+  availableProviders: AvailableModelProvider[]
   error: string | null
 }
 
@@ -45,10 +54,13 @@ export function ModelsClient() {
     isRefreshing: false,
     status: null,
     models: null,
+    availableProviders: [],
     error: null,
   })
   const [expandedProviders, setExpandedProviders] = useState<Set<string>>(new Set())
   const [addModalOpen, setAddModalOpen] = useState(false)
+  const [addModalInitialProviderId, setAddModalInitialProviderId] = useState<string | null>(null)
+  const [addModalInitialAuthMethod, setAddModalInitialAuthMethod] = useState<ModelAuthMethod | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
   const fetchData = useCallback(async (isRefresh = false) => {
@@ -60,10 +72,11 @@ export function ModelsClient() {
     }))
 
     try {
-      // Fetch status and models list in parallel
-      const [statusResult, modelsResult] = await Promise.all([
+      // Fetch status, configured models, and auth-capable providers in parallel.
+      const [statusResult, modelsResult, availableProvidersResult] = await Promise.all([
         modelsApi.getStatus(),
         modelsApi.runAction('list'),
+        openclawModelsApi.getAvailable(),
       ])
 
       setState((prev) => ({
@@ -72,6 +85,7 @@ export function ModelsClient() {
         isRefreshing: false,
         status: statusResult.data.status,
         models: (modelsResult.data as { count: number; models: ModelListItem[] }).models,
+        availableProviders: availableProvidersResult.data.providers ?? [],
       }))
     } catch (err) {
       const message = err instanceof HttpError ? err.message : 'Failed to fetch models'
@@ -82,6 +96,18 @@ export function ModelsClient() {
         error: message,
       }))
     }
+  }, [])
+
+  const openAddProviderModal = useCallback((providerId?: string, authMethod?: ModelAuthMethod) => {
+    setAddModalInitialProviderId(providerId ?? null)
+    setAddModalInitialAuthMethod(authMethod ?? null)
+    setAddModalOpen(true)
+  }, [])
+
+  const closeAddProviderModal = useCallback(() => {
+    setAddModalOpen(false)
+    setAddModalInitialProviderId(null)
+    setAddModalInitialAuthMethod(null)
   }, [])
 
   useEffect(() => {
@@ -100,7 +126,7 @@ export function ModelsClient() {
     })
   }
 
-  const { isLoading, isRefreshing, status, models, error } = state
+  const { isLoading, isRefreshing, status, models, availableProviders, error } = state
   usePageReadyTiming('models', !isLoading)
 
   // Group models by provider
@@ -111,9 +137,24 @@ export function ModelsClient() {
     return acc
   }, {} as Record<string, ModelListItem[]>) || {}
 
-  // Get provider auth status
-  const getProviderAuth = (provider: string): ProviderAuth | undefined => {
-    return status?.auth.oauth.providers.find((p) => p.provider === provider)
+  const modelProviders = Object.keys(modelsByProvider)
+  const normalizedAuthRows = status
+    ? normalizeProviderAuthStates({
+      status,
+      modelProviders,
+      availableProviders,
+    })
+    : []
+  const authByProvider = new Map(normalizedAuthRows.map((providerAuth) => [providerAuth.provider, providerAuth]))
+  const authOnlyProviders = normalizedAuthRows
+    .map((providerAuth) => providerAuth.provider)
+    .filter((provider) => !modelProviders.includes(provider))
+  const providersToRender = [...modelProviders, ...authOnlyProviders]
+
+  const handleAuthRemediation = (providerAuth: NormalizedProviderAuth) => {
+    const action = getAuthAction(providerAuth.status, providerAuth.supportsOauth)
+    if (!action) return
+    openAddProviderModal(providerAuth.provider, action.authMethod)
   }
 
   return (
@@ -123,29 +164,24 @@ export function ModelsClient() {
         subtitle="View and manage AI model configuration"
         actions={
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setAddModalOpen(true)}
-              className={cn(
-                'flex items-center gap-2 px-3 py-1.5 rounded-[var(--radius-sm)] text-sm font-medium transition-colors',
-                'bg-status-info text-bg-0 hover:bg-status-info/90'
-              )}
+            <Button
+              onClick={() => openAddProviderModal()}
+              variant="primary"
+              size="md"
             >
               <Plus className="w-4 h-4" />
               Add Model
-            </button>
+            </Button>
 
-            <button
+            <Button
               onClick={() => fetchData(true)}
               disabled={isRefreshing}
-              className={cn(
-                'flex items-center gap-2 px-3 py-1.5 rounded-[var(--radius-sm)] text-sm font-medium transition-colors',
-                'bg-bg-3 text-fg-0 hover:bg-bg-2',
-                'disabled:opacity-50 disabled:cursor-not-allowed'
-              )}
+              variant="secondary"
+              size="md"
             >
               <RefreshCw className={cn('w-4 h-4', isRefreshing && 'animate-spin')} />
               Refresh
-            </button>
+            </Button>
           </div>
         }
       />
@@ -207,10 +243,17 @@ export function ModelsClient() {
           </div>
 
           {/* Auth Status */}
-          <PageSection title="Authentication Status" description="Provider authentication and OAuth status">
+          <PageSection
+            title="Provider Authentication"
+            description="Credential health per provider. Fix missing/expired providers directly from this section."
+          >
             <div className="space-y-2">
-              {status.auth.oauth.providers.map((providerAuth) => (
-                <ProviderAuthCard key={providerAuth.provider} providerAuth={providerAuth} />
+              {normalizedAuthRows.map((providerAuth) => (
+                <ProviderAuthCard
+                  key={providerAuth.provider}
+                  providerAuth={providerAuth}
+                  onAuthenticate={handleAuthRemediation}
+                />
               ))}
               {status.auth.missingProvidersInUse.length > 0 && (
                 <div className="p-3 rounded-[var(--radius-md)] bg-status-warning/10 flex items-center gap-3">
@@ -227,10 +270,14 @@ export function ModelsClient() {
           </PageSection>
 
           {/* Models by Provider */}
-          <PageSection title="Models" description="Available models organized by provider">
+          <PageSection
+            title="Configured Models"
+            description="Model inventory grouped by provider. Model presence and auth status are related but tracked independently."
+          >
             <div className="space-y-2">
-              {Object.entries(modelsByProvider).map(([provider, providerModels]) => {
-                const providerAuth = getProviderAuth(provider)
+              {providersToRender.map((provider) => {
+                const providerModels = modelsByProvider[provider] ?? []
+                const providerAuth = authByProvider.get(provider)
                 const isExpanded = expandedProviders.has(provider)
 
                 return (
@@ -245,6 +292,7 @@ export function ModelsClient() {
                       ) : (
                         <ChevronRight className="w-4 h-4 text-fg-3" />
                       )}
+                      <ProviderLogo provider={provider} size="sm" />
                       <span className="font-medium text-fg-0">{provider}</span>
                       <span className="text-xs text-fg-3">
                         {providerModels.length} model{providerModels.length !== 1 ? 's' : ''}
@@ -257,16 +305,22 @@ export function ModelsClient() {
                     {/* Models List */}
                     {isExpanded && (
                       <div className="bg-bg-2/50">
-                        {providerModels.map((model, idx) => (
-                          <ModelRow key={model.key} model={model} isLast={idx === providerModels.length - 1} />
-                        ))}
+                        {providerModels.length > 0 ? (
+                          providerModels.map((model, idx) => (
+                            <ModelRow key={model.key} model={model} isLast={idx === providerModels.length - 1} />
+                          ))
+                        ) : (
+                          <div className="px-4 py-3 text-xs text-fg-3">
+                            No models configured for this provider.
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
                 )
               })}
 
-              {Object.keys(modelsByProvider).length === 0 && (
+              {providersToRender.length === 0 && (
                 <div className="p-6 text-center text-fg-2">
                   <Cpu className="w-12 h-12 mx-auto mb-2 text-fg-3" />
                   <p>No models configured</p>
@@ -294,9 +348,11 @@ export function ModelsClient() {
 
       <AddModelModal
         open={addModalOpen}
-        onClose={() => setAddModalOpen(false)}
+        onClose={closeAddProviderModal}
+        initialProviderId={addModalInitialProviderId}
+        initialAuthMethod={addModalInitialAuthMethod}
         onAdded={async () => {
-          setNotice('Provider added')
+          setNotice('Provider authentication updated')
           setTimeout(() => setNotice(null), 2500)
           await fetchData(true)
         }}
@@ -309,8 +365,15 @@ export function ModelsClient() {
 // SUBCOMPONENTS
 // ============================================================================
 
-function ProviderAuthCard({ providerAuth }: { providerAuth: ProviderAuth }) {
-  const { provider, status, profiles, remainingMs } = providerAuth
+function ProviderAuthCard({
+  providerAuth,
+  onAuthenticate,
+}: {
+  providerAuth: NormalizedProviderAuth
+  onAuthenticate: (providerAuth: NormalizedProviderAuth) => void
+}) {
+  const { provider, status, profiles, remainingMs, hasConfiguredAuth, supportsOauth } = providerAuth
+  const authAction = getAuthAction(status, supportsOauth)
 
   const statusColors = {
     ok: 'bg-status-success/10',
@@ -351,6 +414,7 @@ function ProviderAuthCard({ providerAuth }: { providerAuth: ProviderAuth }) {
       <StatusIcon className={cn('w-5 h-5 shrink-0', statusIconColors[status])} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
+          <ProviderLogo provider={provider} size="sm" />
           <span className="font-medium text-fg-0">{provider}</span>
           <AuthStatusBadge status={status} />
         </div>
@@ -364,13 +428,32 @@ function ProviderAuthCard({ providerAuth }: { providerAuth: ProviderAuth }) {
         {status === 'missing' && (
           <p className="text-xs text-fg-3 mt-1">No authentication configured for this provider</p>
         )}
+        {status === 'expired' && (
+          <p className="text-xs text-fg-2 mt-1">Authentication exists but has expired.</p>
+        )}
+        {status === 'ok' && profiles.length === 0 && hasConfiguredAuth && (
+          <p className="text-xs text-fg-2 mt-1">Authenticated via configured provider source.</p>
+        )}
       </div>
-      {remainingMs && status !== 'missing' && (
-        <div className="flex items-center gap-1 text-xs text-status-success shrink-0">
-          <Clock className="w-3 h-3" />
-          <span>{formatTimeRemaining(remainingMs)}</span>
+      <div className="shrink-0">
+        {remainingMs && status !== 'missing' && (
+          <div className="flex items-center justify-end gap-1 text-xs text-status-success">
+            <Clock className="w-3 h-3" />
+            <span>{formatTimeRemaining(remainingMs)}</span>
+          </div>
+        )}
+        {authAction && (
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => onAuthenticate(providerAuth)}
+            className="mt-2"
+          >
+            {authAction.label}
+          </Button>
         </div>
-      )}
+      </div>
     </div>
   )
 }

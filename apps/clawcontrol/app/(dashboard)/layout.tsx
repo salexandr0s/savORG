@@ -6,6 +6,7 @@ import { AppShell } from '@/components/shell/app-shell'
 import { SearchModal, useSearchModal } from '@/components/shell/search-modal'
 import { ProtectedActionProvider } from '@/components/protected-action-modal'
 import { SyncBanner } from '@/components/sync-banner'
+import { LoadingState } from '@/components/ui/loading-state'
 import { usePathname, useRouter } from 'next/navigation'
 
 const INIT_STATUS_CACHE_TTL_MS = 15_000
@@ -77,8 +78,8 @@ export default function DashboardLayout({
 
   if (!guardReady) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-bg-0 text-fg-2">
-        Loading setup status...
+      <div className="bg-bg-0">
+        <LoadingState height="viewport" label="Loading setup status..." />
       </div>
     )
   }

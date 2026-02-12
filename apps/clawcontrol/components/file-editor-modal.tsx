@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import { X, Save, FileCode, AlertCircle } from 'lucide-react'
 import { LoadingSpinner, LoadingState } from '@/components/ui/loading-state'
 import { workspaceApi } from '@/lib/http'
-import { TypedConfirmModal } from '@clawcontrol/ui'
+import { Button, TypedConfirmModal } from '@clawcontrol/ui'
 import { useProtectedAction } from '@/lib/hooks/useProtectedAction'
 import { useSettings } from '@/lib/settings-context'
 import type { ActionKind } from '@clawcontrol/core'
@@ -141,15 +141,12 @@ export function FileEditorModal({
               )}
             </div>
             <div className="flex items-center gap-2">
-              <button
+              <Button
                 onClick={handleSaveClick}
                 disabled={!hasChanges || saving}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-[var(--radius-md)] transition-colors',
-                  hasChanges
-                    ? 'bg-status-progress text-white hover:bg-status-progress/90'
-                    : 'bg-bg-3 text-fg-3 cursor-not-allowed'
-                )}
+                variant={hasChanges ? 'primary' : 'secondary'}
+                size="md"
+                className={cn(!hasChanges && 'text-fg-3')}
               >
                 {saving ? (
                   <LoadingSpinner size="md" />
@@ -157,7 +154,7 @@ export function FileEditorModal({
                   <Save className="w-4 h-4" />
                 )}
                 Save
-              </button>
+              </Button>
               <button
                 onClick={onClose}
                 className="p-2 hover:bg-bg-3 rounded-[var(--radius-md)] text-fg-2 transition-colors"

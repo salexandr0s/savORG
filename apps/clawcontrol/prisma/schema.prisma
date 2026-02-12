@@ -361,12 +361,55 @@ model ErrorSignatureAggregate {
   firstSeenAt        DateTime @map("first_seen_at")
   lastSeenAt         DateTime @map("last_seen_at")
   lastSampleSanitized String  @default("") @map("last_sample_sanitized")
+  lastSampleRawRedacted String @default("") @map("last_sample_raw_redacted")
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
+
+  dailyCounts        ErrorSignatureDailyAggregate[]
+  insight            ErrorSignatureInsight?
 
   @@index([count])
   @@index([lastSeenAt])
   @@map("error_signature_aggregates")
+}
+
+model ErrorSignatureDailyAggregate {
+  id            String   @id @default(cuid())
+  signatureHash String   @map("signature_hash")
+  day           DateTime
+  count         BigInt   @default(0)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  signature ErrorSignatureAggregate @relation(fields: [signatureHash], references: [signatureHash], onDelete: Cascade)
+
+  @@unique([signatureHash, day])
+  @@index([signatureHash])
+  @@index([day])
+  @@index([day, count])
+  @@map("error_signature_daily_aggregates")
+}
+
+model ErrorSignatureInsight {
+  id             String    @id @default(cuid())
+  signatureHash  String    @unique @map("signature_hash")
+  status         String    @default("pending") // pending|ready|failed
+  diagnosisMd    String    @default("") @map("diagnosis_md")
+  failureReason  String?   @map("failure_reason")
+  sourceAgentId  String?   @map("source_agent_id")
+  sourceAgentName String?  @map("source_agent_name")
+  inputHash      String    @default("") @map("input_hash")
+  generatedAt    DateTime? @map("generated_at")
+  lastAttemptAt  DateTime? @map("last_attempt_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  signature ErrorSignatureAggregate @relation(fields: [signatureHash], references: [signatureHash], onDelete: Cascade)
+
+  @@index([status])
+  @@index([generatedAt])
+  @@index([lastAttemptAt])
+  @@map("error_signature_insights")
 }
 
 model ErrorDailyAggregate {

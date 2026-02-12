@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { yaml } from '@codemirror/lang-yaml'
 import { oneDark } from '@codemirror/theme-one-dark'
+import { Button } from '@clawcontrol/ui'
 import { cn } from '@/lib/utils'
 import { LoadingSpinner } from '@/components/ui/loading-state'
 import {
@@ -285,15 +286,12 @@ export function YamlEditor({
 
           {/* Save */}
           {onSave && !readOnly && (
-            <button
+            <Button
               onClick={handleSave}
               disabled={!canSave}
-              className={cn(
-                'flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-[var(--radius-sm)] transition-colors disabled:opacity-50',
-                canSave
-                  ? 'bg-status-info text-white hover:bg-status-info/90'
-                  : 'text-fg-2 hover:text-fg-1 hover:bg-bg-3'
-              )}
+              variant={canSave ? 'primary' : 'secondary'}
+              size="xs"
+              className={cn(!canSave && 'text-fg-2')}
               title="Save (Cmd/Ctrl+S)"
             >
               {isSaving ? (
@@ -304,7 +302,7 @@ export function YamlEditor({
                 <Check className="w-3.5 h-3.5" />
               )}
               {isSaving ? 'Saving...' : hasChanges ? 'Save' : 'Saved'}
-            </button>
+            </Button>
           )}
         </div>
       </div>

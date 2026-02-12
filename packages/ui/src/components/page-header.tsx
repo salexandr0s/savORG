@@ -1,6 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
+import { Button, buttonVariants } from './button'
 
 interface PageHeaderProps {
   title: string
@@ -133,27 +134,16 @@ export function ActionButton({
   disabled = false,
   className,
 }: ActionButtonProps) {
-  const variantClasses = {
-    primary: 'bg-status-info text-bg-0 hover:bg-status-info/90',
-    secondary: 'bg-bg-3 text-fg-0 hover:bg-bg-3/80 border border-bd-0',
-    ghost: 'text-fg-1 hover:text-fg-0 hover:bg-bg-3',
-  }
-
   return (
-    <button
+    <Button
       onClick={onClick}
       disabled={disabled}
-      className={[
-        'px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] transition-colors',
-        variantClasses[variant],
-        disabled && 'opacity-50 cursor-not-allowed',
-        className,
-      ]
-        .filter(Boolean)
-        .join(' ')}
+      variant={variant}
+      size="sm"
+      className={className}
     >
       {children}
-    </button>
+    </Button>
   )
 }
 
@@ -176,8 +166,8 @@ export function DisabledAction({
       disabled
       title={`Available in ${phase}`}
       className={[
-        'px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)]',
-        'bg-bg-3/50 text-fg-3 cursor-not-allowed border border-bd-0 opacity-70',
+        buttonVariants({ variant: 'secondary', size: 'sm' }),
+        'text-fg-3 cursor-not-allowed opacity-70',
         className,
       ]
         .filter(Boolean)

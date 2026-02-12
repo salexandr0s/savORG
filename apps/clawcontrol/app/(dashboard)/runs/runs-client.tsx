@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { PageHeader, PageSection, EmptyState } from '@clawcontrol/ui'
+import { PageHeader, PageSection, EmptyState, SelectDropdown } from '@clawcontrol/ui'
 import { CanonicalTable, type Column } from '@/components/ui/canonical-table'
 import { OperationStatusPill } from '@/components/ui/status-pill'
 import { LoadingState } from '@/components/ui/loading-state'
@@ -78,7 +78,7 @@ export function RunsClient() {
   const blockedCount = operations.filter((op) => op.status === 'blocked').length
 
   if (loading) {
-    return <LoadingState />
+    return <LoadingState height="viewport" />
   }
 
   if (error) {
@@ -167,18 +167,21 @@ export function RunsClient() {
           subtitle={`${inProgressCount} running, ${blockedCount} blocked`}
           actions={
             <div className="flex items-center gap-2">
-              <select
+              <SelectDropdown
                 value={statusFilter || ''}
-                onChange={(e) => setStatusFilter(e.target.value || null)}
-                className="px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] bg-bg-3 text-fg-1 border border-bd-0 focus:outline-none focus:border-bd-1"
-              >
-                <option value="">All statuses</option>
-                <option value="todo">Todo</option>
-                <option value="in_progress">In Progress</option>
-                <option value="blocked">Blocked</option>
-                <option value="review">Review</option>
-                <option value="done">Done</option>
-              </select>
+                onChange={(nextValue) => setStatusFilter(nextValue || null)}
+                ariaLabel="Runs status filter"
+                tone="toolbar"
+                size="sm"
+                options={[
+                  { value: '', label: 'All statuses', textValue: 'all statuses' },
+                  { value: 'todo', label: 'Todo' },
+                  { value: 'in_progress', label: 'In Progress' },
+                  { value: 'blocked', label: 'Blocked' },
+                  { value: 'review', label: 'Review' },
+                  { value: 'done', label: 'Done' },
+                ]}
+              />
             </div>
           }
         />

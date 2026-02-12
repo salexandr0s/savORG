@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { PageHeader, EmptyState, TypedConfirmModal } from '@clawcontrol/ui'
+import { PageHeader, EmptyState, TypedConfirmModal, Button, buttonLikeClass } from '@clawcontrol/ui'
 import { CanonicalTable, type Column } from '@/components/ui/canonical-table'
 import { RightDrawer } from '@/components/shell/right-drawer'
 import { StatusPill } from '@/components/ui/status-pill'
@@ -309,7 +309,7 @@ export function WorkflowsClient() {
   }
 
   if (loading) {
-    return <LoadingState />
+    return <LoadingState height="viewport" />
   }
 
   if (error && rows.length === 0) {
@@ -329,16 +329,17 @@ export function WorkflowsClient() {
           subtitle={`${rows.length} workflows available`}
           actions={
             <div className="flex items-center gap-2">
-              <button
+              <Button
                 type="button"
                 onClick={() => setShowPackageImport(true)}
-                className="btn-secondary inline-flex items-center gap-1.5"
+                variant="secondary"
+                size="sm"
               >
                 <Upload className="w-3.5 h-3.5" />
                 Import Package
-              </button>
+              </Button>
 
-              <label className="btn-secondary inline-flex items-center gap-1.5 cursor-pointer">
+              <label className={buttonLikeClass({ variant: 'secondary', size: 'sm', className: 'cursor-pointer' })}>
                 <FileUp className="w-3.5 h-3.5" />
                 Import Workflow
                 <input
@@ -355,10 +356,10 @@ export function WorkflowsClient() {
                 />
               </label>
 
-              <button type="button" onClick={handleCreate} className="btn-primary inline-flex items-center gap-1.5">
+              <Button type="button" onClick={handleCreate} variant="primary" size="sm">
                 <Plus className="w-3.5 h-3.5" />
                 New Workflow
-              </button>
+              </Button>
             </div>
           }
         />
@@ -429,25 +430,25 @@ export function WorkflowsClient() {
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
-                  <button type="button" onClick={handleClone} className="btn-secondary inline-flex items-center gap-1.5">
+                  <Button type="button" onClick={handleClone} variant="secondary" size="sm">
                     <Copy className="w-3.5 h-3.5" />
                     Clone
-                  </button>
-                  <button type="button" onClick={handleExport} className="btn-secondary inline-flex items-center gap-1.5">
+                  </Button>
+                  <Button type="button" onClick={handleExport} variant="secondary" size="sm">
                     <Download className="w-3.5 h-3.5" />
                     Export
-                  </button>
-                  <button type="button" onClick={handleExportPackage} className="btn-secondary inline-flex items-center gap-1.5">
+                  </Button>
+                  <Button type="button" onClick={handleExportPackage} variant="secondary" size="sm">
                     <Download className="w-3.5 h-3.5" />
                     Export Package
-                  </button>
+                  </Button>
                   {selected.source === 'custom' && (
                     <>
-                      <button type="button" onClick={handleEdit} className="btn-secondary">Edit</button>
-                      <button type="button" onClick={handleDelete} className="btn-secondary inline-flex items-center gap-1.5 text-status-danger">
+                      <Button type="button" onClick={handleEdit} variant="secondary" size="sm">Edit</Button>
+                      <Button type="button" onClick={handleDelete} variant="danger" size="sm">
                         <Trash2 className="w-3.5 h-3.5" />
                         Delete
-                      </button>
+                      </Button>
                     </>
                   )}
                 </div>

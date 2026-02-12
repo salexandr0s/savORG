@@ -4,8 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "cross-env DATABASE_URL=file:../data/clawcontrol.db node scripts/local-only.mjs next dev --webpack --hostname 127.0.0.1",
+    "predev": "node scripts/ensure-next-postcss.mjs",
     "build": "cross-env DATABASE_URL=file:../data/clawcontrol.db next build --webpack",
-    "prebuild": "prisma generate",
+    "prebuild": "node scripts/ensure-next-postcss.mjs && prisma generate",
     "start": "node scripts/local-only.mjs next start --hostname 127.0.0.1",
     "lint": "eslint .",
     "test": "vitest run",

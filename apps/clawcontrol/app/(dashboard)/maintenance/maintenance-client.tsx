@@ -1,12 +1,22 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { PageHeader, PageSection, TypedConfirmModal } from '@clawcontrol/ui'
+import { PageHeader, PageSection, TypedConfirmModal, Button } from '@clawcontrol/ui'
 import { LoadingSpinner, LoadingState } from '@/components/ui/loading-state'
 import { StatusPill } from '@/components/ui/status-pill'
 import { RightDrawer } from '@/components/shell/right-drawer'
 import { YamlEditor } from '@/components/editors/yaml-editor'
-import { playbooksApi, maintenanceApi, type PlaybookWithContent, type MaintenanceStatus, type PlaybookRunResult, HttpError } from '@/lib/http'
+import { CopyButton } from '@/components/prompt-kit/code-block/copy-button'
+import {
+  playbooksApi,
+  maintenanceApi,
+  type PlaybookWithContent,
+  type MaintenanceStatus,
+  type PlaybookRunResult,
+  type MaintenanceErrorSummary,
+  type MaintenanceErrorSignature,
+  HttpError,
+} from '@/lib/http'
 import { useProtectedAction } from '@/lib/hooks/useProtectedAction'
 import { useSettings } from '@/lib/settings-context'
 import type { GatewayStatusDTO } from '@/lib/data'
@@ -27,6 +37,7 @@ import {
   CheckCircle,
   XCircle,
   AlertTriangle,
+  Bot,
 } from 'lucide-react'
 
 interface Props {
@@ -40,22 +51,15 @@ interface Props {
   }>
 }
 
-interface ErrorSummaryData {
-  trend: Array<{ day: string; count: string }>
-  topSignatures: Array<{
-    signatureHash: string
-    signatureText: string
-    count: string
-    sample: string
-  }>
-  spike: {
-    detected: boolean
-    yesterdayCount: number
-    baseline: number
-  }
-}
-
-type MaintenanceAction = 'health' | 'doctor' | 'doctor-fix' | 'cache-clear' | 'sessions-reset' | 'gateway-restart' | 'recover'
+type MaintenanceAction =
+  | 'health'
+  | 'doctor'
+  | 'doctor-fix'
+  | 'cache-clear'
+  | 'sessions-reset'
+  | 'gateway-restart'
+  | 'security-audit-fix'
+  | 'recover'
 
 const ACTION_CONFIG: Record<MaintenanceAction, {
   title: string
@@ -99,6 +103,12 @@ const ACTION_CONFIG: Record<MaintenanceAction, {
     actionKind: 'gateway.restart',
     icon: RotateCcw,
   },
+  'security-audit-fix': {
+    title: 'Run Security Audit (Fix)',
+    description: 'Run security audit and apply safe remediations',
+    actionKind: 'security.audit.fix',
+    icon: Wrench,
+  },
   'recover': {
     title: 'Recover Gateway',
     description: 'Run full recovery playbook (health → doctor → fix → restart)',
@@ -134,9 +144,28 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
   } | null>(null)
 
   const [localOnly, setLocalOnly] = useState<MaintenanceStatus['localOnly'] | null>(null)
-  const [errorSummary, setErrorSummary] = useState<ErrorSummaryData | null>(null)
+  const [errorSummary, setErrorSummary] = useState<MaintenanceErrorSummary | null>(null)
+  const [errorSignatures, setErrorSignatures] = useState<MaintenanceErrorSignature[]>([])
   const [errorSummaryLoading, setErrorSummaryLoading] = useState(false)
+  const [errorSignaturesLoading, setErrorSignaturesLoading] = useState(false)
+  const [includeRawEvidence, setIncludeRawEvidence] = useState(false)
+  const [selectedErrorHash, setSelectedErrorHash] = useState<string | null>(null)
+  const [remediationState, setRemediationState] = useState<{
+    signatureHash: string
+    mode: 'create' | 'create_and_start'
+  } | null>(null)
+  const [errorWorkflowResult, setErrorWorkflowResult] = useState<{
+    signatureHash: string
+    success: boolean
+    message: string
+    workOrderId: string
+    code: string
+  } | null>(null)
   const [relativeNowMs, setRelativeNowMs] = useState(() => Date.now())
+
+  const selectedErrorSignature = selectedErrorHash
+    ? errorSignatures.find((signature) => signature.signatureHash === selectedErrorHash) ?? null
+    : null
 
   const protectedAction = useProtectedAction({ skipTypedConfirm })
 
@@ -178,18 +207,33 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
 
   const refreshErrors = useCallback(async () => {
     setErrorSummaryLoading(true)
+    setErrorSignaturesLoading(true)
     try {
-      const res = await fetch('/api/openclaw/errors/summary?days=14')
-      if (res.ok) {
-        const payload = (await res.json()) as { data: ErrorSummaryData }
-        setErrorSummary(payload.data)
+      const [summaryResult, signaturesResult] = await Promise.all([
+        maintenanceApi.getErrorSummary(14),
+        maintenanceApi.listErrorSignatures({
+          days: 14,
+          limit: 20,
+          includeRaw: includeRawEvidence,
+        }),
+      ])
+
+      setErrorSummary(summaryResult.data)
+      setErrorSignatures(signaturesResult.data.signatures)
+
+      if (
+        selectedErrorHash
+        && !signaturesResult.data.signatures.some((sig) => sig.signatureHash === selectedErrorHash)
+      ) {
+        setSelectedErrorHash(null)
       }
     } catch (err) {
       console.error('Failed to load error summary:', err)
     } finally {
       setErrorSummaryLoading(false)
+      setErrorSignaturesLoading(false)
     }
-  }, [])
+  }, [includeRawEvidence, selectedErrorHash])
 
   useEffect(() => {
     refreshStatus()
@@ -203,6 +247,16 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
 
     return () => window.clearInterval(intervalId)
   }, [])
+
+  useEffect(() => {
+    if (!errorSignatures.some((signature) => signature.insight?.status === 'pending')) return
+
+    const timeoutId = window.setTimeout(() => {
+      void refreshErrors()
+    }, 6000)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [errorSignatures, refreshErrors])
 
   // Handle playbook click - open in drawer
   const handlePlaybookClick = useCallback(async (id: string) => {
@@ -388,6 +442,56 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
     })
   }, [protectedAction])
 
+  const runSuggestedMaintenanceAction = useCallback((signature: MaintenanceErrorSignature) => {
+    const suggestedAction = signature.classification.suggestedActions.find(
+      (action) => action.kind === 'maintenance' && typeof action.maintenanceAction === 'string'
+    )
+
+    if (!suggestedAction?.maintenanceAction) return
+
+    const maintenanceAction = suggestedAction.maintenanceAction as MaintenanceAction
+    if (!(maintenanceAction in ACTION_CONFIG)) return
+
+    handleAction(maintenanceAction)
+  }, [handleAction])
+
+  const remediateError = useCallback(async (
+    signatureHash: string,
+    mode: 'create' | 'create_and_start'
+  ) => {
+    setRemediationState({ signatureHash, mode })
+    setErrorWorkflowResult(null)
+
+    try {
+      const response = await maintenanceApi.remediateError(signatureHash, { mode })
+      const result = response.data
+      const success = mode === 'create' ? true : result.started
+
+      setErrorWorkflowResult({
+        signatureHash,
+        success,
+        message: mode === 'create'
+          ? `Work order ${result.code} created`
+          : result.started
+            ? `Work order ${result.code} created and started`
+            : `Work order ${result.code} created, start failed: ${result.startError ?? 'unknown error'}`,
+        workOrderId: result.workOrderId,
+        code: result.code,
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create remediation work order'
+      setErrorWorkflowResult({
+        signatureHash,
+        success: false,
+        message,
+        workOrderId: '',
+        code: '',
+      })
+    } finally {
+      setRemediationState(null)
+    }
+  }, [])
+
   const cliVersionLabel = cliStatus?.version ?? 'unknown'
   const showCliTooOld = cliStatus?.available && cliStatus.belowMinVersion
   const showCliUnknown = cliStatus?.available && !cliStatus.belowMinVersion && cliVersionLabel === 'unknown'
@@ -459,10 +563,11 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
                 tone={gateway.status === 'ok' ? 'success' : gateway.status === 'degraded' ? 'warning' : 'danger'}
                 label={gateway.status.toUpperCase()}
               />
-              <button
+              <Button
                 onClick={() => void refreshStatus()}
                 disabled={runningAction !== null || isLoading}
-                className="btn-secondary flex items-center gap-1.5 text-xs"
+                variant="secondary"
+                size="xs"
               >
                 {runningAction === 'health' ? (
                   <LoadingSpinner size="xs" />
@@ -470,7 +575,7 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
                   <RefreshCw className="w-3 h-3" />
                 )}
                 Refresh Status
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -537,6 +642,8 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
               disabled={runningAction !== null}
               onClick={() => handleAction('doctor')}
             />
+          </div>
+          <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
             <LiveActionCard
               action="doctor-fix"
               config={ACTION_CONFIG['doctor-fix']}
@@ -583,10 +690,12 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
                   </p>
                 )}
               </div>
-              <button
+              <Button
                 onClick={() => handleAction('recover')}
                 disabled={runningAction !== null || blockCriticalActions}
-                className="btn-primary flex items-center gap-1.5"
+                variant="primary"
+                size="sm"
+                className="self-center"
               >
                 {runningAction === 'recover' ? (
                   <LoadingSpinner size="sm" />
@@ -594,29 +703,31 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
                   <Wrench className="w-3.5 h-3.5" />
                 )}
                 Run Recovery
-              </button>
+              </Button>
             </div>
           </div>
         </PageSection>
 
         {/* Playbooks */}
-        <PageSection title="Playbooks" description="Automated maintenance procedures">
-          <div className="space-y-2">
-            {playbooks.map((playbook) => (
-              <PlaybookCard
-                key={playbook.id}
-                id={playbook.id}
-                name={playbook.name}
-                description={playbook.description}
-                severity={playbook.severity}
-                modifiedAt={playbook.modifiedAt}
-                onEdit={() => handlePlaybookClick(playbook.id)}
-                onRun={() => handleRunPlaybook(playbook)}
-                isRunning={runningPlaybookId === playbook.id}
-              />
-            ))}
-          </div>
-        </PageSection>
+        {playbooks.length > 0 && (
+          <PageSection title="Playbooks" description="Automated maintenance procedures">
+            <div className="space-y-2">
+              {playbooks.map((playbook) => (
+                <PlaybookCard
+                  key={playbook.id}
+                  id={playbook.id}
+                  name={playbook.name}
+                  description={playbook.description}
+                  severity={playbook.severity}
+                  modifiedAt={playbook.modifiedAt}
+                  onEdit={() => handlePlaybookClick(playbook.id)}
+                  onRun={() => handleRunPlaybook(playbook)}
+                  isRunning={runningPlaybookId === playbook.id}
+                />
+              ))}
+            </div>
+          </PageSection>
+        )}
 
         <PageSection title="Error Dashboard" description="Gateway error signatures and trend">
           <div className="p-4 bg-bg-3 rounded-[var(--radius-lg)] border border-bd-0 space-y-4">
@@ -633,14 +744,31 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
                   </span>
                 )}
               </div>
-              <button
-                onClick={refreshErrors}
-                disabled={errorSummaryLoading}
-                className="btn-secondary text-xs flex items-center gap-1.5"
-              >
-                {errorSummaryLoading ? <LoadingSpinner size="xs" /> : <RefreshCw className="w-3 h-3" />}
-                Refresh
-              </button>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={() => setIncludeRawEvidence(false)}
+                  variant={includeRawEvidence ? 'secondary' : 'primary'}
+                  size="xs"
+                >
+                  Sanitized
+                </Button>
+                <Button
+                  onClick={() => setIncludeRawEvidence(true)}
+                  variant={includeRawEvidence ? 'primary' : 'secondary'}
+                  size="xs"
+                >
+                  Raw (Redacted)
+                </Button>
+                <Button
+                  onClick={refreshErrors}
+                  disabled={errorSummaryLoading || errorSignaturesLoading}
+                  variant="secondary"
+                  size="xs"
+                >
+                  {(errorSummaryLoading || errorSignaturesLoading) ? <LoadingSpinner size="xs" /> : <RefreshCw className="w-3 h-3" />}
+                  Refresh
+                </Button>
+              </div>
             </div>
 
             {!errorSummary || errorSummary.trend.length === 0 ? (
@@ -652,11 +780,20 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
                     const max = Math.max(...errorSummary.trend.map((item) => Number(item.count)), 1)
                     return errorSummary.trend.map((item) => {
                       const value = Number(item.count)
-                      const height = Math.max(6, (value / max) * 100)
+                      const height = Math.max(4, (value / max) * 100)
+                      const isToday = item.day === errorSummary.trend[errorSummary.trend.length - 1]?.day
+                      const isYesterday = item.day === errorSummary.trend[errorSummary.trend.length - 2]?.day
                       return (
                         <div
                           key={item.day}
-                          className="flex-1 bg-status-danger/25 hover:bg-status-danger/40 rounded-t"
+                          className={cn(
+                            'flex-1 hover:bg-status-danger/40 rounded-t',
+                            isYesterday
+                              ? 'bg-status-danger/45'
+                              : isToday
+                                ? 'bg-status-warning/35'
+                                : 'bg-status-danger/25'
+                          )}
                           style={{ height: `${height}%` }}
                           title={`${new Date(item.day).toLocaleDateString()} · ${item.count}`}
                         />
@@ -665,24 +802,307 @@ export function MaintenanceClient({ gateway: initialGateway, playbooks: initialP
                   })()}
                 </div>
 
-                <div className="text-xs text-fg-2">
-                  Yesterday: {errorSummary.spike.yesterdayCount} | Baseline: {errorSummary.spike.baseline}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                  <div className="p-2 rounded border border-bd-0 bg-bg-2/60">
+                    <div className="text-fg-2">Total errors (14d)</div>
+                    <div className="font-mono text-fg-0">{errorSummary.totals.totalErrors}</div>
+                  </div>
+                  <div className="p-2 rounded border border-bd-0 bg-bg-2/60">
+                    <div className="text-fg-2">Unique signatures</div>
+                    <div className="font-mono text-fg-0">{errorSummary.totals.windowUniqueSignatures}</div>
+                  </div>
+                  <div className="p-2 rounded border border-bd-0 bg-bg-2/60">
+                    <div className="text-fg-2">Yesterday</div>
+                    <div className="font-mono text-fg-0">{errorSummary.spike.yesterdayCount}</div>
+                  </div>
+                  <div className="p-2 rounded border border-bd-0 bg-bg-2/60">
+                    <div className="text-fg-2">7-day baseline</div>
+                    <div className="font-mono text-fg-0">{errorSummary.spike.baseline}</div>
+                  </div>
                 </div>
 
-                <div className="space-y-1">
-                  {errorSummary.topSignatures.slice(0, 8).map((sig) => (
-                    <div key={sig.signatureHash} className="grid grid-cols-[80px_1fr] gap-3 text-xs">
-                      <span className="font-mono text-fg-2">{sig.count}</span>
-                      <span className="text-fg-1 truncate" title={sig.signatureText}>
-                        {sig.signatureText}
-                      </span>
+                {errorWorkflowResult && (
+                  <div className={cn(
+                    'p-3 rounded-md border flex items-start gap-2',
+                    errorWorkflowResult.success
+                      ? 'bg-status-success/10 border-status-success/30'
+                      : 'bg-status-danger/10 border-status-danger/30'
+                  )}>
+                    {errorWorkflowResult.success ? (
+                      <CheckCircle className="w-4 h-4 text-status-success shrink-0 mt-0.5" />
+                    ) : (
+                      <XCircle className="w-4 h-4 text-status-danger shrink-0 mt-0.5" />
+                    )}
+                    <div className="text-xs">
+                      <div className={cn(errorWorkflowResult.success ? 'text-status-success' : 'text-status-danger')}>
+                        {errorWorkflowResult.message}
+                      </div>
+                      {errorWorkflowResult.workOrderId ? (
+                        <div className="text-fg-2 mt-1 font-mono">
+                          {errorWorkflowResult.code} · {errorWorkflowResult.workOrderId}
+                        </div>
+                      ) : null}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                )}
+
+                {errorSignaturesLoading ? (
+                  <div className="py-5 flex items-center gap-2 text-xs text-fg-2">
+                    <LoadingSpinner size="sm" />
+                    Loading signatures...
+                  </div>
+                ) : errorSignatures.length === 0 ? (
+                  <div className="text-xs text-fg-2">No ranked signatures found for this time window.</div>
+                ) : (
+                  <div className="space-y-2">
+                    {errorSignatures.map((signature) => {
+                      const hasMaintenanceSuggestion = signature.classification.suggestedActions.some(
+                        (action) => action.kind === 'maintenance' && typeof action.maintenanceAction === 'string'
+                      )
+                      const commandSuggestion = signature.classification.suggestedActions.find(
+                        (action) => action.kind !== 'maintenance' && typeof action.command === 'string'
+                      )?.command ?? signature.classification.extractedCliCommand
+
+                      const isCreating = remediationState?.signatureHash === signature.signatureHash && remediationState.mode === 'create'
+                      const isCreatingAndStarting = remediationState?.signatureHash === signature.signatureHash && remediationState.mode === 'create_and_start'
+
+                      return (
+                        <button
+                          key={signature.signatureHash}
+                          type="button"
+                          onClick={() => setSelectedErrorHash(signature.signatureHash)}
+                          className={cn(
+                            'w-full text-left p-3 rounded-md border transition-colors',
+                            selectedErrorHash === signature.signatureHash
+                              ? 'bg-bg-2 border-bd-1'
+                              : 'bg-bg-2/60 border-bd-0 hover:bg-bg-2'
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-mono text-xs text-fg-2">{signature.windowCount}</span>
+                                <span className="text-xs text-fg-0">{signature.classification.title}</span>
+                                <span className="px-1.5 py-0.5 text-[10px] rounded bg-bg-3 text-fg-2 uppercase">
+                                  {signature.classification.category.replace('_', ' ')}
+                                </span>
+                                <span className={cn(
+                                  'px-1.5 py-0.5 text-[10px] rounded uppercase',
+                                  signature.classification.severity === 'critical' && 'bg-status-danger/20 text-status-danger',
+                                  signature.classification.severity === 'high' && 'bg-status-warning/20 text-status-warning',
+                                  signature.classification.severity === 'medium' && 'bg-status-info/20 text-status-info',
+                                  signature.classification.severity === 'low' && 'bg-bg-3 text-fg-2'
+                                )}>
+                                  {signature.classification.severity}
+                                </span>
+                                <span className="text-[10px] text-fg-3">
+                                  {Math.round(signature.classification.confidence * 100)}% confidence
+                                </span>
+                              </div>
+                              <div className="text-xs text-fg-2 truncate mt-1" title={signature.signatureText}>
+                                {signature.signatureText}
+                              </div>
+                              <div className="text-[11px] text-fg-3 mt-1">
+                                Last seen {formatRelativeTime(signature.lastSeen, relativeNowMs)} · all-time {signature.allTimeCount}
+                              </div>
+                            </div>
+
+                            <div
+                              className="flex items-center gap-1.5 flex-wrap justify-end"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <Button
+                                size="xs"
+                                variant="primary"
+                                disabled={!!remediationState}
+                                onClick={() => void remediateError(signature.signatureHash, 'create')}
+                              >
+                                {isCreating ? <LoadingSpinner size="xs" /> : null}
+                                Create Work Order
+                              </Button>
+                              <Button
+                                size="xs"
+                                variant="secondary"
+                                disabled={!!remediationState}
+                                onClick={() => void remediateError(signature.signatureHash, 'create_and_start')}
+                              >
+                                {isCreatingAndStarting ? <LoadingSpinner size="xs" /> : null}
+                                Create + Start
+                              </Button>
+                              {hasMaintenanceSuggestion ? (
+                                <Button
+                                  size="xs"
+                                  variant="secondary"
+                                  disabled={runningAction !== null}
+                                  onClick={() => runSuggestedMaintenanceAction(signature)}
+                                >
+                                  Run Suggested Fix
+                                </Button>
+                              ) : commandSuggestion ? (
+                                <CopyButton text={commandSuggestion} className="h-[26px]" />
+                              ) : null}
+                              <CopyButton
+                                text={[
+                                  signature.signatureText,
+                                  '',
+                                  includeRawEvidence
+                                    ? (signature.rawRedactedSample ?? signature.sample)
+                                    : signature.sample,
+                                ].join('\n')}
+                                className="h-[26px]"
+                              />
+                            </div>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>
         </PageSection>
+
+        <RightDrawer
+          open={!!selectedErrorSignature}
+          onClose={() => setSelectedErrorHash(null)}
+          title={selectedErrorSignature ? `Error ${selectedErrorSignature.signatureHash.slice(0, 10)}` : ''}
+          description="Actionable signature details and remediation guidance"
+          width="lg"
+        >
+          {selectedErrorSignature ? (
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-bg-2 text-fg-2 uppercase">
+                    {selectedErrorSignature.classification.category.replace('_', ' ')}
+                  </span>
+                  <span className="text-xs text-fg-2">
+                    Detectability: {selectedErrorSignature.classification.detectability}
+                  </span>
+                  <span className="text-xs text-fg-2">
+                    Confidence: {Math.round(selectedErrorSignature.classification.confidence * 100)}%
+                  </span>
+                </div>
+                <h4 className="text-sm font-medium text-fg-0">
+                  {selectedErrorSignature.classification.title}
+                </h4>
+                <p className="text-xs text-fg-2">
+                  {selectedErrorSignature.classification.explanation}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-2 rounded border border-bd-0 bg-bg-2/70">
+                  <div className="text-fg-2">Window count</div>
+                  <div className="font-mono text-fg-0">{selectedErrorSignature.windowCount}</div>
+                </div>
+                <div className="p-2 rounded border border-bd-0 bg-bg-2/70">
+                  <div className="text-fg-2">All-time count</div>
+                  <div className="font-mono text-fg-0">{selectedErrorSignature.allTimeCount}</div>
+                </div>
+                <div className="p-2 rounded border border-bd-0 bg-bg-2/70">
+                  <div className="text-fg-2">First seen</div>
+                  <div className="text-fg-0">{new Date(selectedErrorSignature.firstSeen).toLocaleString()}</div>
+                </div>
+                <div className="p-2 rounded border border-bd-0 bg-bg-2/70">
+                  <div className="text-fg-2">Last seen</div>
+                  <div className="text-fg-0">{new Date(selectedErrorSignature.lastSeen).toLocaleString()}</div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <h5 className="text-xs font-medium text-fg-1 uppercase tracking-wide">AI remediation insight</h5>
+                  <Bot className="w-3.5 h-3.5 text-fg-2" />
+                </div>
+                {selectedErrorSignature.insight?.status === 'ready' && selectedErrorSignature.insight.diagnosisMd ? (
+                  <div className="p-3 rounded border border-bd-0 bg-bg-2/70 text-xs text-fg-1 whitespace-pre-wrap">
+                    {selectedErrorSignature.insight.diagnosisMd}
+                  </div>
+                ) : selectedErrorSignature.insight?.status === 'pending' ? (
+                  <div className="p-3 rounded border border-bd-0 bg-bg-2/70 text-xs text-fg-2 flex items-center gap-2">
+                    <LoadingSpinner size="xs" />
+                    Insight generation in progress...
+                  </div>
+                ) : (
+                  <div className="p-3 rounded border border-bd-0 bg-bg-2/70 text-xs text-fg-2">
+                    {selectedErrorSignature.insight?.failureReason
+                      ? `Insight generation failed: ${selectedErrorSignature.insight.failureReason}`
+                      : 'Insight not available yet. Deterministic remediation suggestions are still available below.'}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h5 className="text-xs font-medium text-fg-1 uppercase tracking-wide">Evidence</h5>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      onClick={() => setIncludeRawEvidence(false)}
+                      size="xs"
+                      variant={includeRawEvidence ? 'secondary' : 'primary'}
+                    >
+                      Sanitized
+                    </Button>
+                    <Button
+                      onClick={() => setIncludeRawEvidence(true)}
+                      size="xs"
+                      variant={includeRawEvidence ? 'primary' : 'secondary'}
+                    >
+                      Raw (Redacted)
+                    </Button>
+                    <CopyButton
+                      text={includeRawEvidence
+                        ? (selectedErrorSignature.rawRedactedSample ?? selectedErrorSignature.sample)
+                        : selectedErrorSignature.sample}
+                      className="h-[26px]"
+                    />
+                  </div>
+                </div>
+                <pre className="p-3 rounded border border-bd-0 bg-bg-2/70 text-xs text-fg-1 whitespace-pre-wrap break-words">
+                  {includeRawEvidence
+                    ? (selectedErrorSignature.rawRedactedSample ?? selectedErrorSignature.sample)
+                    : selectedErrorSignature.sample}
+                </pre>
+              </div>
+
+              <div className="space-y-2">
+                <h5 className="text-xs font-medium text-fg-1 uppercase tracking-wide">Suggested actions</h5>
+                <div className="space-y-2">
+                  {selectedErrorSignature.classification.suggestedActions.map((action) => (
+                    <div key={action.id} className="p-2 rounded border border-bd-0 bg-bg-2/70 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-fg-0">{action.label}</div>
+                        {action.kind === 'maintenance' && action.maintenanceAction ? (
+                          <Button
+                            size="xs"
+                            variant="secondary"
+                            disabled={runningAction !== null}
+                            onClick={() => {
+                              const maintenanceAction = action.maintenanceAction as MaintenanceAction
+                              if (maintenanceAction in ACTION_CONFIG) {
+                                handleAction(maintenanceAction)
+                              }
+                            }}
+                          >
+                            Run Suggested Fix
+                          </Button>
+                        ) : action.command ? (
+                          <CopyButton text={action.command} className="h-[26px]" />
+                        ) : null}
+                      </div>
+                      <div className="text-fg-2 mt-1">{action.description}</div>
+                      {action.command ? (
+                        <div className="text-[11px] text-fg-3 mt-1 font-mono break-all">{action.command}</div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </RightDrawer>
       </div>
 
       {/* Playbook Editor Drawer */}

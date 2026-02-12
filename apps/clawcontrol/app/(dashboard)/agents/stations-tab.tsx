@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { PageSection, EmptyState } from '@clawcontrol/ui'
+import { PageSection, EmptyState, Button } from '@clawcontrol/ui'
 import { CanonicalTable, type Column } from '@/components/ui/canonical-table'
 import { InlineLoading } from '@/components/ui/loading-state'
 import { useProtectedActionTrigger } from '@/components/protected-action-modal'
@@ -145,14 +145,15 @@ export function StationsTab() {
           : 'Canonical station set is locked for v1 defaults (read-only).'}
         actions={stationMutationsEnabled
           ? (
-            <button
+            <Button
               type="button"
               onClick={() => setCreating(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] bg-status-progress text-white hover:bg-status-progress/90 transition-colors"
+              variant="primary"
+              size="sm"
             >
               <Plus className="w-3.5 h-3.5" />
               Create Station
-            </button>
+            </Button>
           )
           : undefined}
       >
@@ -400,18 +401,20 @@ export function StationUpsertModal({
         </div>
 
         <div className="p-4 border-t border-bd-0 flex items-center justify-end gap-2">
-          <button
+          <Button
             onClick={onClose}
-            className="px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] bg-bg-3 text-fg-1 hover:bg-bg-2 transition-colors"
+            variant="secondary"
+            size="sm"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={handleSubmit}
-            className="px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] bg-status-progress text-white hover:bg-status-progress/90 transition-colors"
+            variant="primary"
+            size="sm"
           >
             Save
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, type ChangeEvent, type DragEvent } from 'react'
-import { PageHeader, EmptyState, TypedConfirmModal } from '@clawcontrol/ui'
+import { PageHeader, EmptyState, TypedConfirmModal, Button, buttonLikeClass } from '@clawcontrol/ui'
 import { CanonicalTable, type Column } from '@/components/ui/canonical-table'
 import { StatusPill } from '@/components/ui/status-pill'
 import { LoadingSpinner, LoadingState } from '@/components/ui/loading-state'
@@ -732,20 +732,22 @@ export function AgentTemplatesClient({ templates: initialTemplates }: Props) {
           }
           actions={
             <div className="flex gap-2">
-              <button
-                className="btn-secondary flex items-center gap-1.5"
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={openImportModal}
               >
                 <Upload className="w-3.5 h-3.5" />
                 Import
-              </button>
-              <button
-                className="btn-primary flex items-center gap-1.5"
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={() => setShowCreateModal(true)}
               >
                 <Plus className="w-3.5 h-3.5" />
                 New Template
-              </button>
+              </Button>
             </div>
           }
         />
@@ -876,16 +878,18 @@ export function AgentTemplatesClient({ templates: initialTemplates }: Props) {
             </div>
 
             <div className="flex justify-end gap-2 mt-6">
-              <button
+              <Button
                 onClick={() => setShowCreateModal(false)}
-                className="btn-secondary"
+                variant="secondary"
+                size="sm"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleCreate}
                 disabled={isCreating || !createId.trim() || !createName.trim()}
-                className="btn-primary flex items-center gap-1.5"
+                variant="primary"
+                size="sm"
               >
                 {isCreating ? (
                   <LoadingSpinner size="sm" />
@@ -893,7 +897,7 @@ export function AgentTemplatesClient({ templates: initialTemplates }: Props) {
                   <Plus className="w-3.5 h-3.5" />
                 )}
                 Create Template
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -984,7 +988,7 @@ export function AgentTemplatesClient({ templates: initialTemplates }: Props) {
                     <p className="text-xs text-fg-2 mb-3">
                       Supported: .zip, .json, .template.json
                     </p>
-                    <label className="btn-secondary inline-flex items-center gap-1.5 cursor-pointer">
+                    <label className={buttonLikeClass({ variant: 'secondary', size: 'sm', className: 'cursor-pointer' })}>
                       <Upload className="w-3.5 h-3.5" />
                       Choose File
                       <input
@@ -1050,20 +1054,22 @@ export function AgentTemplatesClient({ templates: initialTemplates }: Props) {
             </div>
 
             <div className="flex justify-end gap-2 mt-6">
-              <button
+              <Button
                 onClick={closeImportModal}
-                className="btn-secondary"
+                variant="secondary"
+                size="sm"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleImport}
                 disabled={
                   isImporting
                   || isAnalyzingImport
                   || (importMode === 'file' ? !importFile || !importSummary : !importPayload || !importSummary)
                 }
-                className="btn-primary flex items-center gap-1.5"
+                variant="primary"
+                size="sm"
               >
                 {isImporting ? (
                   <LoadingSpinner size="sm" />
@@ -1071,7 +1077,7 @@ export function AgentTemplatesClient({ templates: initialTemplates }: Props) {
                   <Upload className="w-3.5 h-3.5" />
                 )}
                 {importMode === 'file' ? 'Import File' : 'Import JSON'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -1220,10 +1226,11 @@ function OverviewTab({
         </div>
 
         <div className="flex items-center gap-2">
-          <button
+          <Button
             onClick={onExport}
             disabled={isExporting}
-            className="btn-secondary flex items-center gap-1.5"
+            variant="secondary"
+            size="sm"
           >
             {isExporting ? (
               <LoadingSpinner size="sm" />
@@ -1231,11 +1238,12 @@ function OverviewTab({
               <Download className="w-3.5 h-3.5" />
             )}
             Export
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={onDelete}
             disabled={isDeleting}
-            className="btn-secondary flex items-center gap-1.5 text-status-error"
+            variant="danger"
+            size="sm"
           >
             {isDeleting ? (
               <LoadingSpinner size="sm" />
@@ -1243,7 +1251,7 @@ function OverviewTab({
               <Trash2 className="w-3.5 h-3.5" />
             )}
             Delete
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -1381,10 +1389,11 @@ function FilesTab({
               <FileCode className="w-4 h-4 text-fg-2" />
               <span className="text-sm font-mono text-fg-1">{file.name}</span>
             </div>
-            <button
+            <Button
               onClick={() => onPreviewFile(file)}
               disabled={isLoadingFile}
-              className="btn-secondary btn-sm flex items-center gap-1"
+              variant="secondary"
+              size="xs"
             >
               {isLoadingFile ? (
                 <LoadingSpinner size="xs" />
@@ -1392,7 +1401,7 @@ function FilesTab({
                 <Eye className="w-3 h-3" />
               )}
               Preview
-            </button>
+            </Button>
           </div>
         ))}
       </div>

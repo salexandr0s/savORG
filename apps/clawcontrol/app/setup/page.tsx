@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Button } from '@clawcontrol/ui'
 import { CheckCircle2, AlertTriangle, XCircle, RefreshCw, Save, FolderOpen } from 'lucide-react'
 import { InlineLoading, LoadingSpinner } from '@/components/ui/loading-state'
 import { configApi, type InitStatusResponse, type RemoteAccessMode } from '@/lib/http'
@@ -322,13 +323,14 @@ ssh -L 3000:127.0.0.1:3000 {'<user>@<host-tailnet-name>'}
                     className="flex-1 px-3 py-2 text-sm bg-bg-1 border border-bd-0 rounded-[var(--radius-md)] text-fg-0 placeholder:text-fg-3 focus:outline-none focus:border-status-info/50"
                   />
                   {pickerAvailable && (
-                    <button
+                    <Button
                       onClick={handleBrowseWorkspace}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded bg-bg-3 text-fg-1 hover:bg-bd-1"
+                      variant="secondary"
+                      size="md"
                     >
                       <FolderOpen className="w-4 h-4" />
                       Browse
-                    </button>
+                    </Button>
                   )}
                 </div>
               </div>
@@ -338,62 +340,50 @@ ssh -L 3000:127.0.0.1:3000 {'<user>@<host-tailnet-name>'}
               )}
 
               <div className="flex flex-wrap gap-2">
-                <button
+                <Button
                   onClick={handleSaveConfig}
                   disabled={saving}
-                  className={cn(
-                    'inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded transition-colors',
-                    saving
-                      ? 'bg-bg-3 text-fg-3 cursor-not-allowed'
-                      : 'bg-status-info text-white hover:bg-status-info/90'
-                  )}
+                  variant={saving ? 'secondary' : 'primary'}
+                  size="md"
+                  className={cn(saving && 'text-fg-3')}
                 >
                   {saving ? <LoadingSpinner size="md" /> : <Save className="w-4 h-4" />}
                   Save Configuration
-                </button>
+                </Button>
 
-                <button
+                <Button
                   onClick={handleTestGateway}
                   disabled={testingGateway}
-                  className={cn(
-                    'inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded transition-colors',
-                    testingGateway
-                      ? 'bg-bg-3 text-fg-3 cursor-not-allowed'
-                      : 'bg-bg-3 text-fg-1 hover:bg-bd-1'
-                  )}
+                  variant="secondary"
+                  size="md"
+                  className={cn(testingGateway && 'text-fg-3')}
                 >
                   {testingGateway ? <LoadingSpinner size="md" /> : <RefreshCw className="w-4 h-4" />}
                   Test Gateway
-                </button>
+                </Button>
               </div>
             </section>
 
             <section className="flex flex-wrap gap-2">
-              <button
+              <Button
                 onClick={handleCompleteSetup}
                 disabled={saving || !canEnterDashboard}
-                className={cn(
-                  'px-4 py-2 text-sm rounded transition-colors',
-                  !saving && canEnterDashboard
-                    ? 'bg-status-success text-black hover:bg-status-success/90'
-                    : 'bg-bg-3 text-fg-3 cursor-not-allowed'
-                )}
+                variant={!saving && canEnterDashboard ? 'primary' : 'secondary'}
+                size="md"
+                className={cn((saving || !canEnterDashboard) && 'text-fg-3')}
               >
                 Complete Setup
-              </button>
+              </Button>
 
-              <button
+              <Button
                 onClick={handleContinueLimitedMode}
                 disabled={saving || !canEnterDashboard}
-                className={cn(
-                  'px-4 py-2 text-sm rounded transition-colors',
-                  !saving && canEnterDashboard
-                    ? 'bg-bg-3 text-fg-1 hover:bg-bd-1'
-                    : 'bg-bg-3 text-fg-3 cursor-not-allowed'
-                )}
+                variant="secondary"
+                size="md"
+                className={cn((saving || !canEnterDashboard) && 'text-fg-3')}
               >
                 Continue in Limited Mode
-              </button>
+              </Button>
             </section>
           </>
         ) : null}

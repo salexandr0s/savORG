@@ -5,6 +5,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { prisma } from '@/lib/db'
 import { parseGatewayErrorLog, type ParsedErrorEvent } from './error-parser'
+import { classifyErrorSignature, type ErrorClassification } from './error-classifier'
 
 export interface ErrorSyncStats {
   processedEvents: number
@@ -12,6 +13,42 @@ export interface ErrorSyncStats {
   daysUpdated: number
   cursorReset: boolean
   durationMs: number
+}
+
+export interface ErrorSignatureInsightSnapshot {
+  status: 'pending' | 'ready' | 'failed'
+  diagnosisMd: string | null
+  failureReason: string | null
+  generatedAt: string | null
+  sourceAgentId: string | null
+  sourceAgentName: string | null
+}
+
+export interface ErrorSignatureListItem {
+  signatureHash: string
+  signatureText: string
+  count: string
+  windowCount: string
+  allTimeCount: string
+  firstSeen: string
+  lastSeen: string
+  sample: string
+  rawRedactedSample?: string
+  classification: ErrorClassification
+  insight: ErrorSignatureInsightSnapshot | null
+}
+
+export interface ListErrorSignaturesResult {
+  generatedAt: string
+  from: string
+  to: string
+  days: number
+  signatures: ErrorSignatureListItem[]
+  meta: {
+    limit: number
+    includeRaw: boolean
+    windowUniqueSignatures: number
+  }
 }
 
 export interface ErrorSummaryResult {
@@ -22,20 +59,35 @@ export interface ErrorSummaryResult {
   totals: {
     totalErrors: string
     uniqueSignatures: number
+    windowUniqueSignatures: number
   }
-  topSignatures: Array<{
-    signatureHash: string
-    signatureText: string
-    count: string
-    firstSeen: string
-    lastSeen: string
-    sample: string
-  }>
+  topSignatures: ErrorSignatureListItem[]
   spike: {
     detected: boolean
     yesterdayCount: number
     baseline: number
   }
+}
+
+interface SignatureDelta {
+  signatureText: string
+  sample: string
+  rawSampleRedacted: string
+  count: bigint
+  firstSeen: Date
+  lastSeen: Date
+}
+
+interface SignatureDayDelta {
+  signatureHash: string
+  day: Date
+  count: bigint
+}
+
+export interface ErrorDeltaMaps {
+  signatureDeltas: Map<string, SignatureDelta>
+  dayDeltas: Map<string, bigint>
+  signatureDayDeltas: Map<string, SignatureDayDelta>
 }
 
 function getGatewayErrorLogPath(): string {
@@ -84,8 +136,137 @@ function shouldResetCursor(
   return false
 }
 
-function dayStart(date: Date): Date {
+export function dayStart(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
+}
+
+function dateRangeFromDays(days: number): { from: Date; to: Date } {
+  const toDay = dayStart(new Date())
+  const from = new Date(toDay)
+  from.setUTCDate(from.getUTCDate() - Math.max(1, days) + 1)
+  return { from, to: new Date(toDay.getTime() + 86400_000 - 1) }
+}
+
+function isoDayRange(from: Date, days: number): string[] {
+  const out: string[] = []
+  for (let i = 0; i < days; i += 1) {
+    const d = new Date(from)
+    d.setUTCDate(d.getUTCDate() + i)
+    out.push(d.toISOString())
+  }
+  return out
+}
+
+export function buildZeroFilledTrend(
+  from: Date,
+  days: number,
+  rows: Array<{ day: Date; count: bigint }>
+): Array<{ day: string; count: string }> {
+  const byDay = new Map<string, bigint>()
+  for (const row of rows) {
+    byDay.set(dayStart(row.day).toISOString(), row.count)
+  }
+
+  return isoDayRange(from, days).map((dayIso) => ({
+    day: dayIso,
+    count: (byDay.get(dayIso) ?? 0n).toString(),
+  }))
+}
+
+export function computeSpikeMetrics(
+  trend: Array<{ day: string; count: string }>
+): { detected: boolean; yesterdayCount: number; baseline: number } {
+  if (trend.length === 0) {
+    return { detected: false, yesterdayCount: 0, baseline: 0 }
+  }
+
+  const values = trend.map((item) => Number(item.count))
+  const todayIndex = values.length - 1
+  const yesterdayIndex = todayIndex - 1
+
+  if (yesterdayIndex < 0) {
+    return { detected: false, yesterdayCount: 0, baseline: 0 }
+  }
+
+  const yesterdayCount = values[yesterdayIndex] ?? 0
+  const baselineStart = Math.max(0, yesterdayIndex - 7)
+  const baselineValues = values.slice(baselineStart, yesterdayIndex)
+  const baseline = baselineValues.length > 0
+    ? baselineValues.reduce((sum, value) => sum + value, 0) / baselineValues.length
+    : 0
+
+  const detected = baseline >= 3 && yesterdayCount >= baseline * 2
+
+  return {
+    detected,
+    yesterdayCount,
+    baseline: Math.round(baseline * 100) / 100,
+  }
+}
+
+export function createErrorDeltaMaps(): ErrorDeltaMaps {
+  return {
+    signatureDeltas: new Map<string, SignatureDelta>(),
+    dayDeltas: new Map<string, bigint>(),
+    signatureDayDeltas: new Map<string, SignatureDayDelta>(),
+  }
+}
+
+export function addEventToDeltaMaps(maps: ErrorDeltaMaps, event: ParsedErrorEvent): void {
+  const prevSig = maps.signatureDeltas.get(event.signatureHash)
+  if (!prevSig) {
+    maps.signatureDeltas.set(event.signatureHash, {
+      signatureText: event.signatureText,
+      sample: event.sample,
+      rawSampleRedacted: event.sampleRawRedacted,
+      count: 1n,
+      firstSeen: event.occurredAt,
+      lastSeen: event.occurredAt,
+    })
+  } else {
+    prevSig.count += 1n
+    prevSig.signatureText = event.signatureText || prevSig.signatureText
+    prevSig.sample = event.sample || prevSig.sample
+    prevSig.rawSampleRedacted = event.sampleRawRedacted || prevSig.rawSampleRedacted
+    if (event.occurredAt < prevSig.firstSeen) prevSig.firstSeen = event.occurredAt
+    if (event.occurredAt > prevSig.lastSeen) prevSig.lastSeen = event.occurredAt
+    maps.signatureDeltas.set(event.signatureHash, prevSig)
+  }
+
+  const dayIso = dayStart(event.occurredAt).toISOString()
+  maps.dayDeltas.set(dayIso, (maps.dayDeltas.get(dayIso) ?? 0n) + 1n)
+
+  const signatureDayKey = `${event.signatureHash}::${dayIso}`
+  const prevSignatureDay = maps.signatureDayDeltas.get(signatureDayKey)
+  if (!prevSignatureDay) {
+    maps.signatureDayDeltas.set(signatureDayKey, {
+      signatureHash: event.signatureHash,
+      day: new Date(dayIso),
+      count: 1n,
+    })
+  } else {
+    prevSignatureDay.count += 1n
+    maps.signatureDayDeltas.set(signatureDayKey, prevSignatureDay)
+  }
+}
+
+function toInsightSnapshot(row: {
+  status: string
+  diagnosisMd: string
+  failureReason: string | null
+  generatedAt: Date | null
+  sourceAgentId: string | null
+  sourceAgentName: string | null
+} | null): ErrorSignatureInsightSnapshot | null {
+  if (!row) return null
+  return {
+    status: row.status === 'ready' || row.status === 'failed' ? row.status : 'pending',
+    diagnosisMd: row.status === 'ready' ? row.diagnosisMd : null,
+    failureReason: row.failureReason,
+    generatedAt: row.generatedAt ? row.generatedAt.toISOString() : null,
+    sourceAgentId: row.sourceAgentId,
+    sourceAgentName: row.sourceAgentName,
+  }
 }
 
 export async function syncErrorLog(): Promise<ErrorSyncStats> {
@@ -151,44 +332,16 @@ export async function syncErrorLog(): Promise<ErrorSyncStats> {
     }
   }
 
-  const signatureDeltas = new Map<string, {
-    signatureText: string
-    sample: string
-    count: bigint
-    firstSeen: Date
-    lastSeen: Date
-  }>()
-
-  const dayDeltas = new Map<string, bigint>()
+  const deltaMaps = createErrorDeltaMaps()
   let processedEvents = 0
 
   await parseGatewayErrorLog(sourcePath, offsetBytes, (event: ParsedErrorEvent) => {
-    processedEvents++
-
-    const prevSig = signatureDeltas.get(event.signatureHash)
-    if (!prevSig) {
-      signatureDeltas.set(event.signatureHash, {
-        signatureText: event.signatureText,
-        sample: event.sample,
-        count: 1n,
-        firstSeen: event.occurredAt,
-        lastSeen: event.occurredAt,
-      })
-    } else {
-      prevSig.count += 1n
-      prevSig.signatureText = event.signatureText
-      prevSig.sample = event.sample || prevSig.sample
-      if (event.occurredAt < prevSig.firstSeen) prevSig.firstSeen = event.occurredAt
-      if (event.occurredAt > prevSig.lastSeen) prevSig.lastSeen = event.occurredAt
-      signatureDeltas.set(event.signatureHash, prevSig)
-    }
-
-    const day = dayStart(event.occurredAt).toISOString()
-    dayDeltas.set(day, (dayDeltas.get(day) ?? 0n) + 1n)
+    processedEvents += 1
+    addEventToDeltaMaps(deltaMaps, event)
   })
 
   let signaturesUpdated = 0
-  for (const [signatureHash, delta] of signatureDeltas.entries()) {
+  for (const [signatureHash, delta] of deltaMaps.signatureDeltas.entries()) {
     const existing = await prisma.errorSignatureAggregate.findUnique({
       where: { signatureHash },
     })
@@ -202,6 +355,7 @@ export async function syncErrorLog(): Promise<ErrorSyncStats> {
           firstSeenAt: delta.firstSeen,
           lastSeenAt: delta.lastSeen,
           lastSampleSanitized: delta.sample,
+          lastSampleRawRedacted: delta.rawSampleRedacted,
         },
       })
     } else {
@@ -213,15 +367,16 @@ export async function syncErrorLog(): Promise<ErrorSyncStats> {
           firstSeenAt: existing.firstSeenAt < delta.firstSeen ? existing.firstSeenAt : delta.firstSeen,
           lastSeenAt: existing.lastSeenAt > delta.lastSeen ? existing.lastSeenAt : delta.lastSeen,
           lastSampleSanitized: delta.sample || existing.lastSampleSanitized,
+          lastSampleRawRedacted: delta.rawSampleRedacted || existing.lastSampleRawRedacted,
         },
       })
     }
 
-    signaturesUpdated++
+    signaturesUpdated += 1
   }
 
   let daysUpdated = 0
-  for (const [dayIso, count] of dayDeltas.entries()) {
+  for (const [dayIso, count] of deltaMaps.dayDeltas.entries()) {
     const day = new Date(dayIso)
 
     const existing = await prisma.errorDailyAggregate.findUnique({
@@ -239,7 +394,40 @@ export async function syncErrorLog(): Promise<ErrorSyncStats> {
       })
     }
 
-    daysUpdated++
+    daysUpdated += 1
+  }
+
+  for (const signatureDayDelta of deltaMaps.signatureDayDeltas.values()) {
+    const existing = await prisma.errorSignatureDailyAggregate.findUnique({
+      where: {
+        signatureHash_day: {
+          signatureHash: signatureDayDelta.signatureHash,
+          day: signatureDayDelta.day,
+        },
+      },
+    })
+
+    if (!existing) {
+      await prisma.errorSignatureDailyAggregate.create({
+        data: {
+          signatureHash: signatureDayDelta.signatureHash,
+          day: signatureDayDelta.day,
+          count: signatureDayDelta.count,
+        },
+      })
+    } else {
+      await prisma.errorSignatureDailyAggregate.update({
+        where: {
+          signatureHash_day: {
+            signatureHash: signatureDayDelta.signatureHash,
+            day: signatureDayDelta.day,
+          },
+        },
+        data: {
+          count: existing.count + signatureDayDelta.count,
+        },
+      })
+    }
   }
 
   await prisma.errorIngestionCursor.upsert({
@@ -270,21 +458,118 @@ export async function syncErrorLog(): Promise<ErrorSyncStats> {
   }
 }
 
-function dateRangeFromDays(days: number): { from: Date; to: Date } {
-  const to = dayStart(new Date())
-  const from = new Date(to)
-  from.setUTCDate(from.getUTCDate() - Math.max(1, days) + 1)
-  return { from, to: new Date(to.getTime() + 86400_000 - 1) }
+function normalizeDays(days: number | undefined): number {
+  return Number.isFinite(days) ? Math.max(1, Math.min(90, Math.floor(days as number))) : 14
+}
+
+function normalizeLimit(limit: number | undefined): number {
+  return Number.isFinite(limit) ? Math.max(1, Math.min(100, Math.floor(limit as number))) : 20
+}
+
+export async function listErrorSignatures(params?: {
+  days?: number
+  limit?: number
+  includeRaw?: boolean
+}): Promise<ListErrorSignaturesResult> {
+  const safeDays = normalizeDays(params?.days)
+  const safeLimit = normalizeLimit(params?.limit)
+  const includeRaw = params?.includeRaw === true
+  const { from, to } = dateRangeFromDays(safeDays)
+
+  const grouped = await prisma.errorSignatureDailyAggregate.groupBy({
+    by: ['signatureHash'],
+    where: {
+      day: {
+        gte: from,
+        lte: to,
+      },
+    },
+    _sum: { count: true },
+    orderBy: {
+      _sum: {
+        count: 'desc',
+      },
+    },
+    take: safeLimit,
+  })
+
+  const allDistinct = await prisma.errorSignatureDailyAggregate.findMany({
+    where: {
+      day: {
+        gte: from,
+        lte: to,
+      },
+    },
+    distinct: ['signatureHash'],
+    select: { signatureHash: true },
+  })
+
+  const hashes = grouped
+    .map((row) => row.signatureHash)
+    .filter((hash): hash is string => typeof hash === 'string' && hash.length > 0)
+
+  const aggregateRows = hashes.length > 0
+    ? await prisma.errorSignatureAggregate.findMany({
+        where: {
+          signatureHash: { in: hashes },
+        },
+      })
+    : []
+
+  const insightRows = hashes.length > 0
+    ? await prisma.errorSignatureInsight.findMany({
+        where: {
+          signatureHash: { in: hashes },
+        },
+      })
+    : []
+
+  const aggregatesByHash = new Map(aggregateRows.map((row) => [row.signatureHash, row]))
+  const insightsByHash = new Map(insightRows.map((row) => [row.signatureHash, row]))
+
+  const signatures: ErrorSignatureListItem[] = grouped.map((row) => {
+    const aggregate = aggregatesByHash.get(row.signatureHash)
+    const signatureText = aggregate?.signatureText || row.signatureHash
+    const sample = aggregate?.lastSampleSanitized || ''
+    const rawSampleRedacted = aggregate?.lastSampleRawRedacted || ''
+    const classification = classifyErrorSignature({
+      signatureText,
+      sample,
+      sampleRawRedacted: rawSampleRedacted,
+    })
+
+    return {
+      signatureHash: row.signatureHash,
+      signatureText,
+      count: (row._sum.count ?? 0n).toString(),
+      windowCount: (row._sum.count ?? 0n).toString(),
+      allTimeCount: (aggregate?.count ?? 0n).toString(),
+      firstSeen: (aggregate?.firstSeenAt ?? new Date(0)).toISOString(),
+      lastSeen: (aggregate?.lastSeenAt ?? new Date(0)).toISOString(),
+      sample,
+      ...(includeRaw ? { rawRedactedSample: rawSampleRedacted } : {}),
+      classification,
+      insight: toInsightSnapshot(insightsByHash.get(row.signatureHash) ?? null),
+    }
+  })
+
+  return {
+    generatedAt: new Date().toISOString(),
+    from: from.toISOString(),
+    to: to.toISOString(),
+    days: safeDays,
+    signatures,
+    meta: {
+      limit: safeLimit,
+      includeRaw,
+      windowUniqueSignatures: allDistinct.length,
+    },
+  }
 }
 
 export async function getErrorSummary(days = 14): Promise<ErrorSummaryResult> {
-  const safeDays = Number.isFinite(days) ? Math.max(1, Math.min(90, Math.floor(days))) : 14
+  const safeDays = normalizeDays(days)
   const { from, to } = dateRangeFromDays(safeDays)
-
-  const topRows = await prisma.errorSignatureAggregate.findMany({
-    orderBy: { count: 'desc' },
-    take: 15,
-  })
 
   const dailyRows = await prisma.errorDailyAggregate.findMany({
     where: {
@@ -296,30 +581,15 @@ export async function getErrorSummary(days = 14): Promise<ErrorSummaryResult> {
     orderBy: { day: 'asc' },
   })
 
-  const trend = dailyRows.map((row) => ({
-    day: row.day.toISOString(),
-    count: row.count.toString(),
-  }))
+  const trend = buildZeroFilledTrend(from, safeDays, dailyRows)
+  const totalErrors = trend.reduce((sum, row) => sum + BigInt(row.count), 0n)
+  const topSignatures = await listErrorSignatures({
+    days: safeDays,
+    limit: 15,
+    includeRaw: false,
+  })
 
-  const totalErrors = dailyRows.reduce((sum, row) => sum + row.count, 0n)
-
-  const yesterdayStart = dayStart(new Date())
-  yesterdayStart.setUTCDate(yesterdayStart.getUTCDate() - 1)
-  const yesterdayIso = yesterdayStart.toISOString()
-
-  const yesterdayCount = Number(dailyRows.find((row) => row.day.toISOString() === yesterdayIso)?.count ?? 0n)
-
-  const baselineEnd = new Date(yesterdayStart)
-  baselineEnd.setUTCDate(baselineEnd.getUTCDate() - 1)
-  const baselineStart = new Date(baselineEnd)
-  baselineStart.setUTCDate(baselineStart.getUTCDate() - 6)
-
-  const baselineRows = dailyRows.filter((row) => row.day >= baselineStart && row.day <= baselineEnd)
-  const baseline = baselineRows.length > 0
-    ? baselineRows.reduce((sum, row) => sum + Number(row.count), 0) / baselineRows.length
-    : 0
-
-  const spikeDetected = baseline >= 3 && yesterdayCount >= baseline * 2
+  const spike = computeSpikeMetrics(trend)
 
   return {
     generatedAt: new Date().toISOString(),
@@ -329,19 +599,9 @@ export async function getErrorSummary(days = 14): Promise<ErrorSummaryResult> {
     totals: {
       totalErrors: totalErrors.toString(),
       uniqueSignatures: await prisma.errorSignatureAggregate.count(),
+      windowUniqueSignatures: topSignatures.meta.windowUniqueSignatures,
     },
-    topSignatures: topRows.map((row) => ({
-      signatureHash: row.signatureHash,
-      signatureText: row.signatureText,
-      count: row.count.toString(),
-      firstSeen: row.firstSeenAt.toISOString(),
-      lastSeen: row.lastSeenAt.toISOString(),
-      sample: row.lastSampleSanitized,
-    })),
-    spike: {
-      detected: spikeDetected,
-      yesterdayCount,
-      baseline: Math.round(baseline * 100) / 100,
-    },
+    topSignatures: topSignatures.signatures,
+    spike,
   }
 }

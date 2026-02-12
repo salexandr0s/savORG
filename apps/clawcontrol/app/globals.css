@@ -249,7 +249,7 @@ body {
   .accent-bar-info::before { background-color: var(--info); }
   .accent-bar-progress::before { background-color: var(--progress); }
 
-  /* Shared dashboard action buttons */
+  /* Legacy compatibility classes. Prefer @clawcontrol/ui Button primitive. */
   .btn-primary,
   .btn-secondary {
     display: inline-flex;

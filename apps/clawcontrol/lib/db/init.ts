@@ -24,7 +24,7 @@ interface MigrationEntry {
   filePath: string
 }
 
-const REQUIRED_TABLES = ['work_orders', 'operations', 'operation_stories', 'agents']
+const REQUIRED_TABLES = ['work_orders', 'operations', 'operation_stories', 'agents', 'agent_teams']
 const REQUIRED_COLUMNS_BY_TABLE: Record<string, readonly string[]> = {
   work_orders: ['owner_type', 'owner_agent_id', 'tags', 'workflow_id', 'current_stage'],
   operations: [
@@ -49,7 +49,7 @@ const REQUIRED_COLUMNS_BY_TABLE: Record<string, readonly string[]> = {
     'acceptance_criteria_json',
     'status',
   ],
-  agents: ['dispatch_eligible', 'name_source', 'is_stale', 'stale_at'],
+  agents: ['dispatch_eligible', 'name_source', 'is_stale', 'stale_at', 'team_id'],
 }
 
 let lastStatus: DbInitStatus = {

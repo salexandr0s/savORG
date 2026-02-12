@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback, useMemo, type CSSProperties } from 'react'
-import { PageHeader, PageSection, EmptyState } from '@clawcontrol/ui'
+import { PageHeader, PageSection, EmptyState, Button, SegmentedToggle } from '@clawcontrol/ui'
 import { CanonicalTable, type Column } from '@/components/ui/canonical-table'
 import { StatusPill } from '@/components/ui/status-pill'
 import { InlineLoading, LoadingSpinner } from '@/components/ui/loading-state'
@@ -1581,49 +1581,51 @@ export function CronClient() {
           }
           actions={
             <>
-              <div className="flex items-center bg-bg-3 border border-bd-0 rounded-[var(--radius-md)] overflow-hidden">
-                <button
-                  onClick={() => setCalendarMode('list')}
-                  className={cn(
-                    'px-2 py-1.5 text-xs flex items-center gap-1.5',
-                    calendarMode === 'list' ? 'bg-bg-2 text-fg-0' : 'text-fg-2'
-                  )}
-                >
-                  <List className="w-3.5 h-3.5" />
-                  List
-                </button>
-                <button
-                  onClick={() => setCalendarMode('calendar')}
-                  className={cn(
-                    'px-2 py-1.5 text-xs flex items-center gap-1.5',
-                    calendarMode === 'calendar' ? 'bg-bg-2 text-fg-0' : 'text-fg-2'
-                  )}
-                >
-                  <CalendarDays className="w-3.5 h-3.5" />
-                  Calendar
-                </button>
-              </div>
+              <SegmentedToggle
+                value={calendarMode}
+                onChange={setCalendarMode}
+                tone="neutral"
+                ariaLabel="Cron view mode"
+                items={[
+                  {
+                    value: 'list',
+                    label: (
+                      <>
+                        <List className="w-3.5 h-3.5" />
+                        List
+                      </>
+                    ),
+                  },
+                  {
+                    value: 'calendar',
+                    label: (
+                      <>
+                        <CalendarDays className="w-3.5 h-3.5" />
+                        Calendar
+                      </>
+                    ),
+                  },
+                ]}
+              />
 
-              <button
+              <Button
                 onClick={refreshJobs}
                 disabled={isLoading}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] border transition-colors',
-                  'bg-bg-3 text-fg-1 border-bd-0 hover:text-fg-0 hover:bg-bg-2',
-                  'disabled:opacity-50 disabled:cursor-not-allowed'
-                )}
+                variant="secondary"
+                size="sm"
               >
                 <RefreshCw className={cn('w-3.5 h-3.5', (isLoading || isBackgroundLoading) && 'animate-spin')} />
                 {isLoading ? 'Refreshing...' : 'Refresh'}
-              </button>
+              </Button>
 
-              <button
+              <Button
                 onClick={() => setCreateModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] bg-status-info text-bg-0 hover:bg-status-info/90"
+                variant="primary"
+                size="sm"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Add Job
-              </button>
+              </Button>
             </>
           }
         />
@@ -2452,14 +2454,11 @@ function CronDetail({
           </div>
         )}
         <div className="flex gap-2">
-          <button
+          <Button
             onClick={handleRunNow}
             disabled={isLoading}
-            className={cn(
-              'flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium border-0 transition-colors',
-              'bg-accent/10 text-accent hover:bg-accent/20',
-              'disabled:opacity-50 disabled:cursor-not-allowed'
-            )}
+            variant="secondary"
+            size="md"
           >
             {actionInProgress === 'run' ? (
               <LoadingSpinner size="sm" />
@@ -2467,17 +2466,12 @@ function CronDetail({
               <Play className="w-3.5 h-3.5" />
             )}
             Run Now
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={handleToggleEnabled}
             disabled={isLoading}
-            className={cn(
-              'flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium border-0 transition-colors',
-              job.enabled
-                ? 'bg-status-warning/10 text-status-warning hover:bg-status-warning/20'
-                : 'bg-status-success/10 text-status-success hover:bg-status-success/20',
-              'disabled:opacity-50 disabled:cursor-not-allowed'
-            )}
+            variant="secondary"
+            size="md"
           >
             {actionInProgress === 'toggle' ? (
               <LoadingSpinner size="sm" />
@@ -2487,17 +2481,13 @@ function CronDetail({
               <Play className="w-3.5 h-3.5" />
             )}
             {job.enabled ? 'Disable' : 'Enable'}
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={handleDelete}
             disabled={isLoading}
-            className={cn(
-              'flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium border-0 transition-colors',
-              confirmDelete
-                ? 'bg-status-danger text-white hover:bg-status-danger/90'
-                : 'bg-status-danger/10 text-status-danger hover:bg-status-danger/20',
-              'disabled:opacity-50 disabled:cursor-not-allowed'
-            )}
+            variant="danger"
+            size="md"
+            className={cn(confirmDelete && 'bg-status-danger text-white border-status-danger hover:bg-status-danger/90')}
           >
             {actionInProgress === 'delete' ? (
               <LoadingSpinner size="sm" />
@@ -2505,7 +2495,7 @@ function CronDetail({
               <Trash2 className="w-3.5 h-3.5" />
             )}
             {confirmDelete ? 'Confirm Delete' : 'Delete'}
-          </button>
+          </Button>
         </div>
         {confirmDelete && (
           <p className="mt-2 text-xs text-status-danger">
@@ -2772,22 +2762,24 @@ function CreateCronJobModal({ isOpen, onClose, onCreated }: CreateCronJobModalPr
 
           {/* Actions */}
           <div className="flex justify-end gap-2 pt-2">
-            <button
+            <Button
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-4 py-2 text-xs font-medium text-fg-1 hover:text-fg-0 bg-bg-3 rounded-[var(--radius-md)] border border-bd-0 disabled:opacity-50"
+              variant="secondary"
+              size="md"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
               disabled={isSubmitting || !name.trim() || !schedule.trim() || !command.trim()}
-              className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-bg-0 bg-status-info hover:bg-status-info/90 rounded-[var(--radius-md)] disabled:opacity-50 disabled:cursor-not-allowed"
+              variant="primary"
+              size="md"
             >
               {isSubmitting && <LoadingSpinner size="sm" />}
               {isSubmitting ? 'Creating...' : 'Create Job'}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

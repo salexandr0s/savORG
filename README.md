@@ -14,6 +14,7 @@ ClawControl is a dashboard + orchestration layer for running governed multi-agen
 - Streams real-time system and run activity.
 - Manages agents, agent templates, teams, workflows, skills, plugins, and workspace files from one UI.
 - Supports import/deploy/export package artifacts (`.clawpack.zip`) for workflows, templates, teams, and bundles.
+- Exports optional marketplace sidecar metadata (`marketplace/listing.yaml`) so artifacts are directly ingestible by the marketplace hard-cut contract.
 
 ## Workflow Example
 
@@ -91,9 +92,11 @@ Some features are CLI-backed (Models, Plugins, Cron, Maintenance actions). If CL
 ## Documentation
 
 - Product/API docs (Mintlify): `mintlify/`
+- UI action standards (buttons/toggles/dropdowns): [docs/ui-buttons-and-toggles.md](docs/ui-buttons-and-toggles.md)
 - Agent template guide: [docs/agent-templates.md](docs/agent-templates.md)
 - Workflows guide: [docs/workflows.md](docs/workflows.md)
 - Packages and marketplace artifacts: [docs/packages-and-marketplace-artifacts.md](docs/packages-and-marketplace-artifacts.md)
+- Marketplace canonical implementation: `../Market_ClawControl`
 - Agent starter contract: [docs/AGENT_STARTER_TEMPLATE.md](docs/AGENT_STARTER_TEMPLATE.md)
 - Remote tunnel access: [docs/REMOTE_TAILSCALE.md](docs/REMOTE_TAILSCALE.md)
 - Local-only administration: [docs/local-only-admin.md](docs/local-only-admin.md)

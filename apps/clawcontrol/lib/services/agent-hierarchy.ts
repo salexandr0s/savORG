@@ -1,6 +1,6 @@
 import { existsSync } from 'fs'
-import { readFile } from 'fs/promises'
-import { join, resolve } from 'path'
+import { readdir, readFile } from 'fs/promises'
+import { basename, dirname, join, resolve } from 'path'
 import yaml from 'js-yaml'
 import JSON5 from 'json5'
 import { runCommandJson } from '@clawcontrol/adapters-openclaw'
@@ -264,7 +264,7 @@ interface ResolveHierarchySourcePathsOptions {
 
 export function resolveHierarchySourcePaths(
   options: ResolveHierarchySourcePathsOptions = {}
-): { workspaceRoot: string; yamlPath: string; fallbackPath: string } {
+): { workspaceRoot: string; yamlPath: string; fallbackPath: string; agentsPath: string } {
   const env = options.env ?? process.env
   const envCandidates = [
     env.OPENCLAW_WORKSPACE,
@@ -305,14 +305,17 @@ export function resolveHierarchySourcePaths(
       join(candidate, '.openclaw', 'openclaw.json'),
     ])
   )
+  const agentsCandidates = uniquePaths(candidates.map((candidate) => join(candidate, 'agents')))
 
   const yamlPath = firstExistingPath(yamlCandidates) ?? join(workspaceRoot, 'clawcontrol.config.yaml')
   const fallbackPath = firstExistingPath(fallbackCandidates) ?? join(workspaceRoot, 'openclaw', 'openclaw.json5')
+  const agentsPath = firstExistingPath(agentsCandidates) ?? join(workspaceRoot, 'agents')
 
   return {
     workspaceRoot,
     yamlPath,
     fallbackPath,
+    agentsPath,
   }
 }
 
@@ -372,6 +375,280 @@ function inferCapabilitiesFromToolPolicy(policy: AgentHierarchyToolPolicy): Part
 
 function warningKey(warning: AgentHierarchyWarning): string {
   return [warning.code, warning.source ?? '', warning.relatedNodeId ?? '', warning.message].join('|')
+}
+
+const MARKDOWN_ENTITY_STOP_WORDS = new Set([
+  'a',
+  'agent',
+  'agents',
+  'and',
+  'approval',
+  'approvals',
+  'coordination',
+  'core',
+  'final',
+  'for',
+  'from',
+  'identity',
+  'main',
+  'must',
+  'only',
+  'or',
+  'output',
+  'report',
+  'reports',
+  'role',
+  'tasks',
+  'the',
+  'to',
+  'workflow',
+  'workflows',
+  'you',
+])
+
+const KNOWN_AGENT_ROLE_TOKENS = new Set([
+  'build',
+  'buildreview',
+  'ceo',
+  'guard',
+  'manager',
+  'ops',
+  'plan',
+  'planreview',
+  'research',
+  'security',
+  'ui',
+  'uireview',
+])
+
+function stripMarkdownFormatting(value: string): string {
+  return value
+    .replace(/\[[^\]]+\]\([^)]+\)/g, ' ')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/_([^_]+)_/g, '$1')
+}
+
+function normalizeEntityToken(rawToken: string): string | undefined {
+  const trimmed = rawToken
+    .replace(/^[^A-Za-z0-9]+/, '')
+    .replace(/[^A-Za-z0-9_-]+$/, '')
+    .trim()
+  if (!trimmed) return undefined
+
+  const normalized = normalizeIdentifier(trimmed)
+  if (!normalized || MARKDOWN_ENTITY_STOP_WORDS.has(normalized)) return undefined
+
+  if (KNOWN_AGENT_ROLE_TOKENS.has(normalized)) {
+    return `clawcontrol${normalized}`
+  }
+
+  const looksLikeAgentName = normalized.startsWith('clawcontrol') || /[A-Z]/.test(trimmed)
+  if (!looksLikeAgentName) return undefined
+
+  return trimmed
+}
+
+function extractNamedEntities(value: string): string[] {
+  const input = stripMarkdownFormatting(value)
+  const output: string[] = []
+  const seen = new Set<string>()
+
+  const patterns = [
+    /\*\*([^*]+)\*\*/g,
+    /\bclawcontrol[a-z0-9_-]*\b/gi,
+    /\b[A-Za-z][A-Za-z0-9_-]{2,}\b/g,
+  ]
+
+  for (const pattern of patterns) {
+    for (const match of input.matchAll(pattern)) {
+      const candidate = normalizeEntityToken(match[1] ?? match[0])
+      if (!candidate) continue
+      const key = normalizeIdentifier(candidate)
+      if (seen.has(key)) continue
+      seen.add(key)
+      output.push(candidate)
+    }
+  }
+
+  return output
+}
+
+function extractRelationsFromMarkdown(content: string): {
+  reportsTo?: string
+  delegatesTo: string[]
+  receivesFrom: string[]
+} {
+  const delegatesTo = new Set<string>()
+  const receivesFrom = new Set<string>()
+  let reportsTo: string | undefined
+
+  const lines = content.split(/\r?\n/g)
+  for (const line of lines) {
+    const text = line.trim()
+    if (!text) continue
+
+    const reportMatch = text.match(/(?:^[-*]\s*)?(?:you\s+)?reports?\s+to\s*:\s*(.+)$/i)
+    if (reportMatch) {
+      const payload = reportMatch[1]
+      const [primary, coordination] = payload.split(/\bcoordination\s*:\s*/i, 2)
+      const reportTarget = extractNamedEntities(primary)[0]
+      if (reportTarget && !reportsTo) {
+        reportsTo = reportTarget
+      }
+
+      if (coordination) {
+        for (const sender of extractNamedEntities(coordination)) {
+          receivesFrom.add(sender)
+        }
+      }
+    }
+
+    const delegatesMatch = text.match(/(?:^[-*]\s*)?delegates?\s+to\s*:\s*(.+)$/i)
+    if (delegatesMatch) {
+      for (const target of extractNamedEntities(delegatesMatch[1])) {
+        delegatesTo.add(target)
+      }
+    }
+
+    const delegateTasksMatch = text.match(/(?:^[-*]\s*)?delegate\s+tasks?\s+to\s+(.+)$/i)
+    if (delegateTasksMatch) {
+      for (const target of extractNamedEntities(delegateTasksMatch[1])) {
+        delegatesTo.add(target)
+      }
+    }
+
+    const receivesMatch = text.match(/(?:^[-*]\s*)?(?:you\s+)?receiv(?:e|es)(?:\s+[a-z][a-z -]+)?\s+from\s*:\s*(.+)$/i)
+    if (receivesMatch) {
+      for (const sender of extractNamedEntities(receivesMatch[1])) {
+        receivesFrom.add(sender)
+      }
+    }
+  }
+
+  return {
+    reportsTo,
+    delegatesTo: Array.from(delegatesTo),
+    receivesFrom: Array.from(receivesFrom),
+  }
+}
+
+function inferAgentIdFromMarkdownDocument(path: string, content: string): string | undefined {
+  const explicitNameMatch = content.match(/^\s*-\s*Name\s*:\s*(.+)$/im)
+  const explicitName = explicitNameMatch ? extractNamedEntities(explicitNameMatch[1])[0] : undefined
+  if (explicitName) return explicitName
+
+  const titleMatch = content.match(/^#\s+(.+)$/m)
+  const titleName = titleMatch ? extractNamedEntities(titleMatch[1])[0] : undefined
+  if (titleName) return titleName
+
+  const fileName = basename(path).toLowerCase()
+  if (fileName === 'soul.md') {
+    const folder = basename(dirname(path))
+    const normalizedFolder = normalizeIdentifier(folder)
+    if (!normalizedFolder) return undefined
+    return normalizedFolder.startsWith('clawcontrol') ? folder : `clawcontrol${normalizedFolder}`
+  }
+
+  const rawBase = basename(path).replace(/\.md$/i, '')
+  const normalizedBase = normalizeIdentifier(rawBase)
+  if (!normalizedBase) return undefined
+  return normalizedBase.startsWith('clawcontrol') ? rawBase : `clawcontrol${normalizedBase}`
+}
+
+export function extractMarkdownHierarchyDocuments(
+  documents: Array<{ path: string; content: string }>
+): YamlExtractionResult {
+  const warnings: AgentHierarchyWarning[] = []
+  const records = new Map<string, {
+    id: string
+    reportsTo?: string
+    delegatesTo: Set<string>
+    receivesFrom: Set<string>
+  }>()
+
+  for (const document of documents) {
+    const agentId = inferAgentIdFromMarkdownDocument(document.path, document.content)
+    if (!agentId) continue
+
+    const key = normalizeIdentifier(agentId)
+    if (!key) continue
+
+    const existing = records.get(key) ?? {
+      id: agentId,
+      delegatesTo: new Set<string>(),
+      receivesFrom: new Set<string>(),
+    }
+
+    const relations = extractRelationsFromMarkdown(document.content)
+    if (!existing.reportsTo && relations.reportsTo) {
+      existing.reportsTo = relations.reportsTo
+    }
+
+    for (const target of relations.delegatesTo) {
+      existing.delegatesTo.add(target)
+    }
+    for (const sender of relations.receivesFrom) {
+      existing.receivesFrom.add(sender)
+    }
+
+    records.set(key, existing)
+  }
+
+  const agents: YamlAgentRecord[] = Array.from(records.values()).map((record) => ({
+    id: record.id,
+    reportsTo: record.reportsTo,
+    delegatesTo: Array.from(record.delegatesTo),
+    receivesFrom: Array.from(record.receivesFrom),
+    capabilities: {},
+  }))
+
+  return { agents, warnings }
+}
+
+export async function extractMarkdownHierarchyFromAgentsPath(agentsPath: string): Promise<YamlExtractionResult> {
+  const documents: Array<{ path: string; content: string }> = []
+  const warnings: AgentHierarchyWarning[] = []
+
+  try {
+    const entries = await readdir(agentsPath, { withFileTypes: true })
+
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const soulPath = join(agentsPath, entry.name, 'SOUL.md')
+        if (!existsSync(soulPath)) continue
+        const content = await readFile(soulPath, 'utf-8')
+        documents.push({ path: soulPath, content })
+        continue
+      }
+
+      if (!entry.isFile()) continue
+      if (!entry.name.toLowerCase().endsWith('.md')) continue
+
+      const lowerName = entry.name.toLowerCase()
+      if (lowerName === 'soul.md' || lowerName === 'heartbeat.md') continue
+
+      const filePath = join(agentsPath, entry.name)
+      const content = await readFile(filePath, 'utf-8')
+      documents.push({ path: filePath, content })
+    }
+  } catch (error) {
+    if (!isMissingFileError(error)) {
+      const message = error instanceof Error ? error.message : String(error)
+      warnings.push({
+        code: 'source_unavailable',
+        source: 'clawcontrol_config_yaml',
+        message: `Markdown hierarchy source unavailable: ${message}`,
+      })
+    }
+  }
+
+  const extracted = extractMarkdownHierarchyDocuments(documents)
+  return {
+    agents: extracted.agents,
+    warnings: [...warnings, ...extracted.warnings],
+  }
 }
 
 function readToolPolicy(
@@ -945,7 +1222,7 @@ export function buildAgentHierarchyGraph(input: BuildAgentHierarchyInput): Agent
 }
 
 export async function getAgentHierarchyData(): Promise<AgentHierarchyData> {
-  const { yamlPath, fallbackPath } = resolveHierarchySourcePaths()
+  const { yamlPath, fallbackPath, agentsPath } = resolveHierarchySourcePaths()
 
   const sourceStatus: AgentHierarchySourceStatus = {
     yaml: {
@@ -1010,6 +1287,15 @@ export async function getAgentHierarchyData(): Promise<AgentHierarchyData> {
         source: 'clawcontrol_config_yaml',
         message: `YAML source unavailable: ${message}`,
       })
+    }
+  }
+
+  if (!yamlExtract || yamlExtract.agents.length === 0) {
+    const markdownExtract = await extractMarkdownHierarchyFromAgentsPath(agentsPath)
+    if (markdownExtract.agents.length > 0) {
+      yamlExtract = markdownExtract
+    } else if (markdownExtract.warnings.length > 0) {
+      initialWarnings.push(...markdownExtract.warnings)
     }
   }
 

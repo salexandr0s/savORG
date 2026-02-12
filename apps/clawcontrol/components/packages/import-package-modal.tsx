@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { TypedConfirmModal } from '@clawcontrol/ui'
+import { TypedConfirmModal, Button } from '@clawcontrol/ui'
 import { Modal } from '@/components/ui/modal'
 import { useProtectedAction } from '@/lib/hooks/useProtectedAction'
 import { useSettings } from '@/lib/settings-context'
@@ -153,15 +153,16 @@ export function ImportPackageModal({
               className="w-full text-sm text-fg-1"
             />
 
-            <button
+            <Button
               type="button"
               onClick={handleAnalyze}
               disabled={!file || isWorking}
-              className="btn-secondary inline-flex items-center gap-1.5"
+              variant="secondary"
+              size="sm"
             >
               <Upload className="w-3.5 h-3.5" />
               Analyze
-            </button>
+            </Button>
           </div>
 
           {analysis && (
@@ -221,27 +222,29 @@ export function ImportPackageModal({
               )}
 
               <div className="flex items-center gap-2">
-                <button
+                <Button
                   type="button"
                   onClick={handleDeploy}
                   disabled={isWorking}
-                  className="btn-primary inline-flex items-center gap-1.5"
+                  variant="primary"
+                  size="sm"
                 >
                   <Rocket className="w-3.5 h-3.5" />
                   Deploy
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
                   onClick={() => {
                     setAnalysis(null)
                     setError(null)
                   }}
                   disabled={isWorking}
-                  className="btn-secondary inline-flex items-center gap-1.5"
+                  variant="secondary"
+                  size="sm"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   Reset
-                </button>
+                </Button>
               </div>
             </div>
           )}

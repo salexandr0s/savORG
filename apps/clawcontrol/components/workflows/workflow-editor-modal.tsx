@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { Button, SegmentedToggle, SelectDropdown } from '@clawcontrol/ui'
 import { Modal } from '@/components/ui/modal'
 import { YamlEditor } from '@/components/editors/yaml-editor'
 import type { WorkflowDetail } from '@/lib/http'
@@ -216,22 +217,18 @@ export function WorkflowEditorModal({
       description="Use builder mode or raw YAML mode"
     >
       <div className="space-y-4">
-        <div className="flex items-center gap-1 bg-bg-2 rounded-[var(--radius-md)] border border-bd-0 p-0.5 w-fit">
-          <button
-            type="button"
-            onClick={() => setEditorMode('builder')}
-            className={editorMode === 'builder' ? 'btn-secondary text-xs px-2 py-1' : 'px-2 py-1 text-xs text-fg-2'}
-          >
-            Builder
-          </button>
-          <button
-            type="button"
-            onClick={() => setEditorMode('yaml')}
-            className={editorMode === 'yaml' ? 'btn-secondary text-xs px-2 py-1' : 'px-2 py-1 text-xs text-fg-2'}
-          >
-            YAML
-          </button>
-        </div>
+        <SegmentedToggle
+          value={editorMode}
+          onChange={setEditorMode}
+          tone="neutral"
+          size="xs"
+          className="w-fit"
+          ariaLabel="Workflow editor mode"
+          items={[
+            { value: 'builder', label: 'Builder' },
+            { value: 'yaml', label: 'YAML' },
+          ]}
+        />
 
         {editorMode === 'builder' ? (
           <div className="space-y-4">
@@ -259,10 +256,10 @@ export function WorkflowEditorModal({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <div className="text-sm font-medium text-fg-0">Stages</div>
-                <button type="button" onClick={addStage} className="btn-secondary inline-flex items-center gap-1 text-xs">
+                <Button type="button" onClick={addStage} variant="secondary" size="xs">
                   <Plus className="w-3.5 h-3.5" />
                   Add stage
-                </button>
+                </Button>
               </div>
 
               <div className="space-y-2">
@@ -283,10 +280,10 @@ export function WorkflowEditorModal({
                           placeholder="agent"
                           className="px-2 py-1.5 bg-bg-1 border border-bd-0 rounded text-sm"
                         />
-                        <select
+                        <SelectDropdown
                           value={stage.type ?? 'single'}
-                          onChange={(event) => {
-                            const nextType = event.target.value === 'loop' ? 'loop' : 'single'
+                          onChange={(nextValue) => {
+                            const nextType = nextValue === 'loop' ? 'loop' : 'single'
                             updateStage(index, {
                               type: nextType,
                               loop: nextType === 'loop'
@@ -294,19 +291,25 @@ export function WorkflowEditorModal({
                                 : undefined,
                             })
                           }}
-                          className="px-2 py-1.5 bg-bg-1 border border-bd-0 rounded text-sm"
-                        >
-                          <option value="single">single</option>
-                          <option value="loop">loop</option>
-                        </select>
-                        <button
+                          ariaLabel={`Stage ${stage.ref || index + 1} type`}
+                          tone="field"
+                          size="sm"
+                          search={false}
+                          options={[
+                            { value: 'single', label: 'single' },
+                            { value: 'loop', label: 'loop' },
+                          ]}
+                        />
+                        <Button
                           type="button"
                           onClick={() => removeStage(index)}
-                          className="btn-secondary inline-flex items-center justify-center gap-1 text-xs"
+                          variant="secondary"
+                          size="xs"
+                          className="justify-center"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                           Remove
-                        </button>
+                        </Button>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs text-fg-2">
@@ -410,10 +413,10 @@ export function WorkflowEditorModal({
         )}
 
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
-          <button type="button" onClick={() => { void submit() }} disabled={!canSave} className="btn-primary disabled:opacity-60">
+          <Button type="button" onClick={onClose} variant="secondary" size="sm">Cancel</Button>
+          <Button type="button" onClick={() => { void submit() }} disabled={!canSave} variant="primary" size="sm">
             {isSaving ? 'Saving...' : mode === 'create' ? 'Create Workflow' : 'Save Changes'}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

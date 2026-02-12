@@ -5,6 +5,7 @@ import CodeMirror from '@uiw/react-codemirror'
 import { markdown } from '@codemirror/lang-markdown'
 import { oneDark } from '@codemirror/theme-one-dark'
 import ReactMarkdown from 'react-markdown'
+import { Button } from '@clawcontrol/ui'
 import { cn } from '@/lib/utils'
 import { LoadingSpinner } from '@/components/ui/loading-state'
 import {
@@ -231,15 +232,12 @@ export function MarkdownEditor({
 
           {/* Save */}
           {onSave && !readOnly && (
-            <button
+            <Button
               onClick={handleSave}
               disabled={isSaving || !hasChanges}
-              className={cn(
-                'flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-[var(--radius-sm)] transition-colors disabled:opacity-50',
-                hasChanges
-                  ? 'bg-status-info text-white hover:bg-status-info/90'
-                  : 'text-fg-2 hover:text-fg-1 hover:bg-bg-3'
-              )}
+              variant={hasChanges ? 'primary' : 'secondary'}
+              size="xs"
+              className={cn(!hasChanges && 'text-fg-2')}
               title="Save (Cmd/Ctrl+S)"
             >
               {isSaving ? (
@@ -250,7 +248,7 @@ export function MarkdownEditor({
                 <Check className="w-3.5 h-3.5" />
               )}
               {isSaving ? 'Saving...' : hasChanges ? 'Save' : 'Saved'}
-            </button>
+            </Button>
           )}
         </div>
       </div>

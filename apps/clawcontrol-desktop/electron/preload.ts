@@ -10,6 +10,11 @@ interface ServerRestartResponse {
   message: string
 }
 
+interface RunModelAuthLoginResponse {
+  ok: boolean
+  message?: string
+}
+
 interface DesktopSettingsPayload {
   gatewayHttpUrl?: string | null
   gatewayWsUrl?: string | null
@@ -42,4 +47,7 @@ contextBridge.exposeInMainWorld('clawcontrolDesktop', {
 
   testGateway: async (payload?: { gatewayHttpUrl?: string; gatewayToken?: string; withRetry?: boolean }): Promise<unknown> =>
     ipcRenderer.invoke('clawcontrol:test-gateway', payload ?? {}) as Promise<unknown>,
+
+  runModelAuthLogin: async (providerId: string): Promise<RunModelAuthLoginResponse> =>
+    ipcRenderer.invoke('clawcontrol:run-model-auth-login', { providerId }) as Promise<RunModelAuthLoginResponse>,
 })

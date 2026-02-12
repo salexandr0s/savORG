@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { Button } from '@clawcontrol/ui'
 import { cn } from '@/lib/utils'
 import { X, Search, Globe, Check, Copy } from 'lucide-react'
 import { LoadingSpinner } from '@/components/ui/loading-state'
@@ -178,25 +179,23 @@ export function SkillSelector({
             {selected.size} skill{selected.size !== 1 ? 's' : ''} selected
           </span>
           <div className="flex gap-2">
-            <button
+            <Button
               onClick={onClose}
-              className="px-3 py-1.5 text-sm font-medium text-fg-2 hover:text-fg-0 transition-colors"
+              variant="secondary"
+              size="md"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={handleConfirm}
               disabled={selected.size === 0}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-[var(--radius-md)] transition-colors',
-                selected.size > 0
-                  ? 'bg-status-progress text-white hover:bg-status-progress/90'
-                  : 'bg-bg-3 text-fg-3 cursor-not-allowed'
-              )}
+              variant={selected.size > 0 ? 'primary' : 'secondary'}
+              size="md"
+              className={cn(selected.size === 0 && 'text-fg-3')}
             >
               <Copy className="w-4 h-4" />
               Duplicate to Agent
-            </button>
+            </Button>
           </div>
         </div>
       </div>

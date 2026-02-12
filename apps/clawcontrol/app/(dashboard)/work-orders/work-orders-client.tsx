@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { PageHeader, EmptyState } from '@clawcontrol/ui'
+import { PageHeader, EmptyState, Button, buttonLikeClass, SelectDropdown } from '@clawcontrol/ui'
 import { CanonicalTable, type Column } from '@/components/ui/canonical-table'
 import { WorkOrderStatePill, PriorityPill } from '@/components/ui/status-pill'
 import { ViewToggle, type ViewMode } from '@/components/ui/view-toggle'
@@ -283,63 +283,65 @@ function NewWorkOrderModal({
           <div className="grid grid-cols-3 gap-4">
             {/* Priority */}
             <div>
-              <label htmlFor="wo-priority" className="block text-xs font-medium text-fg-1 mb-1.5">
+              <label className="block text-xs font-medium text-fg-1 mb-1.5">
                 Priority
               </label>
-              <select
-                id="wo-priority"
+              <SelectDropdown
                 value={formData.priority}
-                onChange={(e) => setFormData((f) => ({ ...f, priority: e.target.value as Priority }))}
+                onChange={(nextValue) => setFormData((f) => ({ ...f, priority: nextValue as Priority }))}
                 disabled={isSubmitting}
-                className="w-full px-3 py-2 text-sm bg-bg-2 border border-bd-1 rounded-[var(--radius-md)] text-fg-0 focus:outline-none focus:ring-1 focus:ring-status-info/50 disabled:opacity-50"
-              >
-                {PRIORITY_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label} - {opt.description}
-                  </option>
-                ))}
-              </select>
+                ariaLabel="Work order priority"
+                tone="field"
+                size="md"
+                options={PRIORITY_OPTIONS.map((opt) => ({
+                  value: opt.value,
+                  label: opt.label,
+                  description: opt.description,
+                  textValue: `${opt.label} ${opt.description}`,
+                }))}
+              />
             </div>
 
             {/* Owner */}
             <div>
-              <label htmlFor="wo-owner" className="block text-xs font-medium text-fg-1 mb-1.5">
+              <label className="block text-xs font-medium text-fg-1 mb-1.5">
                 Owner
               </label>
-              <select
-                id="wo-owner"
+              <SelectDropdown
                 value={formData.owner}
-                onChange={(e) => setFormData((f) => ({ ...f, owner: e.target.value as Owner }))}
+                onChange={(nextValue) => setFormData((f) => ({ ...f, owner: nextValue as Owner }))}
                 disabled={isSubmitting}
-                className="w-full px-3 py-2 text-sm bg-bg-2 border border-bd-1 rounded-[var(--radius-md)] text-fg-0 focus:outline-none focus:ring-1 focus:ring-status-info/50 disabled:opacity-50"
-              >
-                {ownerOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+                ariaLabel="Work order owner"
+                tone="field"
+                size="md"
+                options={ownerOptions.map((opt) => ({
+                  value: opt.value,
+                  label: opt.label,
+                  textValue: `${opt.label} ${opt.value}`,
+                }))}
+              />
             </div>
 
             {/* Workflow */}
             <div>
-              <label htmlFor="wo-workflow" className="block text-xs font-medium text-fg-1 mb-1.5">
+              <label className="block text-xs font-medium text-fg-1 mb-1.5">
                 Workflow
               </label>
-              <select
-                id="wo-workflow"
+              <SelectDropdown
                 value={formData.workflowId}
-                onChange={(e) => setFormData((f) => ({ ...f, workflowId: e.target.value }))}
+                onChange={(nextValue) => setFormData((f) => ({ ...f, workflowId: nextValue }))}
                 disabled={isSubmitting}
-                className="w-full px-3 py-2 text-sm bg-bg-2 border border-bd-1 rounded-[var(--radius-md)] text-fg-0 focus:outline-none focus:ring-1 focus:ring-status-info/50 disabled:opacity-50"
-              >
-                <option value="">Auto (deterministic)</option>
-                {workflowOptions.map((workflow) => (
-                  <option key={workflow.id} value={workflow.id}>
-                    {workflow.label}
-                  </option>
-                ))}
-              </select>
+                ariaLabel="Work order workflow"
+                tone="field"
+                size="md"
+                options={[
+                  { value: '', label: 'Auto (deterministic)', textValue: 'auto deterministic workflow' },
+                  ...workflowOptions.map((workflow) => ({
+                    value: workflow.id,
+                    label: workflow.label,
+                  })),
+                ]}
+              />
             </div>
           </div>
 
@@ -352,22 +354,24 @@ function NewWorkOrderModal({
 
           {/* Actions */}
           <div className="flex justify-end gap-2 pt-2">
-            <button
+            <Button
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-4 py-2 text-xs font-medium text-fg-1 hover:text-fg-0 bg-bg-3 rounded-[var(--radius-md)] border border-bd-0 disabled:opacity-50"
+              variant="secondary"
+              size="md"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
               disabled={isSubmitting || !formData.title.trim() || !formData.goalMd.trim()}
-              className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-bg-0 bg-status-info hover:bg-status-info/90 rounded-[var(--radius-md)] disabled:opacity-50 disabled:cursor-not-allowed"
+              variant="primary"
+              size="md"
             >
               {isSubmitting && <LoadingSpinner size="sm" />}
               {isSubmitting ? 'Creating...' : 'Create Work Order'}
-            </button>
+            </Button>
           </div>
         </form>
       </div>
@@ -552,17 +556,23 @@ function WorkOrderDrawerContent({
 
       <div className="space-y-2">
         {workOrder.state === 'planned' && (
-          <button
+          <Button
             onClick={() => onStart?.(workOrder.id)}
             disabled={isStarting}
-            className="w-full text-center px-4 py-2 text-xs font-medium bg-status-info text-bg-0 hover:bg-status-info/90 rounded-[var(--radius-md)] disabled:opacity-60"
+            variant="primary"
+            size="md"
+            className="w-full"
           >
             {isStarting ? 'Starting...' : 'Start Workflow'}
-          </button>
+          </Button>
         )}
         <a
           href={`/work-orders/${workOrder.id}`}
-          className="block w-full text-center px-4 py-2 text-xs font-medium bg-bg-3 text-fg-0 hover:bg-bg-3/80 rounded-[var(--radius-md)] border border-bd-0"
+          className={buttonLikeClass({
+            variant: 'secondary',
+            size: 'md',
+            className: 'w-full',
+          })}
         >
           View Full Details
         </a>
@@ -871,7 +881,7 @@ export function WorkOrdersClient() {
 
   // Loading state
   if (loading) {
-    return <LoadingState />
+    return <LoadingState height="viewport" />
   }
 
   // Error state
@@ -893,30 +903,28 @@ export function WorkOrdersClient() {
         actions={
           <div className="flex items-center gap-2">
             <ViewToggle value={view} onChange={setView} />
-            <button
+            <Button
               onClick={() => setFilterDrawerOpen(true)}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] border border-bd-0',
-                activeFilterCount > 0
-                  ? 'bg-status-info/10 text-status-info border-status-info/20'
-                  : 'bg-bg-3 text-fg-1 hover:text-fg-0'
-              )}
+              variant="secondary"
+              size="sm"
+              className={cn(activeFilterCount > 0 && 'text-status-info border-status-info/20 bg-status-info/10 hover:bg-status-info/20')}
             >
               <Filter className="w-3.5 h-3.5" />
               Filter
               {activeFilterCount > 0 && (
-                <span className="ml-1 px-1.5 py-0.5 text-[10px] bg-status-info text-bg-0 rounded-full">
+                <span className="ml-1 px-1.5 py-0.5 text-[10px] bg-status-progress text-white rounded-full">
                   {activeFilterCount}
                 </span>
               )}
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => setCreateModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] bg-status-info text-bg-0 hover:bg-status-info/90"
+              variant="primary"
+              size="sm"
             >
               <Plus className="w-3.5 h-3.5" />
               New Work Order
-            </button>
+            </Button>
           </div>
         }
       />

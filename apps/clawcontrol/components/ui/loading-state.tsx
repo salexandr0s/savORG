@@ -15,7 +15,7 @@ const spinnerSizeClass: Record<SpinnerSize, string> = {
   '3xl': 'w-12 h-12',
 }
 
-type LoadingStateHeight = 'auto' | 'sm' | 'md' | 'lg' | 'full'
+type LoadingStateHeight = 'auto' | 'sm' | 'md' | 'lg' | 'full' | 'viewport'
 
 const loadingHeightClass: Record<LoadingStateHeight, string> = {
   auto: '',
@@ -23,6 +23,7 @@ const loadingHeightClass: Record<LoadingStateHeight, string> = {
   md: 'h-64',
   lg: 'h-80',
   full: 'h-full',
+  viewport: 'min-h-[calc(100dvh-var(--topbar-height)-1.5rem)] sm:min-h-[calc(100dvh-var(--topbar-height)-2rem)]',
 }
 
 interface LoadingSpinnerProps {

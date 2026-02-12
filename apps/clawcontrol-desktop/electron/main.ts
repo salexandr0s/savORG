@@ -24,6 +24,7 @@ const GET_SETTINGS_CHANNEL = 'clawcontrol:get-settings'
 const SAVE_SETTINGS_CHANNEL = 'clawcontrol:save-settings'
 const GET_INIT_STATUS_CHANNEL = 'clawcontrol:get-init-status'
 const TEST_GATEWAY_CHANNEL = 'clawcontrol:test-gateway'
+const RUN_MODEL_AUTH_LOGIN_CHANNEL = 'clawcontrol:run-model-auth-login'
 // Add a custom startup logo under apps/clawcontrol-desktop/assets using one of these names.
 const LOADING_LOGO_FILES = [
   'loading-logo.gif',
@@ -36,6 +37,11 @@ const LOADING_LOGO_FILES = [
 interface ServerRestartResponse {
   ok: boolean
   message: string
+}
+
+interface RunModelAuthLoginResponse {
+  ok: boolean
+  message?: string
 }
 
 interface DesktopSettings {
@@ -347,6 +353,112 @@ function resolveOpenClawBin(pathValue: string): string | null {
   }
 
   return null
+}
+
+function resolveBinaryInPath(binaryName: string, pathValue: string): string | null {
+  const separator = process.platform === 'win32' ? ';' : ':'
+  const candidates = pathValue
+    .split(separator)
+    .filter((segment) => segment.length > 0)
+    .map((segment) => path.join(segment, process.platform === 'win32' ? `${binaryName}.exe` : binaryName))
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate
+  }
+
+  return null
+}
+
+function escapeForAppleScript(input: string): string {
+  return input.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
+function quoteForPosixShell(input: string): string {
+  if (/^[a-zA-Z0-9_./:-]+$/.test(input)) return input
+  return `'${input.replace(/'/g, `'\\''`)}'`
+}
+
+function parseProviderId(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const providerId = value.trim()
+  if (!providerId) return null
+  if (!/^[a-z0-9][a-z0-9._-]{0,63}$/.test(providerId)) return null
+  return providerId
+}
+
+function launchDetached(command: string, args: string[]): RunModelAuthLoginResponse {
+  try {
+    const child = spawn(command, args, {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true,
+    })
+    child.unref()
+    return { ok: true }
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : 'Failed to launch terminal command.',
+    }
+  }
+}
+
+function runModelAuthLoginInTerminal(providerId: string): RunModelAuthLoginResponse {
+  const pathValue = buildServerPath(process.env.PATH)
+  const openClawBin = resolveOpenClawBin(pathValue)
+
+  if (!openClawBin) {
+    return {
+      ok: false,
+      message: 'OpenClaw CLI was not found on PATH.',
+    }
+  }
+
+  if (process.platform === 'win32') {
+    const command = `"${openClawBin}" models auth login --provider ${providerId}`
+    const result = launchDetached('cmd.exe', ['/c', 'start', '', 'cmd', '/k', command])
+    return result.ok
+      ? { ok: true, message: 'Opened terminal for OAuth login.' }
+      : result
+  }
+
+  const posixCommand = `${quoteForPosixShell(openClawBin)} models auth login --provider ${providerId}`
+
+  if (process.platform === 'darwin') {
+    const script = [
+      'tell application "Terminal"',
+      'activate',
+      `do script "${escapeForAppleScript(posixCommand)}"`,
+      'end tell',
+    ].join('\n')
+
+    const result = launchDetached('osascript', ['-e', script])
+    return result.ok
+      ? { ok: true, message: 'Opened Terminal for OAuth login.' }
+      : result
+  }
+
+  const linuxTerminalCandidates: Array<{ bin: string; args: string[] }> = [
+    { bin: 'x-terminal-emulator', args: ['-e', 'bash', '-lc', `${posixCommand}; exec bash`] },
+    { bin: 'gnome-terminal', args: ['--', 'bash', '-lc', `${posixCommand}; exec bash`] },
+    { bin: 'konsole', args: ['-e', 'bash', '-lc', `${posixCommand}; exec bash`] },
+    { bin: 'xfce4-terminal', args: ['-e', `bash -lc "${posixCommand}; exec bash"`] },
+    { bin: 'xterm', args: ['-e', 'bash', '-lc', `${posixCommand}; exec bash`] },
+  ]
+
+  for (const candidate of linuxTerminalCandidates) {
+    const binaryPath = resolveBinaryInPath(candidate.bin, pathValue)
+    if (!binaryPath) continue
+    const result = launchDetached(binaryPath, candidate.args)
+    if (result.ok) {
+      return { ok: true, message: 'Opened terminal for OAuth login.' }
+    }
+  }
+
+  return {
+    ok: false,
+    message: 'No supported terminal app was found to run the OAuth command.',
+  }
 }
 
 function normalizeSettingsString(value: unknown): string | null {
@@ -745,6 +857,21 @@ ipcMain.handle(TEST_GATEWAY_CHANNEL, async (_event, payload: unknown) => {
     }
   }
 })
+
+ipcMain.handle(
+  RUN_MODEL_AUTH_LOGIN_CHANNEL,
+  async (_event, payload: { providerId?: unknown }): Promise<RunModelAuthLoginResponse> => {
+    const providerId = parseProviderId(payload?.providerId)
+    if (!providerId) {
+      return {
+        ok: false,
+        message: 'Invalid provider id.',
+      }
+    }
+
+    return runModelAuthLoginInTerminal(providerId)
+  }
+)
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
 if (!gotSingleInstanceLock) {

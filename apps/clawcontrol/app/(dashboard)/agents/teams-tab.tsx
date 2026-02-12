@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { EmptyState, TypedConfirmModal } from '@clawcontrol/ui'
+import { EmptyState, TypedConfirmModal, Button } from '@clawcontrol/ui'
 import { CanonicalTable, type Column } from '@/components/ui/canonical-table'
 import { RightDrawer } from '@/components/shell/right-drawer'
 import { Modal } from '@/components/ui/modal'
@@ -9,7 +9,6 @@ import { ImportPackageModal } from '@/components/packages/import-package-modal'
 import { agentTeamsApi, packagesApi, type AgentTeamSummary } from '@/lib/http'
 import { useProtectedAction } from '@/lib/hooks/useProtectedAction'
 import { useSettings } from '@/lib/settings-context'
-import { cn } from '@/lib/utils'
 import { Download, Plus, Trash2, Upload } from 'lucide-react'
 
 const teamColumns: Column<AgentTeamSummary>[] = [
@@ -158,15 +157,16 @@ function TeamEditorModal({
         </label>
 
         <div className="flex justify-end gap-2 pt-1">
-          <button onClick={onClose} className="btn-secondary" type="button">Cancel</button>
-          <button
+          <Button onClick={onClose} variant="secondary" size="sm" type="button">Cancel</Button>
+          <Button
             onClick={() => { void onSubmit() }}
             disabled={!canSubmit}
-            className={cn('btn-primary', !canSubmit && 'opacity-60')}
+            variant="primary"
+            size="sm"
             type="button"
           >
             {isSubmitting ? 'Saving...' : mode === 'create' ? 'Create Team' : 'Save Changes'}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>
@@ -361,18 +361,19 @@ export function TeamsTab() {
         <div className="flex items-center justify-between gap-2">
           <div className="text-sm text-fg-2">{teams.length} teams configured</div>
           <div className="flex items-center gap-2">
-            <button
+            <Button
               type="button"
               onClick={() => setShowPackageImport(true)}
-              className="btn-secondary inline-flex items-center gap-1.5"
+              variant="secondary"
+              size="sm"
             >
               <Upload className="w-3.5 h-3.5" />
               Import Package
-            </button>
-            <button type="button" onClick={openCreate} className="btn-primary inline-flex items-center gap-1.5">
+            </Button>
+            <Button type="button" onClick={openCreate} variant="primary" size="sm">
               <Plus className="w-3.5 h-3.5" />
               New Team
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -441,19 +442,19 @@ export function TeamsTab() {
             </div>
 
             <div className="flex items-center gap-2">
-              <button type="button" onClick={openEdit} className="btn-secondary">Edit</button>
-              <button type="button" onClick={exportTeam} className="btn-secondary inline-flex items-center gap-1.5">
+              <Button type="button" onClick={openEdit} variant="secondary" size="sm">Edit</Button>
+              <Button type="button" onClick={exportTeam} variant="secondary" size="sm">
                 <Download className="w-3.5 h-3.5" />
                 Export
-              </button>
-              <button type="button" onClick={exportTeamPackage} className="btn-secondary inline-flex items-center gap-1.5">
+              </Button>
+              <Button type="button" onClick={exportTeamPackage} variant="secondary" size="sm">
                 <Download className="w-3.5 h-3.5" />
                 Export Package
-              </button>
-              <button type="button" onClick={deleteTeam} className="btn-secondary inline-flex items-center gap-1.5 text-status-danger">
+              </Button>
+              <Button type="button" onClick={deleteTeam} variant="danger" size="sm">
                 <Trash2 className="w-3.5 h-3.5" />
                 Delete
-              </button>
+              </Button>
             </div>
           </div>
         )}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { EmptyState, PageSection } from '@clawcontrol/ui'
+import { EmptyState, PageSection, SelectDropdown } from '@clawcontrol/ui'
 import { Bot, RefreshCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AgentAvatar } from '@/components/ui/agent-avatar'
@@ -382,7 +382,7 @@ export function HierarchyView({ data, loading, error, onRetry }: HierarchyViewPr
   }, [data])
 
   if (loading) {
-    return <LoadingState />
+    return <LoadingState height="viewport" />
   }
 
   if (error) {
@@ -454,18 +454,17 @@ export function HierarchyView({ data, loading, error, onRetry }: HierarchyViewPr
 
             <div className="h-5 w-px bg-bd-0" />
 
-            <select
+            <SelectDropdown
               value={stationFilter}
-              onChange={(event) => setStationFilter(event.target.value)}
-              className="px-2 py-1 text-xs rounded-[var(--radius-sm)] border border-bd-0 bg-bg-1 text-fg-1"
-            >
-              <option value="all">All stations</option>
-              {stationOptions.map((station) => (
-                <option key={station} value={station}>
-                  {station}
-                </option>
-              ))}
-            </select>
+              onChange={(nextValue) => setStationFilter(nextValue)}
+              ariaLabel="Hierarchy station filter"
+              tone="toolbar"
+              size="sm"
+              options={[
+                { value: 'all', label: 'All stations', textValue: 'all stations' },
+                ...stationOptions.map((station) => ({ value: station, label: station })),
+              ]}
+            />
 
             <label className="inline-flex items-center gap-2 text-xs text-fg-1">
               <input

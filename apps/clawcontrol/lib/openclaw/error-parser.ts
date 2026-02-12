@@ -9,6 +9,7 @@ export interface ParsedErrorEvent {
   signatureHash: string
   signatureText: string
   sample: string
+  sampleRawRedacted: string
 }
 
 function isEntryStart(line: string): boolean {
@@ -66,6 +67,7 @@ async function emitBlock(block: string, onEvent: (event: ParsedErrorEvent) => vo
     signatureHash: normalized.signatureHash,
     signatureText: normalized.signatureText,
     sample: normalized.sample,
+    sampleRawRedacted: normalized.rawSampleRedacted,
   })
 }
 

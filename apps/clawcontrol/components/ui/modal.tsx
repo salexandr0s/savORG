@@ -89,6 +89,7 @@ export function ModalFrame({
         className={cn(
           'relative flex max-h-[85vh] flex-col overflow-hidden',
           'bg-bg-1 border border-bd-0 shadow-2xl rounded-[var(--radius-lg)]',
+          'focus:outline-none focus-visible:outline-none',
           'transform-gpu transition duration-200 ease-out',
           open ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-1',
           widthClasses[width],

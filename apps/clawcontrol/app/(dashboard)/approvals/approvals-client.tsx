@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { PageHeader, PageSection, EmptyState } from '@clawcontrol/ui'
+import { PageHeader, PageSection, EmptyState, Button, SelectDropdown } from '@clawcontrol/ui'
 import { CanonicalTable, type Column } from '@/components/ui/canonical-table'
 import { StatusPill } from '@/components/ui/status-pill'
 import { LoadingSpinner } from '@/components/ui/loading-state'
@@ -170,13 +170,14 @@ const createColumns = (
       const isApproving = quickApprovingId === row.id
 
       return (
-        <button
+        <Button
           onClick={(e) => {
             e.stopPropagation()
             onQuickApprove?.(row.id)
           }}
           disabled={isApproving}
-          className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-status-success text-white rounded hover:bg-status-success/90 disabled:opacity-50"
+          variant="primary"
+          size="xs"
         >
           {isApproving ? (
             <LoadingSpinner size="xs" />
@@ -184,7 +185,7 @@ const createColumns = (
             <CheckCircle className="w-3 h-3" />
           )}
           Approve
-        </button>
+        </Button>
       )
     },
   })
@@ -359,16 +360,20 @@ export function ApprovalsClient({ approvals: initialApprovals, workOrderMap }: P
           </div>
 
           {/* Type Filter */}
-          <select
+          <SelectDropdown
             value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
-            className="px-3 py-1.5 text-xs bg-bg-2 border border-bd-0 rounded-[var(--radius-md)] text-fg-1"
-          >
-            <option value="all">All Types</option>
-            {Object.entries(APPROVAL_TYPE_LABELS).map(([key, label]) => (
-              <option key={key} value={key}>{label}</option>
-            ))}
-          </select>
+            onChange={(nextValue) => setTypeFilter(nextValue as TypeFilter)}
+            ariaLabel="Approval type filter"
+            tone="toolbar"
+            size="sm"
+            options={[
+              { value: 'all', label: 'All Types', textValue: 'all types' },
+              ...Object.entries(APPROVAL_TYPE_LABELS).map(([key, label]) => ({
+                value: key as ApprovalType,
+                label,
+              })),
+            ]}
+          />
 
           {/* Select All / Deselect All */}
           {showCheckbox && selectableApprovals.length > 0 && (
@@ -398,18 +403,20 @@ export function ApprovalsClient({ approvals: initialApprovals, workOrderMap }: P
               {selectedIds.size} {selectedIds.size === 1 ? 'item' : 'items'} selected
             </span>
             <div className="flex-1" />
-            <button
+            <Button
               onClick={handleBatchReject}
               disabled={isBatchProcessing}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-status-danger hover:bg-status-danger/10 rounded-[var(--radius-md)] disabled:opacity-50"
+              variant="danger"
+              size="sm"
             >
               <XCircle className="w-3.5 h-3.5" />
               Reject Selected
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={handleBatchApprove}
               disabled={isBatchProcessing}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-status-success text-white hover:bg-status-success/90 rounded-[var(--radius-md)] disabled:opacity-50"
+              variant="primary"
+              size="sm"
             >
               {isBatchProcessing ? (
                 <LoadingSpinner size="sm" />
@@ -417,7 +424,7 @@ export function ApprovalsClient({ approvals: initialApprovals, workOrderMap }: P
                 <CheckCircle className="w-3.5 h-3.5" />
               )}
               Approve Selected
-            </button>
+            </Button>
           </div>
         )}
 
@@ -614,18 +621,20 @@ function ApprovalDetail({
           )}
 
           <div className="flex items-center gap-2">
-            <button
+            <Button
               onClick={() => handleResolve('rejected')}
               disabled={isSubmitting}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-status-error hover:bg-status-error/10 rounded-[var(--radius-md)] disabled:opacity-50"
+              variant="danger"
+              size="md"
             >
               <XCircle className="w-4 h-4" />
               Reject
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => handleResolve('approved')}
               disabled={isSubmitting}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-status-success text-white hover:bg-status-success/90 rounded-[var(--radius-md)] disabled:opacity-50"
+              variant="primary"
+              size="md"
             >
               {isSubmitting ? (
                 <LoadingSpinner size="md" />
@@ -633,7 +642,7 @@ function ApprovalDetail({
                 <CheckCircle className="w-4 h-4" />
               )}
               Approve
-            </button>
+            </Button>
           </div>
         </PageSection>
       )}

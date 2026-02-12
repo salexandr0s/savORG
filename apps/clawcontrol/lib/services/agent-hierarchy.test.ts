@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   buildAgentHierarchyGraph,
   extractFallbackToolOverlay,
+  extractMarkdownHierarchyDocuments,
   extractRuntimeToolOverlay,
   extractYamlHierarchy,
   type AgentHierarchySourceStatus,
@@ -61,6 +62,37 @@ test('extractYamlHierarchy extracts reports/delegates/receives and permission hi
   assert.equal(worker.capabilities.message, false)
   assert.equal(worker.capabilities.exec, true)
   assert.equal(worker.capabilities.write, false)
+})
+
+test('extractMarkdownHierarchyDocuments derives relationships from SOUL and role docs', () => {
+  const parsed = extractMarkdownHierarchyDocuments([
+    {
+      path: '/workspace/agents/build/SOUL.md',
+      content: `# SOUL.md - Build
+
+## Identity
+- Name: ClawcontrolBuild
+- Reports to: ClawcontrolCEO (main). Coordination: ClawcontrolManager.
+
+## Can
+- Delegate tasks to ClawcontrolManager only.
+`,
+    },
+    {
+      path: '/workspace/agents/build.md',
+      content: `# ClawcontrolBuild - Builder
+
+- You report to: **ClawcontrolManager**
+- You receive tasks from: **ClawcontrolManager** only
+`,
+    },
+  ])
+
+  const build = parsed.agents.find((agent) => agent.id === 'ClawcontrolBuild')
+  assert.ok(build)
+  assert.equal(build?.reportsTo, 'ClawcontrolCEO')
+  assert.ok(build?.delegatesTo.includes('ClawcontrolManager'))
+  assert.ok(build?.receivesFrom.includes('ClawcontrolManager'))
 })
 
 test('buildAgentHierarchyGraph normalizes IDs, dedupes edges, keeps external references, and drops self-loops', () => {

@@ -1,5 +1,6 @@
 'use client'
 
+import { SelectDropdown } from '@clawcontrol/ui'
 import { cn } from '@/lib/utils'
 import { Filter, Bot, MessageSquare, Wrench, Settings, Radio } from 'lucide-react'
 import type { useGatewayGraphStore } from '../graph-store'
@@ -67,24 +68,23 @@ export function GraphHeader({ store }: GraphHeaderProps) {
         {uniqueAgentIds.length > 0 && (
           <div className="flex items-center gap-2">
             <span className="text-xs text-fg-3">Agent:</span>
-            <select
+            <SelectDropdown
               value={state.filters.agentIds.size === 1 ? Array.from(state.filters.agentIds)[0] : ''}
-              onChange={(e) => {
-                if (e.target.value) {
-                  actions.setFilter({ agentIds: new Set([e.target.value]) })
+              onChange={(nextValue) => {
+                if (nextValue) {
+                  actions.setFilter({ agentIds: new Set([nextValue]) })
                 } else {
                   actions.setFilter({ agentIds: new Set() })
                 }
               }}
-              className="px-2 py-1 text-xs font-medium rounded-[var(--radius-sm)] bg-bg-3 text-fg-1 border border-bd-0 focus:outline-none focus:border-bd-1"
-            >
-              <option value="">All agents</option>
-              {uniqueAgentIds.map((id) => (
-                <option key={id} value={id}>
-                  {id}
-                </option>
-              ))}
-            </select>
+              ariaLabel="Graph agent filter"
+              tone="toolbar"
+              size="sm"
+              options={[
+                { value: '', label: 'All agents', textValue: 'all agents' },
+                ...uniqueAgentIds.map((id) => ({ value: id, label: id })),
+              ]}
+            />
           </div>
         )}
 

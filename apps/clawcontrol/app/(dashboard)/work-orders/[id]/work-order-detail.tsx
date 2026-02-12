@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
-import { PageHeader, PageSection, EmptyState } from '@clawcontrol/ui'
+import { PageHeader, PageSection, EmptyState, Button } from '@clawcontrol/ui'
 import { OperationStatusPill, WorkOrderStatePill, PriorityPill } from '@/components/ui/status-pill'
 import { LoadingSpinner, LoadingState } from '@/components/ui/loading-state'
 import { workOrdersApi, operationsApi, activitiesApi, approvalsApi, receiptsApi, agentsApi } from '@/lib/http'
@@ -148,7 +148,7 @@ export function WorkOrderDetail({ workOrderId }: WorkOrderDetailProps) {
   }
 
   if (loading) {
-    return <LoadingState />
+    return <LoadingState height="viewport" />
   }
 
   if (error || !workOrder) {
@@ -265,32 +265,35 @@ export function WorkOrderDetail({ workOrderId }: WorkOrderDetailProps) {
             {/* Action Buttons */}
             <div className="flex items-center gap-2">
               {workOrder.state === 'planned' && (
-                <button
+                <Button
                   onClick={handleStart}
                   disabled={starting}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] bg-status-info text-bg-0 hover:bg-status-info/90 disabled:opacity-60"
+                  variant="primary"
+                  size="sm"
                 >
                   <Play className="w-3.5 h-3.5" />
                   {starting ? 'Starting...' : 'Start'}
-                </button>
+                </Button>
               )}
               {canShip && (
-                <button
+                <Button
                   onClick={handleShip}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] bg-status-success text-white hover:bg-status-success/90"
+                  variant="primary"
+                  size="sm"
                 >
                   <Ship className="w-3.5 h-3.5" />
                   Ship
-                </button>
+                </Button>
               )}
               {canCancel && (
-                <button
+                <Button
                   onClick={handleCancel}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] bg-status-warning text-black hover:bg-status-warning/90"
+                  variant="danger"
+                  size="sm"
                 >
                   <Ban className="w-3.5 h-3.5" />
                   Cancel
-                </button>
+                </Button>
               )}
             </div>
             {/* Status Pills */}
@@ -322,13 +325,14 @@ export function WorkOrderDetail({ workOrderId }: WorkOrderDetailProps) {
       <div className="p-4 bg-bg-2 border border-bd-0 rounded-[var(--radius-md)]">
         <div className="flex items-center justify-between gap-3 mb-3">
           <h3 className="text-sm font-medium text-fg-0">Tags</h3>
-          <button
+          <Button
             onClick={handleSaveTags}
             disabled={savingTags}
-            className="px-3 py-1.5 text-xs font-medium rounded-[var(--radius-sm)] bg-status-info text-bg-0 hover:bg-status-info/90 disabled:opacity-50"
+            variant="primary"
+            size="sm"
           >
             {savingTags ? 'Saving...' : 'Save Tags'}
-          </button>
+          </Button>
         </div>
         <input
           value={tagInput}
@@ -581,21 +585,23 @@ function OverviewTab({
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <button
+                    <Button
                       onClick={() => handleApproval(approval.id, 'rejected')}
                       disabled={isResolving}
-                      className="px-2.5 py-1 text-xs font-medium text-status-danger hover:bg-status-danger/10 rounded-[var(--radius-sm)] disabled:opacity-50"
+                      variant="danger"
+                      size="xs"
                     >
                       Reject
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       onClick={() => handleApproval(approval.id, 'approved')}
                       disabled={isResolving}
-                      className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-status-success text-bg-0 hover:bg-status-success/90 rounded-[var(--radius-sm)] disabled:opacity-50"
+                      variant="primary"
+                      size="xs"
                     >
                       {isResolving && <LoadingSpinner size="xs" />}
                       Approve
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )

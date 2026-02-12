@@ -67,6 +67,10 @@ refactor: simplify Governor policy lookup
 - Use functional components with hooks
 - Prefer server components where possible (Next.js App Router)
 - Keep components focused and composable
+- Use canonical action primitives from `@clawcontrol/ui` (`Button`, `buttonLikeClass`, `SegmentedToggle`, `SelectDropdown`, `DropdownMenu`)
+- Do not introduce new `.btn-primary` / `.btn-secondary` usage; these are legacy compatibility classes
+- Do not introduce native `<select>` controls for dashboard/app dropdowns; use `SelectDropdown`
+- See [docs/ui-buttons-and-toggles.md](docs/ui-buttons-and-toggles.md) for the current UI action style contract
 
 ### File Organization
 

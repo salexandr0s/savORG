@@ -1464,6 +1464,81 @@ export interface RecoveryState {
   finalStatus: 'healthy' | 'recovered' | 'needs_manual_intervention' | 'failed' | null
 }
 
+export interface MaintenanceErrorSuggestedAction {
+  id: string
+  label: string
+  description: string
+  kind: 'maintenance' | 'cli' | 'manual'
+  maintenanceAction?: string
+  command?: string
+}
+
+export interface MaintenanceErrorClassification {
+  title: string
+  category: string
+  severity: 'critical' | 'high' | 'medium' | 'low'
+  detectability: 'deterministic' | 'heuristic' | 'unknown'
+  confidence: number
+  actionable: boolean
+  explanation: string
+  extractedCliCommand: string | null
+  suggestedActions: MaintenanceErrorSuggestedAction[]
+}
+
+export interface MaintenanceErrorInsight {
+  status: 'pending' | 'ready' | 'failed'
+  diagnosisMd: string | null
+  failureReason: string | null
+  generatedAt: string | null
+  sourceAgentId: string | null
+  sourceAgentName: string | null
+}
+
+export interface MaintenanceErrorSignature {
+  signatureHash: string
+  signatureText: string
+  count: string
+  windowCount: string
+  allTimeCount: string
+  firstSeen: string
+  lastSeen: string
+  sample: string
+  rawRedactedSample?: string
+  classification: MaintenanceErrorClassification
+  insight: MaintenanceErrorInsight | null
+}
+
+export interface MaintenanceErrorSummary {
+  generatedAt: string
+  from: string
+  to: string
+  trend: Array<{ day: string; count: string }>
+  totals: {
+    totalErrors: string
+    uniqueSignatures: number
+    windowUniqueSignatures: number
+  }
+  topSignatures: MaintenanceErrorSignature[]
+  spike: {
+    detected: boolean
+    yesterdayCount: number
+    baseline: number
+  }
+}
+
+export interface MaintenanceErrorSignaturesResult {
+  generatedAt: string
+  from: string
+  to: string
+  days: number
+  signatures: MaintenanceErrorSignature[]
+  meta: {
+    limit: number
+    includeRaw: boolean
+    windowUniqueSignatures: number
+  }
+}
+
 export const maintenanceApi = {
   getStatus: () => apiGet<{ data: MaintenanceStatus }>('/api/maintenance'),
 
@@ -1506,6 +1581,41 @@ export const maintenanceApi = {
     }
     return res.json() as Promise<{ data: RecoveryState; receiptId: string }>
   }),
+
+  getErrorSummary: (days = 14) =>
+    apiGet<{ data: MaintenanceErrorSummary }>(
+      '/api/openclaw/errors/summary',
+      { days }
+    ),
+
+  listErrorSignatures: (params?: {
+    days?: number
+    limit?: number
+    includeRaw?: boolean
+  }) =>
+    apiGet<{ data: MaintenanceErrorSignaturesResult }>(
+      '/api/openclaw/errors/signatures',
+      params
+    ),
+
+  remediateError: (
+    signatureHash: string,
+    body: { mode: 'create' | 'create_and_start' }
+  ) =>
+    apiPost<{
+      data: {
+        workOrderId: string
+        code: string
+        mode: 'create' | 'create_and_start'
+        started: boolean
+        operationId: string | null
+        workflowId: string | null
+        startError: string | null
+      }
+    }>(
+      `/api/openclaw/errors/signatures/${encodeURIComponent(signatureHash)}/remediate`,
+      body
+    ),
 }
 
 // ============================================================================

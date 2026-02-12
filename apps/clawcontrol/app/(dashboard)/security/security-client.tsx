@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { PageHeader, PageSection, TypedConfirmModal } from '@clawcontrol/ui'
+import { PageHeader, PageSection, TypedConfirmModal, Button } from '@clawcontrol/ui'
 import { LoadingSpinner, LoadingState } from '@/components/ui/loading-state'
 import {
   securityApi,
@@ -164,10 +164,57 @@ For automated fixes where available, run \`openclaw security audit --fix\`.
 
   return (
     <>
-      <div className="w-full space-y-6">
+      <div className="mx-auto w-full max-w-6xl space-y-6">
         <PageHeader
           title="Security"
           subtitle="Run security audits and review findings"
+          actions={
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => runAudit('basic')}
+                disabled={isRunning}
+                variant="primary"
+                size="sm"
+              >
+                {isRunning && auditType === 'basic' ? (
+                  <LoadingSpinner size="sm" />
+                ) : (
+                  <Play className="w-3.5 h-3.5" />
+                )}
+                Run Audit
+              </Button>
+
+              <Button
+                onClick={() => runAudit('deep')}
+                disabled={isRunning}
+                variant="secondary"
+                size="sm"
+              >
+                {isRunning && auditType === 'deep' ? (
+                  <LoadingSpinner size="sm" />
+                ) : (
+                  <Zap className="w-3.5 h-3.5" />
+                )}
+                Deep Audit
+              </Button>
+
+              <Button
+                onClick={() => runAudit('fix')}
+                disabled={isRunning || !report}
+                title={!report ? 'Run an audit first to see what needs fixing' : undefined}
+                variant="secondary"
+                size="sm"
+                className="text-status-warning border-status-warning/30 hover:bg-status-warning/10"
+              >
+                {isRunning && auditType === 'fix' ? (
+                  <LoadingSpinner size="sm" />
+                ) : (
+                  <Wrench className="w-3.5 h-3.5" />
+                )}
+                Apply Fixes
+              </Button>
+            </div>
+          }
         />
 
         {/* Error Banner */}
@@ -177,61 +224,6 @@ For automated fixes where available, run \`openclaw security audit --fix\`.
             <span className="text-sm text-status-error">{error}</span>
           </div>
         )}
-
-        {/* Action Buttons */}
-        <div className="flex flex-wrap gap-3">
-          <button
-            onClick={() => runAudit('basic')}
-            disabled={isRunning}
-            className={cn(
-              'flex items-center gap-2 px-4 py-2 rounded-[var(--radius-md)] font-medium transition-colors',
-              'bg-status-info text-white hover:bg-status-info/90',
-              'disabled:opacity-50 disabled:cursor-not-allowed'
-            )}
-          >
-            {isRunning && auditType === 'basic' ? (
-              <LoadingSpinner size="md" />
-            ) : (
-              <Play className="w-4 h-4" />
-            )}
-            Run Audit
-          </button>
-
-          <button
-            onClick={() => runAudit('deep')}
-            disabled={isRunning}
-            className={cn(
-              'flex items-center gap-2 px-4 py-2 rounded-[var(--radius-md)] font-medium transition-colors',
-              'bg-bg-3 text-fg-0 hover:bg-bg-2',
-              'disabled:opacity-50 disabled:cursor-not-allowed'
-            )}
-          >
-            {isRunning && auditType === 'deep' ? (
-              <LoadingSpinner size="md" />
-            ) : (
-              <Zap className="w-4 h-4" />
-            )}
-            Deep Audit
-          </button>
-
-          <button
-            onClick={() => runAudit('fix')}
-            disabled={isRunning || !report}
-            title={!report ? 'Run an audit first to see what needs fixing' : undefined}
-            className={cn(
-              'flex items-center gap-2 px-4 py-2 rounded-[var(--radius-md)] font-medium transition-colors',
-              'bg-status-warning/10 text-status-warning hover:bg-status-warning/20',
-              'disabled:opacity-50 disabled:cursor-not-allowed'
-            )}
-          >
-            {isRunning && auditType === 'fix' ? (
-              <LoadingSpinner size="md" />
-            ) : (
-              <Wrench className="w-4 h-4" />
-            )}
-            Apply Fixes
-          </button>
-        </div>
 
         {/* Receipt ID */}
         {receiptId && (
@@ -365,25 +357,27 @@ For automated fixes where available, run \`openclaw security audit --fix\`.
 
         {/* Initial State - No Report Yet */}
         {!report && !isRunning && (
-          <div className="p-8 text-center bg-bg-2 rounded-[var(--radius-lg)]">
-            <Shield className="w-16 h-16 mx-auto mb-4 text-fg-3" />
-            <h3 className="text-lg font-medium text-fg-0 mb-2">Run a Security Audit</h3>
-            <p className="text-sm text-fg-2 max-w-md mx-auto mb-4">
-              Scan your OpenClaw configuration for security issues including access control,
-              tool permissions, network exposure, and file permissions.
-            </p>
-            <div className="flex flex-col gap-2 text-sm text-fg-2 max-w-sm mx-auto text-left">
-              <div className="flex items-start gap-2">
-                <Play className="w-4 h-4 mt-0.5 text-accent-primary shrink-0" />
-                <span><strong>Run Audit</strong> - Basic security check</span>
-              </div>
-              <div className="flex items-start gap-2">
-                <Zap className="w-4 h-4 mt-0.5 text-fg-2 shrink-0" />
-                <span><strong>Deep Audit</strong> - Includes live Gateway probe</span>
-              </div>
-              <div className="flex items-start gap-2">
-                <Wrench className="w-4 h-4 mt-0.5 text-status-warning shrink-0" />
-                <span><strong>Apply Fixes</strong> - Auto-fix file permissions</span>
+          <div className="flex justify-center">
+            <div className="w-full max-w-2xl p-8 text-center bg-bg-2 rounded-[var(--radius-lg)] border border-bd-0">
+              <Shield className="w-16 h-16 mx-auto mb-4 text-fg-3" />
+              <h3 className="text-lg font-medium text-fg-0 mb-2">Run a Security Audit</h3>
+              <p className="text-sm text-fg-2 max-w-md mx-auto mb-4">
+                Scan your OpenClaw configuration for security issues including access control,
+                tool permissions, network exposure, and file permissions.
+              </p>
+              <div className="flex flex-col gap-2 text-sm text-fg-2 max-w-sm mx-auto text-left">
+                <div className="flex items-start gap-2">
+                  <Play className="w-4 h-4 mt-0.5 text-accent-primary shrink-0" />
+                  <span><strong>Run Audit</strong> - Basic security check</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <Zap className="w-4 h-4 mt-0.5 text-fg-2 shrink-0" />
+                  <span><strong>Deep Audit</strong> - Includes live Gateway probe</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <Wrench className="w-4 h-4 mt-0.5 text-status-warning shrink-0" />
+                  <span><strong>Apply Fixes</strong> - Auto-fix file permissions</span>
+                </div>
               </div>
             </div>
           </div>

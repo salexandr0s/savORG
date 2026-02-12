@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { PageHeader, PageSection, EmptyState, TypedConfirmModal } from '@clawcontrol/ui'
+import { PageHeader, PageSection, EmptyState, TypedConfirmModal, Button } from '@clawcontrol/ui'
 import { CanonicalTable, type Column } from '@/components/ui/canonical-table'
 import { StatusPill } from '@/components/ui/status-pill'
 import { LoadingSpinner, LoadingState } from '@/components/ui/loading-state'
@@ -509,8 +509,7 @@ export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Pr
           }
           actions={
             <div className="flex items-center gap-2">
-              <button
-                className="btn-secondary flex items-center gap-1.5"
+              <Button
                 onClick={() => setShowInstallModal(true)}
                 disabled={listLoading || isUnsupported || !capabilities?.install}
                 title={
@@ -520,10 +519,12 @@ export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Pr
                       ? 'Install not supported by OpenClaw'
                       : undefined
                 }
+                variant="secondary"
+                size="sm"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Install
-              </button>
+              </Button>
             </div>
           }
         />
@@ -560,10 +561,12 @@ export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Pr
                 {meta?.message || 'OpenClaw does not support plugin commands. Plugin functionality is read-only.'}
               </p>
             </div>
-            <button
+            <Button
               onClick={handleReprobe}
               disabled={isProbing}
-              className="btn-secondary flex items-center gap-1.5 text-xs shrink-0"
+              variant="secondary"
+              size="sm"
+              className="shrink-0"
               title="Re-probe OpenClaw capabilities"
             >
               {isProbing ? (
@@ -572,7 +575,7 @@ export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Pr
                 <RotateCcw className="w-3.5 h-3.5" />
               )}
               Re-probe
-            </button>
+            </Button>
           </div>
         )}
 
@@ -588,10 +591,12 @@ export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Pr
                 {meta?.message || 'Some plugin features are not available in this OpenClaw version.'}
               </p>
             </div>
-            <button
+            <Button
               onClick={handleReprobe}
               disabled={isProbing}
-              className="btn-secondary flex items-center gap-1.5 text-xs shrink-0"
+              variant="secondary"
+              size="sm"
+              className="shrink-0"
               title="Re-probe OpenClaw capabilities"
             >
               {isProbing ? (
@@ -600,7 +605,7 @@ export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Pr
                 <RotateCcw className="w-3.5 h-3.5" />
               )}
               Re-probe
-            </button>
+            </Button>
           </div>
         )}
 
@@ -613,10 +618,12 @@ export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Pr
                 {restartRequiredCount} plugin{restartRequiredCount > 1 ? 's' : ''} require restart to apply changes
               </span>
             </div>
-            <button
+            <Button
               onClick={handleRestart}
               disabled={isRestarting}
-              className="btn-secondary flex items-center gap-1.5 text-status-warning border-status-warning/30 hover:bg-status-warning/10"
+              variant="secondary"
+              size="sm"
+              className="text-status-warning border-status-warning/30 hover:bg-status-warning/10"
             >
               {isRestarting ? (
                 <LoadingSpinner size="sm" />
@@ -624,7 +631,7 @@ export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Pr
                 <RotateCcw className="w-3.5 h-3.5" />
               )}
               Restart Now
-            </button>
+            </Button>
           </div>
         )}
 
@@ -747,16 +754,18 @@ export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Pr
             </div>
 
             <div className="flex justify-end gap-2 mt-6">
-              <button
+              <Button
                 onClick={() => setShowInstallModal(false)}
-                className="btn-secondary"
+                variant="secondary"
+                size="sm"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleInstall}
                 disabled={isInstalling || !installSpec.trim()}
-                className="btn-primary flex items-center gap-1.5"
+                variant="primary"
+                size="sm"
               >
                 {isInstalling ? (
                   <LoadingSpinner size="sm" />
@@ -764,7 +773,7 @@ export function PluginsClient({ plugins: initialPlugins, meta: initialMeta }: Pr
                   <Plus className="w-3.5 h-3.5" />
                 )}
                 Install
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -919,14 +928,13 @@ function OverviewTab({
         </div>
 
         <div className="flex items-center gap-2">
-          <button
+          <Button
             onClick={onToggleEnabled}
             disabled={isToggling || !canToggle}
             title={!canToggle ? `${plugin.enabled ? 'Disable' : 'Enable'} not supported by OpenClaw` : undefined}
-            className={cn(
-              'btn-secondary flex items-center gap-1.5',
-              plugin.enabled ? 'text-status-error' : 'text-status-success'
-            )}
+            variant="secondary"
+            size="sm"
+            className={cn(plugin.enabled ? 'text-status-error' : 'text-status-success')}
           >
             {isToggling ? (
               <LoadingSpinner size="sm" />
@@ -934,12 +942,13 @@ function OverviewTab({
               <Power className="w-3.5 h-3.5" />
             )}
             {plugin.enabled ? 'Disable' : 'Enable'}
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={onUninstall}
             disabled={isUninstalling || !canUninstall}
             title={!canUninstall ? 'Uninstall not supported by OpenClaw' : undefined}
-            className="btn-secondary flex items-center gap-1.5 text-status-error"
+            variant="danger"
+            size="sm"
           >
             {isUninstalling ? (
               <LoadingSpinner size="sm" />
@@ -947,7 +956,7 @@ function OverviewTab({
               <Trash2 className="w-3.5 h-3.5" />
             )}
             Uninstall
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -1106,19 +1115,21 @@ function ConfigTab({
           {hasChanges ? 'You have unsaved changes' : 'No changes'}
         </p>
         <div className="flex items-center gap-2">
-          <button
+          <Button
             onClick={handleReset}
             disabled={!hasChanges || isSaving}
-            className="btn-secondary flex items-center gap-1.5"
+            variant="secondary"
+            size="sm"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             Reset
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={handleSave}
             disabled={!hasChanges || !!parseError || isSaving || !canSaveConfig}
             title={!canSaveConfig ? 'Config editing not supported by OpenClaw' : undefined}
-            className="btn-primary flex items-center gap-1.5"
+            variant="primary"
+            size="sm"
           >
             {isSaving ? (
               <LoadingSpinner size="sm" />
@@ -1126,7 +1137,7 @@ function ConfigTab({
               <Save className="w-3.5 h-3.5" />
             )}
             Save Config
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -1173,11 +1184,12 @@ function DoctorTab({
           )}
         </div>
 
-        <button
+        <Button
           onClick={onRunDoctor}
           disabled={isRunningDoctor || !canRunDoctor}
           title={!canRunDoctor ? 'Doctor not supported by OpenClaw' : undefined}
-          className="btn-secondary flex items-center gap-1.5"
+          variant="secondary"
+          size="sm"
         >
           {isRunningDoctor ? (
             <LoadingSpinner size="sm" />
@@ -1185,7 +1197,7 @@ function DoctorTab({
             <Stethoscope className="w-3.5 h-3.5" />
           )}
           Run Doctor
-        </button>
+        </Button>
       </div>
 
       {/* Doctor Results */}

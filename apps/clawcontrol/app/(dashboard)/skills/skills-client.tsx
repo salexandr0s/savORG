@@ -1,7 +1,16 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { PageHeader, PageSection, EmptyState, TypedConfirmModal } from '@clawcontrol/ui'
+import {
+  PageHeader,
+  PageSection,
+  EmptyState,
+  TypedConfirmModal,
+  Button,
+  SegmentedToggle,
+  buttonLikeClass,
+  SelectDropdown,
+} from '@clawcontrol/ui'
 import { CanonicalTable, type Column } from '@/components/ui/canonical-table'
 import { StatusPill } from '@/components/ui/status-pill'
 import { LoadingSpinner, LoadingState } from '@/components/ui/loading-state'
@@ -413,12 +422,12 @@ export function SkillsClient({ skills: initialSkills, agents }: Props) {
                 href="https://github.com/openclaw/skills"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm bg-bg-2 text-fg-1 hover:bg-bg-3 border border-bd-0 rounded-[var(--radius-md)]"
+                className={buttonLikeClass({ variant: 'secondary', size: 'md' })}
               >
                 <ExternalLink className="w-3.5 h-3.5" />
                 Find Skills
               </a>
-              <label className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm bg-bg-2 text-fg-1 hover:bg-bg-3 border border-bd-0 rounded-[var(--radius-md)] cursor-pointer">
+              <label className={buttonLikeClass({ variant: 'secondary', size: 'md', className: 'cursor-pointer' })}>
                 <Upload className="w-3.5 h-3.5" />
                 Upload Skill
                 <input
@@ -428,38 +437,39 @@ export function SkillsClient({ skills: initialSkills, agents }: Props) {
                   onChange={handleUpload}
                 />
               </label>
-              <button
+              <Button
                 onClick={() => setShowCreateModal(true)}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm bg-status-info text-bg-0 hover:bg-status-info/90 rounded-[var(--radius-md)]"
+                variant="primary"
+                size="md"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Create Skill
-              </button>
+              </Button>
             </div>
           }
         />
 
         {/* Scope Tabs */}
-        <div className="flex items-center gap-1 p-1 bg-bg-2 rounded-[var(--radius-md)] border border-bd-0 w-fit">
-          {scopeTabs.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => setActiveTab(id)}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-[var(--radius-sm)] transition-colors',
-                activeTab === id
-                  ? 'bg-bg-1 text-fg-0 shadow-sm'
-                  : 'text-fg-2 hover:text-fg-1'
-              )}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              {label}
-              <span className="text-xs text-fg-3 ml-1">
-                {id === 'all' ? skills.length : id === 'global' ? globalCount : agentCount}
-              </span>
-            </button>
-          ))}
-        </div>
+        <SegmentedToggle
+          value={activeTab}
+          onChange={setActiveTab}
+          tone="neutral"
+          size="sm"
+          className="w-fit"
+          ariaLabel="Skill scope"
+          items={scopeTabs.map(({ id, label, icon: Icon }) => ({
+            value: id,
+            label: (
+              <>
+                <Icon className="w-3.5 h-3.5" />
+                {label}
+                <span className="text-xs text-fg-3 ml-1">
+                  {id === 'all' ? skills.length : id === 'global' ? globalCount : agentCount}
+                </span>
+              </>
+            ),
+          }))}
+        />
 
         {/* Skills Table */}
         <div className="bg-bg-2 rounded-[var(--radius-lg)] border border-bd-0 overflow-hidden">
@@ -528,18 +538,22 @@ export function SkillsClient({ skills: initialSkills, agents }: Props) {
 
               {/* Actions - grid layout for consistent sizing */}
               <div className="grid grid-cols-3 gap-2">
-                <button
+                <Button
                   onClick={handleToggleEnabled}
                   disabled={isSaving}
-                  className="inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs bg-bg-3 border border-bd-0 rounded-[var(--radius-md)] text-fg-1 hover:bg-bg-2 transition-colors disabled:opacity-50"
+                  variant="secondary"
+                  size="xs"
+                  className="justify-center"
                 >
                   <Power className="w-3.5 h-3.5" />
                   {selectedSkill.enabled ? 'Disable' : 'Enable'}
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={handleValidate}
                   disabled={isValidating}
-                  className="inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs bg-bg-3 border border-bd-0 rounded-[var(--radius-md)] text-fg-1 hover:bg-bg-2 transition-colors disabled:opacity-50"
+                  variant="secondary"
+                  size="xs"
+                  className="justify-center"
                 >
                   {isValidating ? (
                     <LoadingSpinner size="sm" />
@@ -547,31 +561,37 @@ export function SkillsClient({ skills: initialSkills, agents }: Props) {
                     <RefreshCw className="w-3.5 h-3.5" />
                   )}
                   Validate
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={handleExport}
                   disabled={isSaving}
-                  className="inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs bg-bg-3 border border-bd-0 rounded-[var(--radius-md)] text-fg-1 hover:bg-bg-2 transition-colors disabled:opacity-50"
+                  variant="secondary"
+                  size="xs"
+                  className="justify-center"
                 >
                   <Download className="w-3.5 h-3.5" />
                   Export
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={() => setShowDuplicateModal(true)}
                   disabled={isSaving}
-                  className="inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs bg-bg-3 border border-bd-0 rounded-[var(--radius-md)] text-fg-1 hover:bg-bg-2 transition-colors disabled:opacity-50"
+                  variant="secondary"
+                  size="xs"
+                  className="justify-center"
                 >
                   <Copy className="w-3.5 h-3.5" />
                   Duplicate
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={handleUninstall}
                   disabled={isSaving}
-                  className="col-span-2 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs bg-bg-3 border border-bd-0 rounded-[var(--radius-md)] text-status-danger hover:bg-status-danger/10 transition-colors disabled:opacity-50"
+                  variant="danger"
+                  size="xs"
+                  className="col-span-2 justify-center"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   Uninstall
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -610,32 +630,34 @@ export function SkillsClient({ skills: initialSkills, agents }: Props) {
                     </label>
                   </div>
                   {duplicateTarget.scope === 'agent' && (
-                    <select
+                    <SelectDropdown
                       value={duplicateTarget.agentId}
-                      onChange={(e) => setDuplicateTarget({ scope: 'agent', agentId: e.target.value })}
-                      className="w-full px-3 py-2 bg-bg-2 border border-bd-0 rounded-[var(--radius-md)] text-sm text-fg-1"
-                    >
-                      {agents.map((agent) => (
-                        <option key={agent.id} value={agent.id}>
-                          {agent.name}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(nextValue) => setDuplicateTarget({ scope: 'agent', agentId: nextValue })}
+                      ariaLabel="Duplicate target agent"
+                      tone="field"
+                      size="md"
+                      options={agents.map((agent) => ({
+                        value: agent.id,
+                        label: agent.name,
+                      }))}
+                    />
                   )}
                   <div className="flex gap-2">
-                    <button
+                    <Button
                       onClick={handleDuplicate}
                       disabled={isSaving}
-                      className="px-3 py-1.5 bg-accent text-white text-sm rounded-[var(--radius-md)] hover:bg-accent/90 disabled:opacity-50"
+                      variant="primary"
+                      size="md"
                     >
                       Confirm
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       onClick={() => setShowDuplicateModal(false)}
-                      className="px-3 py-1.5 bg-bg-2 border border-bd-0 text-sm text-fg-1 rounded-[var(--radius-md)] hover:bg-bg-1"
+                      variant="secondary"
+                      size="md"
                     >
                       Cancel
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -875,23 +897,25 @@ function UploadSkillModal({
           {/* Agent Selector (only for agent scope) */}
           {scope === 'agent' && (
             <div>
-              <label htmlFor="upload-skill-agent" className="block text-xs font-medium text-fg-1 mb-1.5">
+              <label className="block text-xs font-medium text-fg-1 mb-1.5">
                 Agent
               </label>
-              <select
-                id="upload-skill-agent"
+              <SelectDropdown
                 value={agentId}
-                onChange={(e) => setAgentId(e.target.value)}
+                onChange={setAgentId}
                 disabled={isSubmitting}
-                className="w-full px-3 py-2 text-sm bg-bg-2 border border-bd-1 rounded-[var(--radius-md)] text-fg-0 focus:outline-none focus:ring-1 focus:ring-status-info/50 disabled:opacity-50"
-              >
-                <option value="">Select an agent...</option>
-                {agents.map((agent) => (
-                  <option key={agent.id} value={agent.id}>
-                    {agent.name}
-                  </option>
-                ))}
-              </select>
+                ariaLabel="Upload skill target agent"
+                tone="field"
+                size="md"
+                placeholder="Select an agent..."
+                options={[
+                  { value: '', label: 'Select an agent...', disabled: true },
+                  ...agents.map((agent) => ({
+                    value: agent.id,
+                    label: agent.name,
+                  })),
+                ]}
+              />
             </div>
           )}
 
@@ -904,23 +928,25 @@ function UploadSkillModal({
 
           {/* Actions */}
           <div className="flex justify-end gap-2 pt-2">
-            <button
+            <Button
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-4 py-2 text-xs font-medium text-fg-1 hover:text-fg-0 bg-bg-3 rounded-[var(--radius-md)] border border-bd-0 disabled:opacity-50"
+              variant="secondary"
+              size="md"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={handleInstall}
               disabled={isSubmitting || (scope === 'agent' && !agentId)}
-              className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-bg-0 bg-status-info hover:bg-status-info/90 rounded-[var(--radius-md)] disabled:opacity-50 disabled:cursor-not-allowed"
+              variant="primary"
+              size="md"
             >
               {isSubmitting && <LoadingSpinner size="sm" />}
               {isSubmitting ? 'Installing...' : 'Install'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -1121,23 +1147,25 @@ function CreateSkillModal({
           {/* Agent Selector (only for agent scope) */}
           {scope === 'agent' && (
             <div>
-              <label htmlFor="skill-agent" className="block text-xs font-medium text-fg-1 mb-1.5">
+              <label className="block text-xs font-medium text-fg-1 mb-1.5">
                 Agent
               </label>
-              <select
-                id="skill-agent"
+              <SelectDropdown
                 value={agentId}
-                onChange={(e) => setAgentId(e.target.value)}
+                onChange={setAgentId}
                 disabled={isSubmitting}
-                className="w-full px-3 py-2 text-sm bg-bg-2 border border-bd-1 rounded-[var(--radius-md)] text-fg-0 focus:outline-none focus:ring-1 focus:ring-status-info/50 disabled:opacity-50"
-              >
-                <option value="">Select an agent...</option>
-                {agents.map((agent) => (
-                  <option key={agent.id} value={agent.id}>
-                    {agent.name}
-                  </option>
-                ))}
-              </select>
+                ariaLabel="Create skill target agent"
+                tone="field"
+                size="md"
+                placeholder="Select an agent..."
+                options={[
+                  { value: '', label: 'Select an agent...', disabled: true },
+                  ...agents.map((agent) => ({
+                    value: agent.id,
+                    label: agent.name,
+                  })),
+                ]}
+              />
             </div>
           )}
 
@@ -1150,22 +1178,24 @@ function CreateSkillModal({
 
           {/* Actions */}
           <div className="flex justify-end gap-2 pt-2">
-            <button
+            <Button
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-4 py-2 text-xs font-medium text-fg-1 hover:text-fg-0 bg-bg-3 rounded-[var(--radius-md)] border border-bd-0 disabled:opacity-50"
+              variant="secondary"
+              size="md"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
               disabled={isSubmitting || !name.trim() || (scope === 'agent' && !agentId)}
-              className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-bg-0 bg-status-info hover:bg-status-info/90 rounded-[var(--radius-md)] disabled:opacity-50 disabled:cursor-not-allowed"
+              variant="primary"
+              size="md"
             >
               {isSubmitting && <LoadingSpinner size="sm" />}
               {isSubmitting ? 'Creating...' : 'Create Skill'}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

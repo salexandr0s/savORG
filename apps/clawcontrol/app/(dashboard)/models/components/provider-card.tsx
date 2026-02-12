@@ -3,6 +3,7 @@
 import { cn } from '@/lib/utils'
 import type { AvailableModelProvider } from '@/lib/http'
 import { AlertTriangle, CheckCircle, PlusCircle, XCircle } from 'lucide-react'
+import { ProviderLogo } from '@/components/provider-logo'
 
 export function ProviderCard({
   provider,
@@ -26,9 +27,12 @@ export function ProviderCard({
         !provider.supported && 'opacity-50 cursor-not-allowed'
       )}
     >
-      <div className="min-w-0">
-        <div className="text-sm font-medium text-fg-0 truncate">{provider.label}</div>
-        <div className="text-xs text-fg-3 font-mono truncate">{provider.id}</div>
+      <div className="min-w-0 flex items-center gap-2">
+        <ProviderLogo provider={provider.id} size="sm" />
+        <div className="min-w-0">
+          <div className="text-sm font-medium text-fg-0 truncate">{provider.label}</div>
+          <div className="text-xs text-fg-3 font-mono truncate">{provider.id}</div>
+        </div>
       </div>
       <div className="shrink-0 mt-0.5">
         {!provider.supported ? (

@@ -1,14 +1,14 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { PageHeader, PageSection, EmptyState } from '@clawcontrol/ui'
+import { PageHeader, PageSection, EmptyState, Button, SegmentedToggle, SelectDropdown } from '@clawcontrol/ui'
 import { CanonicalTable, type Column } from '@/components/ui/canonical-table'
 import { StatusPill } from '@/components/ui/status-pill'
 import { LoadingSpinner, LoadingState } from '@/components/ui/loading-state'
 import { RightDrawer } from '@/components/shell/right-drawer'
 import { useProtectedActionTrigger } from '@/components/protected-action-modal'
 import { AgentAvatar } from '@/components/ui/agent-avatar'
-import { ModelBadge, ModelOption } from '@/components/ui/model-badge'
+import { ModelBadge } from '@/components/ui/model-badge'
 import { AgentCard } from '@/components/agent-card'
 import { StationIcon } from '@/components/station-icon'
 import { FileEditorModal } from '@/components/file-editor-modal'
@@ -49,7 +49,6 @@ import {
   RotateCcw,
   FileText,
   Sparkles,
-  ChevronDown,
 } from 'lucide-react'
 import type { StatusTone } from '@clawcontrol/ui/theme'
 
@@ -491,7 +490,7 @@ export function AgentsClient() {
   }
 
   if (loading && agents.length === 0) {
-    return <LoadingState />
+    return <LoadingState height="viewport" />
   }
 
   if (error) {
@@ -519,116 +518,75 @@ export function AgentsClient() {
           actions={
             <div className="flex items-center gap-2">
               {/* Tab Switch */}
-              <div className="flex items-center gap-1 bg-bg-2 rounded-[var(--radius-md)] border border-bd-0 p-0.5">
-                <button
-                  onClick={() => setActiveTab('agents')}
-                  className={cn(
-                    'px-2.5 py-1.5 text-xs font-medium rounded-[var(--radius-sm)] transition-colors',
-                    activeTab === 'agents'
-                      ? 'bg-bg-3 text-fg-0'
-                      : 'text-fg-2 hover:text-fg-1'
-                  )}
-                >
-                  Agents
-                </button>
-                <button
-                  onClick={() => setActiveTab('teams')}
-                  className={cn(
-                    'px-2.5 py-1.5 text-xs font-medium rounded-[var(--radius-sm)] transition-colors',
-                    activeTab === 'teams'
-                      ? 'bg-bg-3 text-fg-0'
-                      : 'text-fg-2 hover:text-fg-1'
-                  )}
-                >
-                  Teams
-                </button>
-                <button
-                  onClick={() => setActiveTab('stations')}
-                  className={cn(
-                    'px-2.5 py-1.5 text-xs font-medium rounded-[var(--radius-sm)] transition-colors',
-                    activeTab === 'stations'
-                      ? 'bg-bg-3 text-fg-0'
-                      : 'text-fg-2 hover:text-fg-1'
-                  )}
-                >
-                  Stations
-                </button>
-              </div>
+              <SegmentedToggle
+                value={activeTab}
+                onChange={setActiveTab}
+                tone="neutral"
+                ariaLabel="Agents section"
+                items={[
+                  { value: 'agents', label: 'Agents' },
+                  { value: 'teams', label: 'Teams' },
+                  { value: 'stations', label: 'Stations' },
+                ]}
+              />
 
               {activeTab === 'agents' && (
                 <>
                   {/* Primary View Toggle */}
-                  <div className="flex items-center gap-1 bg-bg-2 rounded-[var(--radius-md)] border border-bd-0 p-0.5">
-                    <button
-                      onClick={() => setAgentView('list')}
-                      className={cn(
-                        'px-2.5 py-1.5 text-xs font-medium rounded-[var(--radius-sm)] transition-colors',
-                        agentView === 'list'
-                          ? 'bg-bg-3 text-fg-0'
-                          : 'text-fg-2 hover:text-fg-1'
-                      )}
-                    >
-                      List
-                    </button>
-                    <button
-                      onClick={() => {
-                        setAgentView('hierarchy')
+                  <SegmentedToggle
+                    value={agentView}
+                    onChange={(nextView) => {
+                      setAgentView(nextView)
+                      if (nextView === 'hierarchy') {
                         void fetchHierarchy()
-                      }}
-                      className={cn(
-                        'px-2.5 py-1.5 text-xs font-medium rounded-[var(--radius-sm)] transition-colors',
-                        agentView === 'hierarchy'
-                          ? 'bg-bg-3 text-fg-0'
-                          : 'text-fg-2 hover:text-fg-1'
-                      )}
-                    >
-                      Hierarchy
-                    </button>
-                  </div>
+                      }
+                    }}
+                    tone="neutral"
+                    ariaLabel="Agent view"
+                    items={[
+                      { value: 'list', label: 'List' },
+                      { value: 'hierarchy', label: 'Hierarchy' },
+                    ]}
+                  />
 
                   {agentView === 'list' && (
-                    <div className="flex rounded-[var(--radius-md)] border border-bd-0 overflow-hidden">
-                      <button
-                        onClick={() => setListViewMode('card')}
-                        className={cn(
-                          'p-1.5 transition-colors',
-                          listViewMode === 'card'
-                            ? 'bg-status-progress text-white'
-                            : 'bg-bg-2 text-fg-2 hover:text-fg-0'
-                        )}
-                        title="Card view"
-                      >
-                        <LayoutGrid className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setListViewMode('list')}
-                        className={cn(
-                          'p-1.5 transition-colors',
-                          listViewMode === 'list'
-                            ? 'bg-status-progress text-white'
-                            : 'bg-bg-2 text-fg-2 hover:text-fg-0'
-                        )}
-                        title="Table view"
-                      >
-                        <List className="w-4 h-4" />
-                      </button>
-                    </div>
+                    <SegmentedToggle
+                      value={listViewMode}
+                      onChange={setListViewMode}
+                      tone="accent"
+                      size="xs"
+                      ariaLabel="List layout"
+                      items={[
+                        {
+                          value: 'card',
+                          label: <LayoutGrid className="w-4 h-4" />,
+                          title: 'Card view',
+                        },
+                        {
+                          value: 'list',
+                          label: <List className="w-4 h-4" />,
+                          title: 'Table view',
+                        },
+                      ]}
+                    />
                   )}
 
-                  <button
+                  <Button
                     onClick={() => setShowTemplateWizard(true)}
-                    className="btn-secondary flex items-center gap-1.5"
+                    variant="secondary"
+                    size="sm"
                   >
                     <LayoutTemplate className="w-3.5 h-3.5" />
                     From Template
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     onClick={() => setShowCreateModal(true)}
-                    className="btn-primary flex items-center gap-1.5"
+                    variant="primary"
+                    size="sm"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     Create Agent
-                  </button>
+                  </Button>
                 </>
               )}
             </div>
@@ -949,20 +907,22 @@ function CreateAgentModal({
 
           {/* Actions */}
           <div className="flex justify-end gap-3 pt-4 border-t border-bd-0">
-            <button
+            <Button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-fg-1 bg-bg-3 rounded-[var(--radius-md)] hover:bg-bg-3/80 transition-colors"
+              variant="secondary"
+              size="md"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
               disabled={!role || !purpose}
-              className="px-4 py-2 text-sm font-medium text-white bg-status-progress rounded-[var(--radius-md)] hover:bg-status-progress/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              variant="primary"
+              size="md"
             >
               Create Agent
-            </button>
+            </Button>
           </div>
         </form>
       </div>
@@ -1236,18 +1196,21 @@ function CreateFromTemplateWizard({
                         <p className="text-xs text-fg-2">{prop.description}</p>
                       )}
                       {prop.enum ? (
-                        <select
+                        <SelectDropdown
                           value={String(params[key] || '')}
-                          onChange={(e) => handleParamChange(key, e.target.value)}
-                          className="w-full px-3 py-2 bg-bg-2 border border-bd-0 rounded-[var(--radius-md)] text-sm text-fg-0"
-                        >
-                          <option value="">Select...</option>
-                          {prop.enum.map((val) => (
-                            <option key={String(val)} value={String(val)}>
-                              {String(val)}
-                            </option>
-                          ))}
-                        </select>
+                          onChange={(nextValue) => handleParamChange(key, nextValue)}
+                          ariaLabel={`${key} parameter`}
+                          tone="field"
+                          size="md"
+                          placeholder="Select..."
+                          options={[
+                            { value: '', label: 'Select...', disabled: true },
+                            ...prop.enum.map((val) => ({
+                              value: String(val),
+                              label: String(val),
+                            })),
+                          ]}
+                        />
                       ) : (
                         <input
                           type="text"
@@ -1291,39 +1254,43 @@ function CreateFromTemplateWizard({
         <div className="flex items-center justify-between px-6 py-4 border-t border-bd-0 shrink-0">
           <div>
             {step !== 'select' && (
-              <button
+              <Button
                 onClick={() => setStep(step === 'preview' ? 'params' : 'select')}
-                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-fg-1 hover:bg-bg-3 rounded-[var(--radius-md)] transition-colors"
+                variant="ghost"
+                size="md"
               >
                 <ChevronLeft className="w-4 h-4" />
                 Back
-              </button>
+              </Button>
             )}
           </div>
           <div className="flex gap-3">
-            <button
+            <Button
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-fg-1 bg-bg-3 rounded-[var(--radius-md)] hover:bg-bg-3/80 transition-colors"
+              variant="secondary"
+              size="md"
             >
               Cancel
-            </button>
+            </Button>
             {step === 'params' && (
-              <button
+              <Button
                 onClick={handleProceedToPreview}
-                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-status-progress rounded-[var(--radius-md)] hover:bg-status-progress/90 transition-colors"
+                variant="primary"
+                size="md"
               >
                 Preview
                 <Eye className="w-4 h-4" />
-              </button>
+              </Button>
             )}
             {step === 'preview' && (
-              <button
+              <Button
                 onClick={handleConfirm}
-                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-status-progress rounded-[var(--radius-md)] hover:bg-status-progress/90 transition-colors"
+                variant="primary"
+                size="md"
               >
                 Create Agent
                 <Check className="w-4 h-4" />
-              </button>
+              </Button>
             )}
           </div>
         </div>
@@ -1383,9 +1350,6 @@ function AgentDetail({
   const [editCaps, setEditCaps] = useState<Record<string, boolean>>(agent.capabilities)
   const [editModel, setEditModel] = useState(agent.model || DEFAULT_MODEL)
   const [editFallbacks, setEditFallbacks] = useState<string[]>(agent.fallbacks ?? [])
-  const [showFallbackSelector, setShowFallbackSelector] = useState(false)
-  const [showModelSelector, setShowModelSelector] = useState(false)
-  const [showStationSelector, setShowStationSelector] = useState(false)
   const [showCreateStation, setShowCreateStation] = useState(false)
 
   // Skills state
@@ -1405,8 +1369,6 @@ function AgentDetail({
     setEditCaps(agent.capabilities)
     setEditModel(agent.model || DEFAULT_MODEL)
     setEditFallbacks((agent.fallbacks ?? []).filter((m) => m !== (agent.model || DEFAULT_MODEL)))
-    setShowFallbackSelector(false)
-    setShowStationSelector(false)
     loadAgentSkills()
   }, [agent.id])
 
@@ -1441,8 +1403,31 @@ function AgentDetail({
     { label: `${agentSlug}.md`, path: `/agents/${agentSlug}.md` },
   ]
   const agentStationLabel = stationsById[agent.station]?.name ?? agent.station
-  const editStationLabel = stationsById[editStation]?.name ?? editStation
   const sortedStations = [...stations].sort((a, b) => (a.sortOrder - b.sortOrder) || a.name.localeCompare(b.name))
+  const modelOptions = AVAILABLE_MODELS.map((model) => ({
+    value: model.id,
+    label: model.name,
+    description: model.description,
+    icon: <ModelBadge modelId={model.id} size="sm" />,
+    textValue: `${model.id} ${model.name} ${model.description}`,
+  }))
+  const availableFallbackModels = AVAILABLE_MODELS
+    .filter((model) => model.id !== editModel)
+    .filter((model) => !editFallbacks.includes(model.id))
+  const fallbackModelOptions = availableFallbackModels.map((model) => ({
+    value: model.id,
+    label: model.name,
+    description: model.description,
+    icon: <ModelBadge modelId={model.id} size="sm" />,
+    textValue: `${model.id} ${model.name} ${model.description}`,
+  }))
+  const stationOptions = sortedStations.map((station) => ({
+    value: station.id,
+    label: station.name,
+    description: station.id,
+    icon: <StationIcon stationId={station.id} />,
+    textValue: `${station.id} ${station.name}`,
+  }))
 
   return (
     <div className="space-y-6">
@@ -1653,35 +1638,18 @@ function AgentDetail({
           {/* Model Selection */}
           <div className="space-y-2">
             <label className="text-xs text-fg-2">AI Model</label>
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowModelSelector(!showModelSelector)}
-                className="w-full flex items-center justify-between px-3 py-2 bg-bg-2 border border-bd-0 rounded-[var(--radius-md)] text-sm text-fg-0 hover:border-bd-1 transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  <ModelBadge modelId={editModel} size="sm" />
-                  <span>{AVAILABLE_MODELS.find((m) => m.id === editModel)?.name || 'Unknown'}</span>
-                </div>
-                <ChevronDown className={cn('w-4 h-4 text-fg-2 transition-transform', showModelSelector && 'rotate-180')} />
-              </button>
-              {showModelSelector && (
-                <div className="absolute z-10 mt-1 w-full bg-bg-1 border border-bd-0 rounded-[var(--radius-md)] shadow-lg overflow-hidden">
-                  {AVAILABLE_MODELS.map((model) => (
-                    <ModelOption
-                      key={model.id}
-                      modelId={model.id}
-                      selected={editModel === model.id}
-                      onClick={() => {
-                        setEditModel(model.id)
-                        setEditFallbacks((prev) => prev.filter((m) => m !== model.id))
-                        setShowModelSelector(false)
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
+            <SelectDropdown
+              value={editModel}
+              onChange={(nextValue) => {
+                setEditModel(nextValue)
+                setEditFallbacks((prev) => prev.filter((modelId) => modelId !== nextValue))
+              }}
+              ariaLabel="AI model"
+              tone="field"
+              size="md"
+              options={modelOptions}
+              search="auto"
+            />
           </div>
 
           {/* Fallbacks */}
@@ -1754,41 +1722,18 @@ function AgentDetail({
               )}
             </div>
 
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowFallbackSelector(!showFallbackSelector)}
-                className="w-full flex items-center justify-between px-3 py-2 bg-bg-2 border border-bd-0 rounded-[var(--radius-md)] text-sm text-fg-0 hover:border-bd-1 transition-colors"
-              >
-                <span className="text-xs text-fg-2">Add fallback…</span>
-                <ChevronDown
-                  className={cn('w-4 h-4 text-fg-2 transition-transform', showFallbackSelector && 'rotate-180')}
-                />
-              </button>
-
-              {showFallbackSelector && (
-                <div className="absolute z-10 mt-1 w-full bg-bg-1 border border-bd-0 rounded-[var(--radius-md)] shadow-lg overflow-hidden">
-                  {AVAILABLE_MODELS
-                    .filter((m) => m.id !== editModel)
-                    .filter((m) => !editFallbacks.includes(m.id))
-                    .map((m) => (
-                      <ModelOption
-                        key={m.id}
-                        modelId={m.id}
-                        selected={false}
-                        onClick={() => {
-                          setEditFallbacks((prev) => [...prev, m.id])
-                          setShowFallbackSelector(false)
-                        }}
-                      />
-                    ))}
-
-                  {AVAILABLE_MODELS.filter((m) => m.id !== editModel).filter((m) => !editFallbacks.includes(m.id)).length === 0 && (
-                    <div className="px-3 py-2 text-xs text-fg-3">No more models available</div>
-                  )}
-                </div>
-              )}
-            </div>
+            <SelectDropdown
+              value={null}
+              onChange={(nextValue) => setEditFallbacks((prev) => [...prev, nextValue])}
+              ariaLabel="Add fallback model"
+              tone="field"
+              size="md"
+              placeholder="Add fallback..."
+              options={fallbackModelOptions}
+              disabled={fallbackModelOptions.length === 0}
+              search="auto"
+              emptyMessage="No more models available"
+            />
 
             <p className="text-[11px] text-fg-3">Tried in order if primary fails. Stored as a JSON array of model IDs.</p>
           </div>
@@ -1804,55 +1749,19 @@ function AgentDetail({
             </div>
             <div className="space-y-1">
               <label className="text-xs text-fg-2">Station</label>
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowStationSelector(!showStationSelector)}
-                  className="w-full flex items-center justify-between px-3 py-2 bg-bg-2 border border-bd-0 rounded-[var(--radius-md)] text-sm text-fg-0 hover:border-bd-1 transition-colors"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <StationIcon stationId={editStation} />
-                    <span className="truncate">{editStationLabel}</span>
-                  </div>
-                  <ChevronDown className={cn('w-4 h-4 text-fg-2 transition-transform', showStationSelector && 'rotate-180')} />
-                </button>
-                {showStationSelector && (
-                  <div className="absolute z-10 mt-1 w-full bg-bg-1 border border-bd-0 rounded-[var(--radius-md)] shadow-lg overflow-hidden">
-                    {sortedStations.map((s) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => {
-                          setEditStation(s.id)
-                          setShowStationSelector(false)
-                        }}
-                        className={cn(
-                          'w-full px-3 py-2 text-left text-xs hover:bg-bg-2 transition-colors flex items-center justify-between gap-2',
-                          s.id === editStation && 'bg-status-progress/10'
-                        )}
-                      >
-                        <span className="inline-flex items-center gap-2 min-w-0">
-                          <StationIcon stationId={s.id} />
-                          <span className="truncate">{s.name}</span>
-                        </span>
-                        <span className="text-[10px] text-fg-3 font-mono">{s.id}</span>
-                      </button>
-                    ))}
-                    <div className="border-t border-bd-0">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowStationSelector(false)
-                          setShowCreateStation(true)
-                        }}
-                        className="w-full px-3 py-2 text-left text-xs hover:bg-bg-2 transition-colors text-status-progress"
-                      >
-                        + Create new…
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <SelectDropdown
+                value={editStation}
+                onChange={setEditStation}
+                ariaLabel="Agent station"
+                tone="field"
+                size="md"
+                options={stationOptions}
+                search="auto"
+                footerAction={{
+                  label: '+ Create new...',
+                  onClick: () => setShowCreateStation(true),
+                }}
+              />
             </div>
           </div>
 

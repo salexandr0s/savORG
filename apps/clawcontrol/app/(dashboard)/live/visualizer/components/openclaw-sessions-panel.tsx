@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { Button } from '@clawcontrol/ui'
 import { cn } from '@/lib/utils'
 import { RefreshCw, Bot, Clock, AlertTriangle, Activity } from 'lucide-react'
 
@@ -117,29 +118,25 @@ export function OpenClawSessionsPanel() {
         </div>
 
         <div className="flex items-center gap-2">
-          <button
+          <Button
             onClick={() => setDriftOnly(!driftOnly)}
-            className={cn(
-              'px-2.5 py-1.5 text-xs font-medium rounded-[var(--radius-md)] border transition-colors',
-              driftOnly
-                ? 'bg-status-warning/10 text-status-warning border-status-warning/30'
-                : 'bg-bg-3 text-fg-2 border-bd-0 hover:border-bd-1'
-            )}
+            variant="secondary"
+            size="sm"
+            className={cn(driftOnly && 'bg-status-warning/10 text-status-warning border-status-warning/30 hover:bg-status-warning/20')}
           >
             Drift only
-          </button>
+          </Button>
 
-          <button
+          <Button
             onClick={syncAndLoad}
-            className={cn(
-              'btn-secondary flex items-center gap-1.5 text-xs',
-              loading && 'opacity-70'
-            )}
+            variant="secondary"
+            size="sm"
+            className={cn(loading && 'opacity-70')}
             disabled={loading}
           >
             <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
             Sync
-          </button>
+          </Button>
         </div>
       </div>
 

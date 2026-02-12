@@ -1,7 +1,15 @@
 'use client'
 
 import { useState, useCallback, useEffect, useMemo, type CSSProperties } from 'react'
-import { PageHeader, EmptyState, TypedConfirmModal } from '@clawcontrol/ui'
+import {
+  PageHeader,
+  EmptyState,
+  TypedConfirmModal,
+  Button,
+  SegmentedToggle,
+  DropdownMenu,
+  SelectDropdown,
+} from '@clawcontrol/ui'
 import { LoadingSpinner, LoadingState } from '@/components/ui/loading-state'
 import { RightDrawer } from '@/components/shell/right-drawer'
 import { MarkdownEditor } from '@/components/editors/markdown-editor'
@@ -423,7 +431,6 @@ export function WorkspaceClient({ initialFiles }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [fileContent, setFileContent] = useState<string>('')
 
-  const [showCreateMenu, setShowCreateMenu] = useState(false)
   const [createModalOpen, setCreateModalOpen] = useState<'file' | 'folder' | null>(null)
   const [newName, setNewName] = useState('')
   const [isCreating, setIsCreating] = useState(false)
@@ -755,7 +762,6 @@ export function WorkspaceClient({ initialFiles }: Props) {
   const handleCreate = useCallback((type: 'file' | 'folder') => {
     setCreateModalOpen(type)
     setNewName('')
-    setShowCreateMenu(false)
     setError(null)
   }, [])
 
@@ -1030,67 +1036,73 @@ export function WorkspaceClient({ initialFiles }: Props) {
                 />
               </div>
 
-              <select
+              <SelectDropdown
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as WorkspaceSort)}
-                className="px-2 py-1.5 text-xs bg-bg-3 border border-bd-0 rounded-[var(--radius-md)] text-fg-1"
-              >
-                <option value="name">Sort: Name</option>
-                <option value="recentlyEdited">Sort: Recently Edited</option>
-                <option value="newestCreated">Sort: Newest Created</option>
-                <option value="oldestCreated">Sort: Oldest Created</option>
-              </select>
+                onChange={(nextValue) => setSortBy(nextValue as WorkspaceSort)}
+                ariaLabel="Workspace sort"
+                tone="toolbar"
+                size="sm"
+                options={[
+                  { value: 'name', label: 'Sort: Name', textValue: 'sort name' },
+                  { value: 'recentlyEdited', label: 'Sort: Recently Edited', textValue: 'sort recently edited' },
+                  { value: 'newestCreated', label: 'Sort: Newest Created', textValue: 'sort newest created' },
+                  { value: 'oldestCreated', label: 'Sort: Oldest Created', textValue: 'sort oldest created' },
+                ]}
+              />
 
-              <div className="flex items-center bg-bg-3 border border-bd-0 rounded-[var(--radius-md)] overflow-hidden">
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={cn(
-                    'px-2 py-1.5 text-xs flex items-center gap-1.5',
-                    viewMode === 'list' ? 'bg-bg-2 text-fg-0' : 'text-fg-2'
-                  )}
-                >
-                  <List className="w-3.5 h-3.5" />
-                  List
-                </button>
-                <button
-                  onClick={() => setViewMode('calendar')}
-                  className={cn(
-                    'px-2 py-1.5 text-xs flex items-center gap-1.5',
-                    viewMode === 'calendar' ? 'bg-bg-2 text-fg-0' : 'text-fg-2'
-                  )}
-                >
-                  <CalendarDays className="w-3.5 h-3.5" />
-                  Calendar
-                </button>
-              </div>
+              <SegmentedToggle
+                value={viewMode}
+                onChange={setViewMode}
+                tone="neutral"
+                ariaLabel="Workspace view mode"
+                items={[
+                  {
+                    value: 'list',
+                    label: (
+                      <>
+                        <List className="w-3.5 h-3.5" />
+                        List
+                      </>
+                    ),
+                  },
+                  {
+                    value: 'calendar',
+                    label: (
+                      <>
+                        <CalendarDays className="w-3.5 h-3.5" />
+                        Calendar
+                      </>
+                    ),
+                  },
+                ]}
+              />
 
-              <div className="relative">
-                <button
-                  onClick={() => setShowCreateMenu((prev) => !prev)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-bg-3 hover:bg-bd-1 rounded-[var(--radius-md)] border border-bd-0 text-fg-1"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  New
-                </button>
-                {showCreateMenu && (
-                  <div className="absolute right-0 top-full mt-1 bg-bg-3 border border-bd-1 rounded-[var(--radius-md)] shadow-lg z-10 min-w-[140px]">
-                    <button
-                      onClick={() => handleCreate('file')}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-fg-1 hover:bg-bg-2 transition-colors text-left"
-                    >
-                      <FilePlus className="w-4 h-4 text-fg-2" />
-                      New File
-                    </button>
-                    <button
-                      onClick={() => handleCreate('folder')}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-fg-1 hover:bg-bg-2 transition-colors text-left"
-                    >
-                      <FolderPlus className="w-4 h-4 text-fg-2" />
-                      New Folder
-                    </button>
-                  </div>
-                )}
-              </div>
+              <DropdownMenu
+                trigger={
+                  <>
+                    <Plus className="w-3.5 h-3.5" />
+                    New
+                  </>
+                }
+                ariaLabel="Create workspace item"
+                size="sm"
+                align="end"
+                menuWidth={170}
+                className="bg-bg-2"
+                items={[
+                  {
+                    id: 'file',
+                    label: 'New File',
+                    icon: <FilePlus className="w-4 h-4" />,
+                  },
+                  {
+                    id: 'folder',
+                    label: 'New Folder',
+                    icon: <FolderPlus className="w-4 h-4" />,
+                  },
+                ]}
+                onSelect={(itemId) => handleCreate(itemId)}
+              />
             </div>
           }
         />
@@ -1653,20 +1665,22 @@ export function WorkspaceClient({ initialFiles }: Props) {
               )}
 
               <div className="flex justify-end gap-2">
-                <button
+                <Button
                   onClick={() => setCreateModalOpen(null)}
-                  className="px-4 py-2 text-sm font-medium text-fg-2 hover:text-fg-1 hover:bg-bg-3 rounded-[var(--radius-md)]"
+                  variant="secondary"
+                  size="md"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={handleCreateSubmit}
                   disabled={!newName.trim() || isCreating}
-                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-status-info text-white hover:bg-status-info/90 rounded-[var(--radius-md)] disabled:opacity-50"
+                  variant="primary"
+                  size="md"
                 >
                   {isCreating && <LoadingSpinner size="sm" />}
                   Create
-                </button>
+                </Button>
               </div>
             </div>
           </div>

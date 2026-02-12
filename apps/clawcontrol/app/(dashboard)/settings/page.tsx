@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, type ChangeEvent } from 'react'
+import { Button, SegmentedToggle, buttonLikeClass } from '@clawcontrol/ui'
 import { useLayout } from '@/lib/layout-context'
 import { useSettings } from '@/lib/settings-context'
 import { useSyncStatus } from '@/lib/hooks/useSyncStatus'
@@ -403,10 +404,10 @@ export default function SettingsPage() {
           <div className="flex items-center gap-2">
             <label
               className={cn(
-                'inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-[var(--radius-md)] transition-colors cursor-pointer',
+                buttonLikeClass({ variant: 'secondary', size: 'md', className: 'cursor-pointer' }),
                 avatarBusy
-                  ? 'bg-bg-3 text-fg-3 cursor-not-allowed'
-                  : 'bg-bg-3 text-fg-1 hover:bg-bd-1'
+                  ? 'text-fg-3 cursor-not-allowed'
+                  : null
               )}
             >
               <input
@@ -420,20 +421,17 @@ export default function SettingsPage() {
               {avatarBusy ? 'Processing...' : 'Upload Image'}
             </label>
 
-            <button
+            <Button
               type="button"
               onClick={() => setUserAvatarDataUrl(null)}
               disabled={!userAvatarDataUrl || avatarBusy}
-              className={cn(
-                'inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-[var(--radius-md)] transition-colors',
-                userAvatarDataUrl && !avatarBusy
-                  ? 'bg-bg-3 text-fg-1 hover:bg-bd-1'
-                  : 'bg-bg-3 text-fg-3 cursor-not-allowed'
-              )}
+              variant="secondary"
+              size="md"
+              className={cn(!(userAvatarDataUrl && !avatarBusy) && 'text-fg-3')}
             >
               <Trash2 className="w-4 h-4" />
               Reset
-            </button>
+            </Button>
           </div>
 
           {avatarError && (
@@ -541,15 +539,12 @@ ssh -L 3000:127.0.0.1:3000 {'<user>@<host-tailnet-name>'}
                         Runs security and usability checks: listener bindings, gateway policy, tailscale status, serve exposure, and SSH availability.
                       </p>
                     </div>
-                    <button
+                    <Button
                       onClick={handleRunTailscaleReadiness}
                       disabled={tailscaleReadinessLoading}
-                      className={cn(
-                        'shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-[var(--radius-md)] transition-colors',
-                        tailscaleReadinessLoading
-                          ? 'bg-bg-3 text-fg-3 cursor-not-allowed'
-                          : 'bg-bg-3 text-fg-1 hover:bg-bd-1'
-                      )}
+                      variant="secondary"
+                      size="sm"
+                      className={cn('shrink-0', tailscaleReadinessLoading && 'text-fg-3')}
                     >
                       {tailscaleReadinessLoading ? (
                         <LoadingSpinner size="sm" />
@@ -557,7 +552,7 @@ ssh -L 3000:127.0.0.1:3000 {'<user>@<host-tailnet-name>'}
                         <RefreshCw className="w-3.5 h-3.5" />
                       )}
                       {tailscaleReadinessLoading ? 'Running...' : 'Run Checks'}
-                    </button>
+                    </Button>
                   </div>
 
                   {tailscaleReadinessError && (
@@ -714,15 +709,12 @@ ssh -L 3000:127.0.0.1:3000 {'<user>@<host-tailnet-name>'}
                     className="flex-1 px-3 py-2 text-sm bg-bg-1 border border-bd-0 rounded-[var(--radius-md)] text-fg-0 placeholder:text-fg-3 focus:outline-none focus:border-status-info/50"
                   />
                   {pickerAvailable && (
-                    <button
+                    <Button
                       onClick={handlePickWorkspace}
                       disabled={pickingWorkspace || saving}
-                      className={cn(
-                        'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-[var(--radius-md)] transition-colors',
-                        !pickingWorkspace && !saving
-                          ? 'bg-bg-3 text-fg-1 hover:bg-bd-1'
-                          : 'bg-bg-3 text-fg-3 cursor-not-allowed'
-                      )}
+                      variant="secondary"
+                      size="md"
+                      className={cn((pickingWorkspace || saving) && 'text-fg-3')}
                     >
                       {pickingWorkspace ? (
                         <LoadingSpinner size="md" />
@@ -730,17 +722,14 @@ ssh -L 3000:127.0.0.1:3000 {'<user>@<host-tailnet-name>'}
                         <FolderOpen className="w-4 h-4" />
                       )}
                       Browse
-                    </button>
+                    </Button>
                   )}
-                  <button
+                  <Button
                     onClick={handleSaveSettings}
                     disabled={!hasSettingsChanges || saving}
-                    className={cn(
-                      'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-[var(--radius-md)] transition-colors',
-                      hasSettingsChanges && !saving
-                        ? 'bg-status-info text-white hover:bg-status-info/90'
-                        : 'bg-bg-3 text-fg-3 cursor-not-allowed'
-                    )}
+                    variant={hasSettingsChanges && !saving ? 'primary' : 'secondary'}
+                    size="md"
+                    className={cn(!(hasSettingsChanges && !saving) && 'text-fg-3')}
                   >
                     {saving ? (
                       <LoadingSpinner size="md" />
@@ -750,7 +739,7 @@ ssh -L 3000:127.0.0.1:3000 {'<user>@<host-tailnet-name>'}
                       <Save className="w-4 h-4" />
                     )}
                     {saving ? (restartingServer ? 'Restarting...' : 'Saving...') : saveSuccess ? 'Saved' : 'Save'}
-                  </button>
+                  </Button>
                 </div>
               </div>
 
@@ -843,26 +832,24 @@ ssh -L 3000:127.0.0.1:3000 {'<user>@<host-tailnet-name>'}
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <button
+                  <Button
                     onClick={loadDiscover}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-[var(--radius-md)] bg-bg-3 text-fg-1 hover:bg-bg-4 transition-colors"
+                    variant="secondary"
+                    size="sm"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                     Refresh
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     onClick={handleManualSync}
                     disabled={syncing}
-                    className={cn(
-                      'flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-[var(--radius-md)] transition-colors',
-                      syncing
-                        ? 'bg-bg-3 text-fg-3 cursor-not-allowed'
-                        : 'bg-status-info text-white hover:bg-status-info/90'
-                    )}
+                    variant={syncing ? 'secondary' : 'primary'}
+                    size="sm"
+                    className={cn(syncing && 'text-fg-3')}
                   >
                     <RefreshCw className={cn('w-3.5 h-3.5', syncing && 'animate-spin')} />
                     {syncing ? 'Syncing...' : 'Sync Now'}
-                  </button>
+                  </Button>
                 </div>
               </div>
 
@@ -966,34 +953,17 @@ ssh -L 3000:127.0.0.1:3000 {'<user>@<host-tailnet-name>'}
                 </p>
               </div>
             </div>
-            <div className="inline-flex items-center gap-1 p-1 rounded-[var(--radius-md)] bg-bg-3 border border-bd-0 shrink-0">
-              <button
-                type="button"
-                onClick={() => setSkipTypedConfirm(false)}
-                className={cn(
-                  'px-2.5 py-1 text-xs font-medium rounded-[var(--radius-sm)] transition-colors',
-                  !skipTypedConfirm
-                    ? 'bg-bg-1 text-fg-0'
-                    : 'text-fg-2 hover:text-fg-0'
-                )}
-                aria-pressed={!skipTypedConfirm}
-              >
-                Off
-              </button>
-              <button
-                type="button"
-                onClick={() => setSkipTypedConfirm(true)}
-                className={cn(
-                  'px-2.5 py-1 text-xs font-medium rounded-[var(--radius-sm)] transition-colors',
-                  skipTypedConfirm
-                    ? 'bg-status-warning text-black'
-                    : 'text-fg-2 hover:text-fg-0'
-                )}
-                aria-pressed={skipTypedConfirm}
-              >
-                On
-              </button>
-            </div>
+            <SegmentedToggle
+              value={skipTypedConfirm ? 'on' : 'off'}
+              onChange={(next) => setSkipTypedConfirm(next === 'on')}
+              tone="neutral"
+              size="sm"
+              ariaLabel="Skip typed confirmation"
+              items={[
+                { value: 'off', label: 'Off' },
+                { value: 'on', label: 'On' },
+              ]}
+            />
           </div>
 
           {skipTypedConfirm && (

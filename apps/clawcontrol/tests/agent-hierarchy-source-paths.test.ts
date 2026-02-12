@@ -12,8 +12,10 @@ describe('hierarchy source path discovery', () => {
       const workspaceRoot = join(tempRoot, 'OpenClaw')
       const clawcontrolRoot = join(workspaceRoot, 'projects', 'ClawControl')
       const fallbackDir = join(clawcontrolRoot, 'openclaw')
+      const agentsDir = join(clawcontrolRoot, 'agents')
 
       await mkdir(fallbackDir, { recursive: true })
+      await mkdir(agentsDir, { recursive: true })
       await writeFile(join(clawcontrolRoot, 'clawcontrol.config.yaml'), 'agents: {}\n', 'utf-8')
       await writeFile(join(fallbackDir, 'openclaw.json5'), '{ agents: { list: [] } }', 'utf-8')
 
@@ -27,6 +29,7 @@ describe('hierarchy source path discovery', () => {
       expect(resolved.workspaceRoot).toBe(workspaceRoot)
       expect(resolved.yamlPath).toBe(join(clawcontrolRoot, 'clawcontrol.config.yaml'))
       expect(resolved.fallbackPath).toBe(join(fallbackDir, 'openclaw.json5'))
+      expect(resolved.agentsPath).toBe(join(clawcontrolRoot, 'agents'))
     } finally {
       await rm(tempRoot, { recursive: true, force: true })
     }

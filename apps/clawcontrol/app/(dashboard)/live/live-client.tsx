@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { PageHeader, EmptyState } from '@clawcontrol/ui'
+import { PageHeader, EmptyState, Button, SegmentedToggle, SelectDropdown } from '@clawcontrol/ui'
 import { activitiesApi, agentsApi } from '@/lib/http'
 import { useSseStream, type SseConnectionState } from '@/lib/hooks/useSseStream'
 import type { ActivityDTO } from '@/lib/repo'
@@ -87,7 +87,7 @@ export function LiveClient() {
       : activities.filter((a) => a.type.startsWith(filter))
 
   if (loading) {
-    return <LoadingState />
+    return <LoadingState height="viewport" />
   }
 
   if (error) {
@@ -119,59 +119,59 @@ export function LiveClient() {
         actions={
           <div className="flex items-center gap-3">
             {/* Mode Switch */}
-            <div className="flex items-center gap-1 bg-bg-2 rounded-[var(--radius-md)] border border-bd-0 p-0.5">
-              <button
-                onClick={() => setViewMode('timeline')}
-                className={cn(
-                  'flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-[var(--radius-sm)] transition-colors',
-                  viewMode === 'timeline'
-                    ? 'bg-bg-3 text-fg-0'
-                    : 'text-fg-2 hover:text-fg-1'
-                )}
-              >
-                <List className="w-3.5 h-3.5" />
-                Timeline
-              </button>
-              <button
-                onClick={() => setViewMode('visualizer')}
-                className={cn(
-                  'flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-[var(--radius-sm)] transition-colors',
-                  viewMode === 'visualizer'
-                    ? 'bg-bg-3 text-fg-0'
-                    : 'text-fg-2 hover:text-fg-1'
-                )}
-              >
-                <LayoutGrid className="w-3.5 h-3.5" />
-                Visualizer
-              </button>
-            </div>
+            <SegmentedToggle
+              value={viewMode}
+              onChange={setViewMode}
+              tone="neutral"
+              ariaLabel="Live view mode"
+              items={[
+                {
+                  value: 'timeline',
+                  label: (
+                    <>
+                      <List className="w-3.5 h-3.5" />
+                      Timeline
+                    </>
+                  ),
+                },
+                {
+                  value: 'visualizer',
+                  label: (
+                    <>
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                      Visualizer
+                    </>
+                  ),
+                },
+              ]}
+            />
 
             {/* Timeline-specific controls */}
             {viewMode === 'timeline' && (
               <>
                 {/* Filter */}
-                <select
+                <SelectDropdown
                   value={filter}
-                  onChange={(e) => setFilter(e.target.value as ActivityType)}
-                  className="px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] bg-bg-3 text-fg-1 border border-bd-0 focus:outline-none focus:border-bd-1"
-                >
-                  <option value="all">All events</option>
-                  <option value="work_order">Work Orders</option>
-                  <option value="operation">Operations</option>
-                  <option value="approval">Approvals</option>
-                  <option value="agent">Agents</option>
-                  <option value="system">System</option>
-                </select>
+                  onChange={(nextValue) => setFilter(nextValue as ActivityType)}
+                  ariaLabel="Live event filter"
+                  tone="toolbar"
+                  size="sm"
+                  options={[
+                    { value: 'all', label: 'All events' },
+                    { value: 'work_order', label: 'Work Orders' },
+                    { value: 'operation', label: 'Operations' },
+                    { value: 'approval', label: 'Approvals' },
+                    { value: 'agent', label: 'Agents' },
+                    { value: 'system', label: 'System' },
+                  ]}
+                />
 
                 {/* Tail Mode Toggle */}
-                <button
+                <Button
                   onClick={() => setTailMode(!tailMode)}
-                  className={cn(
-                    'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] border transition-colors',
-                    tailMode
-                      ? 'bg-status-progress/10 text-status-progress border-status-progress/30'
-                      : 'bg-bg-3 text-fg-2 border-bd-0 hover:border-bd-1'
-                  )}
+                  variant="secondary"
+                  size="sm"
+                  className={cn(tailMode && 'text-status-progress border-status-progress/30 bg-status-progress/10 hover:bg-status-progress/20')}
                 >
                   {tailMode ? (
                     <Pause className="w-3.5 h-3.5" />
@@ -179,7 +179,7 @@ export function LiveClient() {
                     <Play className="w-3.5 h-3.5" />
                   )}
                   Tail
-                </button>
+                </Button>
               </>
             )}
           </div>

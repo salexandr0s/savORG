@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { Button, SelectDropdown } from '@clawcontrol/ui'
 import { cn } from '@/lib/utils'
 import { formatRelativeTime } from '@/lib/utils'
 import { PriorityPill } from '@/components/ui/status-pill'
@@ -183,23 +184,26 @@ export function KanbanCard({
             Assign to Agent
           </span>
           <div className="flex items-center gap-1.5">
-            <select
+            <SelectDropdown
               value={selectedAgent}
-              onChange={(event) => setSelectedAgent(event.target.value)}
-              onClick={stopEvent}
-              onPointerDown={stopEvent}
-              className="flex-1 min-w-0 px-2 py-1 text-[11px] bg-bg-3 border border-bd-0 rounded-[var(--radius-sm)] text-fg-1 focus:outline-none focus:ring-1 focus:ring-status-info/40"
-            >
-              {availableAgents.length === 0 && (
-                <option value="">No available agents</option>
-              )}
-              {availableAgents.map((agent) => (
-                <option key={agent.id} value={agent.id}>
-                  {agent.displayName}
-                </option>
-              ))}
-            </select>
-            <button
+              onChange={setSelectedAgent}
+              ariaLabel={`Assign ${workOrder.code} to agent`}
+              tone="toolbar"
+              size="sm"
+              disabled={availableAgents.length === 0}
+              search={false}
+              className="flex-1 min-w-0"
+              triggerClassName="text-[11px]"
+              options={
+                availableAgents.length === 0
+                  ? [{ value: '', label: 'No available agents', disabled: true }]
+                  : availableAgents.map((agent) => ({
+                    value: agent.id,
+                    label: agent.displayName,
+                  }))
+              }
+            />
+            <Button
               type="button"
               onClick={async (event) => {
                 stopEvent(event)
@@ -208,10 +212,12 @@ export function KanbanCard({
               }}
               onPointerDown={stopEvent}
               disabled={!selectedAgent || isAssigning || availableAgents.length === 0}
-              className="px-2 py-1 text-[11px] font-medium rounded-[var(--radius-sm)] bg-status-info text-bg-0 hover:bg-status-info/90 disabled:opacity-50 disabled:cursor-not-allowed"
+              variant="primary"
+              size="xs"
+              className="text-[11px]"
             >
               {isAssigning ? 'Assigning...' : 'Assign'}
-            </button>
+            </Button>
           </div>
         </div>
       )}

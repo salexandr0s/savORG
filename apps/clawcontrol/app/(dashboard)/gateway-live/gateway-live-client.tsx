@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback } from 'react'
-import { PageHeader, EmptyState } from '@clawcontrol/ui'
+import { PageHeader, EmptyState, Button } from '@clawcontrol/ui'
 import { cn } from '@/lib/utils'
 import { LoadingSpinner, LoadingState } from '@/components/ui/loading-state'
 import {
@@ -70,14 +70,11 @@ export function GatewayLiveClient() {
             </div>
 
             {/* Pause Toggle */}
-            <button
+            <Button
               onClick={actions.togglePause}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[var(--radius-md)] border transition-colors',
-                state.paused
-                  ? 'bg-status-warning/10 text-status-warning border-status-warning/30'
-                  : 'bg-bg-3 text-fg-2 border-bd-0 hover:border-bd-1'
-              )}
+              variant="secondary"
+              size="sm"
+              className={cn(state.paused && 'bg-status-warning/10 text-status-warning border-status-warning/30 hover:bg-status-warning/20')}
             >
               {state.paused ? (
                 <>
@@ -90,7 +87,7 @@ export function GatewayLiveClient() {
                   Pause
                 </>
               )}
-            </button>
+            </Button>
           </div>
         }
       />
@@ -119,13 +116,14 @@ export function GatewayLiveClient() {
                   : 'Not connected to the Gateway.'
               }
               action={
-                <button
+                <Button
                   onClick={reconnect}
-                  className="btn-secondary flex items-center gap-2"
+                  variant="secondary"
+                  size="md"
                 >
                   <RefreshCw className="w-4 h-4" />
                   Reconnect
-                </button>
+                </Button>
               }
             />
           </div>

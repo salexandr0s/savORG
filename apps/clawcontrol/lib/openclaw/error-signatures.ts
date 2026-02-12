@@ -6,6 +6,7 @@ export interface NormalizedErrorSignature {
   signatureHash: string
   signatureText: string
   sample: string
+  rawSampleRedacted: string
 }
 
 function stripControlChars(input: string): string {
@@ -21,6 +22,49 @@ function stripControlChars(input: string): string {
 export function sanitizeErrorSample(input: string, maxLen = 320): string {
   const cleaned = stripControlChars(input)
     .replace(/\s+/g, ' ')
+    .trim()
+
+  if (!cleaned) return ''
+  return cleaned.length > maxLen ? `${cleaned.slice(0, maxLen - 1)}…` : cleaned
+}
+
+export function redactSensitiveErrorText(input: string): string {
+  let redacted = input
+
+  // Redact private key blocks.
+  redacted = redacted.replace(
+    /-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/gi,
+    '[REDACTED_PRIVATE_KEY]'
+  )
+
+  // Redact JWT-like tokens.
+  redacted = redacted.replace(
+    /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g,
+    '[REDACTED_JWT]'
+  )
+
+  // Redact bearer tokens.
+  redacted = redacted.replace(
+    /(Bearer\s+)[A-Za-z0-9._~+/=-]{8,}/gi,
+    '$1[REDACTED_TOKEN]'
+  )
+
+  // Redact common provider token formats.
+  redacted = redacted.replace(/\b(?:sk|rk|pk)_[A-Za-z0-9]{16,}\b/g, '[REDACTED_TOKEN]')
+  redacted = redacted.replace(/\b(?:ghp|github_pat)_[A-Za-z0-9_]{20,}\b/g, '[REDACTED_TOKEN]')
+
+  // Redact common key/value secret patterns while preserving previous token masks.
+  redacted = redacted.replace(
+    /(\b(?:api[_-]?key|token|secret|password|passwd|authorization)\b\s*[:=]\s*)(?!\[)([^\s"',;]+)/gi,
+    '$1[REDACTED]'
+  )
+
+  return redacted
+}
+
+export function sanitizeRawErrorSample(input: string, maxLen = 2400): string {
+  const cleaned = stripControlChars(redactSensitiveErrorText(input))
+    .replace(/\r/g, '')
     .trim()
 
   if (!cleaned) return ''
@@ -66,5 +110,6 @@ export function normalizeErrorSignature(block: string): NormalizedErrorSignature
     signatureHash,
     signatureText: signatureText || 'unknown-error',
     sample: sanitizeErrorSample(lines.slice(0, 6).join(' | ')),
+    rawSampleRedacted: sanitizeRawErrorSample(lines.slice(0, 12).join('\n')),
   }
 }

@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { normalizeErrorSignature, sanitizeErrorSample } from '@/lib/openclaw/error-signatures'
+import {
+  normalizeErrorSignature,
+  sanitizeErrorSample,
+  sanitizeRawErrorSample,
+  redactSensitiveErrorText,
+} from '@/lib/openclaw/error-signatures'
 
 describe('error-signatures', () => {
   it('normalizes volatile values into stable signature', () => {
@@ -14,5 +19,29 @@ describe('error-signatures', () => {
     const sample = sanitizeErrorSample('hello\u0000world\n'.repeat(80), 50)
     expect(sample.includes('\u0000')).toBe(false)
     expect(sample.length).toBeLessThanOrEqual(50)
+  })
+
+  it('produces raw redacted sample output for display toggle', () => {
+    const normalized = normalizeErrorSignature(
+      'ERROR auth failed\\nAuthorization: Bearer super-secret-token\\nRun: openclaw doctor --fix'
+    )
+
+    expect(normalized.rawSampleRedacted).toContain('[REDACTED_TOKEN]')
+    expect(normalized.rawSampleRedacted).toContain('Run: openclaw doctor --fix')
+  })
+
+  it('redacts common secret patterns in raw mode', () => {
+    const input = [
+      'api_key=sk_12345678901234567890123456789012',
+      'token: ghp_1234567890abcdefghijklmnopqrstuv',
+      'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.signaturepayload',
+    ].join('\n')
+
+    const redacted = redactSensitiveErrorText(input)
+    const sample = sanitizeRawErrorSample(input, 600)
+
+    expect(redacted).toContain('[REDACTED_TOKEN]')
+    expect(redacted).toContain('[REDACTED_JWT]')
+    expect(sample).not.toContain('sk_123456')
   })
 })
