@@ -11,6 +11,7 @@ export { getRepos, createRepos, resetRepos, type Repos } from './provider'
 export type { WorkOrdersRepo } from './workOrders'
 export type { OperationsRepo, CreateOperationInput } from './operations'
 export type { AgentsRepo } from './agents'
+export type { AgentTeamsRepo, CreateAgentTeamInput, UpdateAgentTeamInput } from './agentTeams'
 export type { StationsRepo, CreateStationInput, UpdateStationInput } from './stations'
 export type { ApprovalsRepo, CreateApprovalInput } from './approvals'
 export type { ActivitiesRepo, CreateActivityInput } from './activities'
@@ -36,6 +37,8 @@ export type {
   OperationSummaryDTO,
   OperationFilters,
   AgentDTO,
+  AgentTeamDTO,
+  AgentTeamMemberDTO,
   AgentFilters,
   StationDTO,
   ApprovalDTO,

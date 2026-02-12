@@ -23,6 +23,7 @@ import {
   MessageSquare,
   Radio,
   Cpu,
+  GitBranch,
 } from 'lucide-react'
 import type { Route } from 'next'
 
@@ -39,7 +40,8 @@ const navItems: NavItem[] = [
   { href: '/approvals' as Route, label: 'Approvals', icon: ShieldCheck },
   { href: '/console' as Route, label: 'Chat', icon: MessageSquare },
   { href: '/agents' as Route, label: 'Agents', icon: Bot },
-  { href: '/agent-templates' as Route, label: 'Templates', icon: LayoutTemplate },
+  { href: '/workflows' as Route, label: 'Workflows', icon: GitBranch },
+  { href: '/agent-templates' as Route, label: 'Agent Templates', icon: LayoutTemplate },
   { href: '/cron' as Route, label: 'Cron', icon: Clock },
   { href: '/workspace' as Route, label: 'Workspace', icon: FolderTree },
   { href: '/runs' as Route, label: 'Runs', icon: TerminalSquare },

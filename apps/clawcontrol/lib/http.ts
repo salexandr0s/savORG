@@ -1712,6 +1712,328 @@ export const templatesApi = {
 }
 
 // ============================================================================
+// WORKFLOWS / TEAMS / PACKAGES API
+// ============================================================================
+
+export interface WorkflowListItem {
+  id: string
+  description: string
+  source: 'built_in' | 'custom'
+  editable: boolean
+  sourcePath: string
+  stages: number
+  loops: number
+  inUse: number
+  updatedAt: string
+}
+
+export interface WorkflowDetail {
+  id: string
+  source: 'built_in' | 'custom'
+  editable: boolean
+  sourcePath: string
+  updatedAt: string
+  stages: number
+  loops: number
+  usage: {
+    totalWorkOrders: number
+    activeWorkOrders: number
+  }
+  workflow: {
+    id: string
+    description: string
+    stages: Array<{
+      ref: string
+      agent: string
+      condition?: string
+      optional?: boolean
+      loopTarget?: string
+      maxIterations?: number
+      canVeto?: boolean
+      type?: 'single' | 'loop'
+      loop?: {
+        over: 'stories'
+        completion: 'all_done'
+        verifyEach?: boolean
+        verifyStageRef?: string
+        maxStories?: number
+      }
+    }>
+  }
+}
+
+export interface WorkflowSelectionState {
+  source: 'built_in' | 'custom'
+  selection: {
+    defaultWorkflowId: string
+    rules: Array<{
+      id: string
+      workflowId: string
+      priority?: string[]
+      tagsAny?: string[]
+      titleKeywordsAny?: string[]
+      goalKeywordsAny?: string[]
+      precedes?: string[]
+    }>
+  }
+}
+
+export interface AgentTeamMember {
+  id: string
+  displayName: string
+  slug: string
+  role: string
+  station: string
+  status: string
+}
+
+export interface AgentTeamSummary {
+  id: string
+  slug: string
+  name: string
+  description: string | null
+  source: 'builtin' | 'custom' | 'imported'
+  workflowIds: string[]
+  templateIds: string[]
+  healthStatus: 'healthy' | 'warning' | 'degraded' | 'unknown'
+  memberCount: number
+  members: AgentTeamMember[]
+  createdAt: string
+  updatedAt: string
+}
+
+export type ClawPackageKind = 'agent_template' | 'agent_team' | 'workflow' | 'team_with_workflows'
+
+export interface PackageImportAnalysis {
+  packageId: string
+  fileName: string
+  manifest: {
+    id: string
+    name: string
+    version: string
+    kind: ClawPackageKind
+    description?: string
+    createdAt?: string
+    createdBy?: string
+  }
+  summary: {
+    templates: number
+    workflows: number
+    teams: number
+    hasSelection: boolean
+  }
+  conflicts: {
+    templates: string[]
+    workflows: string[]
+    teams: string[]
+  }
+  stagedUntil: string
+}
+
+export interface PackageDeployResult {
+  packageId: string
+  deployed: {
+    templates: string[]
+    workflows: string[]
+    teams: string[]
+    selectionApplied: boolean
+  }
+}
+
+export const workflowsApi = {
+  list: () => apiGet<{ data: WorkflowListItem[] }>('/api/workflows'),
+
+  get: (id: string) => apiGet<{ data: WorkflowDetail }>(`/api/workflows/${id}`),
+
+  create: (data: { workflow: WorkflowDetail['workflow']; typedConfirmText?: string }) =>
+    apiPost<{ data: WorkflowDetail['workflow'] }, { workflow: WorkflowDetail['workflow']; typedConfirmText?: string }>(
+      '/api/workflows',
+      data
+    ),
+
+  update: (id: string, data: { workflow: WorkflowDetail['workflow']; typedConfirmText?: string }) =>
+    apiPatch<{ data: WorkflowDetail['workflow'] }, { workflow: WorkflowDetail['workflow']; typedConfirmText?: string }>(
+      `/api/workflows/${id}`,
+      data
+    ),
+
+  delete: (id: string, data: { typedConfirmText?: string }) =>
+    apiDeleteJson<{ success: true }, { typedConfirmText?: string }>(`/api/workflows/${id}`, data),
+
+  clone: (id: string, data?: { cloneId?: string; descriptionSuffix?: string; typedConfirmText?: string }) =>
+    apiPost<{ data: WorkflowDetail['workflow'] }, { cloneId?: string; descriptionSuffix?: string; typedConfirmText?: string }>(
+      `/api/workflows/${id}/clone`,
+      data ?? {}
+    ),
+
+  import: (data: { workflows?: unknown[]; workflow?: unknown; yaml?: string; typedConfirmText?: string }) =>
+    apiPost<{
+      data: {
+        imported: WorkflowDetail['workflow'][]
+        importedIds: string[]
+        count: number
+      }
+    }, { workflows?: unknown[]; workflow?: unknown; yaml?: string; typedConfirmText?: string }>(
+      '/api/workflows/import',
+      data
+    ),
+
+  importFile: (data: { file: File; typedConfirmText?: string }) => {
+    const formData = new FormData()
+    formData.set('file', data.file)
+    if (data.typedConfirmText) formData.set('typedConfirmText', data.typedConfirmText)
+
+    return apiFetch('/api/workflows/import', {
+      method: 'POST',
+      headers: { Accept: 'application/json' },
+      body: formData,
+    }).then(async (res) => {
+      const json = await res.json()
+      if (!res.ok) {
+        throw new HttpError(json.error || 'Workflow import failed', res.status, json.code, json.details)
+      }
+      return json as {
+        data: {
+          imported: WorkflowDetail['workflow'][]
+          importedIds: string[]
+          count: number
+        }
+      }
+    })
+  },
+
+  export: (id: string, confirm?: string) => {
+    const query = confirm ? `?confirm=${encodeURIComponent(confirm)}` : ''
+    return apiFetch(`/api/workflows/${id}/export${query}`, {
+      method: 'GET',
+      headers: { Accept: 'application/x-yaml,application/octet-stream' },
+    }).then(async (res) => {
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({ error: 'Workflow export failed' }))
+        throw new HttpError(json.error || 'Workflow export failed', res.status, json.code, json.details)
+      }
+      return res.blob()
+    })
+  },
+
+  getSelection: () => apiGet<{ data: WorkflowSelectionState }>('/api/workflows/selection'),
+
+  updateSelection: (data: { selection: WorkflowSelectionState['selection']; typedConfirmText?: string }) =>
+    apiFetch('/api/workflows/selection', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(data),
+    }).then(async (res) => {
+      const json = await res.json()
+      if (!res.ok) {
+        throw new HttpError(json.error || 'Failed to update workflow selection', res.status, json.code, json.details)
+      }
+      return json as { data: WorkflowSelectionState }
+    }),
+}
+
+export const agentTeamsApi = {
+  list: () => apiGet<{ data: AgentTeamSummary[] }>('/api/agent-teams'),
+
+  get: (id: string) => apiGet<{ data: AgentTeamSummary }>(`/api/agent-teams/${id}`),
+
+  create: (data: {
+    name: string
+    slug?: string
+    description?: string | null
+    source?: 'builtin' | 'custom' | 'imported'
+    workflowIds?: string[]
+    templateIds?: string[]
+    healthStatus?: 'healthy' | 'warning' | 'degraded' | 'unknown'
+    memberAgentIds?: string[]
+    typedConfirmText?: string
+  }) => apiPost<{ data: AgentTeamSummary }>('/api/agent-teams', data),
+
+  update: (id: string, data: {
+    name?: string
+    description?: string | null
+    workflowIds?: string[]
+    templateIds?: string[]
+    healthStatus?: 'healthy' | 'warning' | 'degraded' | 'unknown'
+    memberAgentIds?: string[]
+    typedConfirmText?: string
+  }) => apiPatch<{ data: AgentTeamSummary }>(`/api/agent-teams/${id}`, data),
+
+  delete: (id: string, data: { typedConfirmText?: string }) =>
+    apiDeleteJson<{ success: true }, { typedConfirmText?: string }>(`/api/agent-teams/${id}`, data),
+
+  export: (id: string, confirm?: string) => {
+    const query = confirm ? `?confirm=${encodeURIComponent(confirm)}` : ''
+    return apiFetch(`/api/agent-teams/${id}/export${query}`, {
+      method: 'GET',
+      headers: { Accept: 'application/x-yaml,application/octet-stream' },
+    }).then(async (res) => {
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({ error: 'Team export failed' }))
+        throw new HttpError(json.error || 'Team export failed', res.status, json.code, json.details)
+      }
+      return res.blob()
+    })
+  },
+}
+
+export const packagesApi = {
+  import: (data: { file: File; typedConfirmText?: string }) => {
+    const formData = new FormData()
+    formData.set('file', data.file)
+    if (data.typedConfirmText) formData.set('typedConfirmText', data.typedConfirmText)
+
+    return apiFetch('/api/packages/import', {
+      method: 'POST',
+      headers: { Accept: 'application/json' },
+      body: formData,
+    }).then(async (res) => {
+      const json = await res.json().catch(() => ({ error: 'Package import failed' }))
+      if (!res.ok) {
+        throw new HttpError(json.error || 'Package import failed', res.status, json.code, json.details)
+      }
+      return json as { data: PackageImportAnalysis }
+    })
+  },
+
+  deploy: (data: { packageId: string; options?: {
+    applyTemplates?: boolean
+    applyWorkflows?: boolean
+    applyTeams?: boolean
+    applySelection?: boolean
+  }; typedConfirmText?: string }) =>
+    apiPost<{ data: PackageDeployResult }, {
+      packageId: string
+      options?: {
+        applyTemplates?: boolean
+        applyWorkflows?: boolean
+        applyTeams?: boolean
+        applySelection?: boolean
+      }
+      typedConfirmText?: string
+    }>('/api/packages/deploy', data),
+
+  export: (id: string, kind: ClawPackageKind, confirm?: string) => {
+    const params = new URLSearchParams({ kind })
+    if (confirm) params.set('confirm', confirm)
+
+    return apiFetch(`/api/packages/${id}/export?${params.toString()}`, {
+      method: 'GET',
+      headers: { Accept: 'application/zip,application/octet-stream' },
+    }).then(async (res) => {
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({ error: 'Package export failed' }))
+        throw new HttpError(json.error || 'Package export failed', res.status, json.code, json.details)
+      }
+      return res.blob()
+    })
+  },
+}
+
+// ============================================================================
 // CONFIGURATION API
 // ============================================================================
 

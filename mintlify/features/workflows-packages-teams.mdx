@@ -1,0 +1,54 @@
+# Feature: Workflows + Teams + Packages
+
+This page documents the implemented workflows/teams/package management surface.
+
+## Workflows
+
+The Workflows page supports:
+
+- list built-in + custom workflows
+- stage/usage inspection
+- create/edit custom workflow YAML
+- clone built-in workflow to custom
+- import workflow YAML
+- export workflow YAML
+
+Built-in workflows are read-only.
+
+## Teams
+
+Teams are first-class records linked to agents.
+
+Teams support:
+
+- create/edit/delete
+- member assignment via agent linkage
+- linked workflow/template metadata
+- team export
+
+## Package Artifacts
+
+ClawControl package artifacts (`.clawpack.zip`) support four package kinds:
+
+- `agent_template`
+- `agent_team`
+- `workflow`
+- `team_with_workflows`
+
+Package flow is Analyze -> Deploy.
+
+## Workspace Outputs
+
+Workflow snapshots are written to workspace:
+
+- `/workflows/clawcontrol-resolved-workflows.yaml`
+- `/workflows/clawcontrol-resolved-selection.yaml`
+
+Package history traces are written to:
+
+- `/workflow-packages/history/*.json`
+
+## Related pages
+
+- [API: Workflows + Teams + Packages](/api/workflows-teams-packages)
+- [Feature: Agents + Hierarchy + Templates](/features/agents-hierarchy-templates)

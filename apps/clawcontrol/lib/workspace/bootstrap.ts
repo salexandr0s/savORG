@@ -5,6 +5,8 @@ const REQUIRED_DIRS = [
   'agents',
   'skills',
   'agent-templates',
+  'workflows',
+  'workflow-packages',
   'memory',
   'docs',
   'playbooks',

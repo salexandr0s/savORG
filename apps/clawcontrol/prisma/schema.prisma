@@ -165,6 +165,7 @@ model Agent {
   nameSource      String    @default("system") @map("name_source") // system|openclaw|user
   role            String
   station         String
+  teamId          String?   @map("team_id")
   status          String    @default("idle") // idle|active|blocked|error
   sessionKey      String    @unique @map("session_key")
   capabilities    String    @default("{}") @map("capabilities") // JSON object
@@ -181,10 +182,32 @@ model Agent {
 
   @@index([status])
   @@index([station])
+  @@index([teamId])
   @@index([displayName])
   @@index([kind])
   @@index([dispatchEligible])
   @@map("agents")
+}
+
+// ============================================================================
+// AGENT TEAMS
+// ============================================================================
+
+model AgentTeam {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  name         String
+  description  String?
+  source       String   @default("custom") // custom|imported|builtin
+  workflowIds  String   @default("[]") @map("workflow_ids") // JSON array
+  templateIds  String   @default("[]") @map("template_ids") // JSON array
+  healthStatus String   @default("healthy") @map("health_status") // healthy|warning|degraded|unknown
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([source])
+  @@index([healthStatus])
+  @@map("agent_teams")
 }
 
 // ============================================================================

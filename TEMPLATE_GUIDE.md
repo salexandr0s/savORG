@@ -1,9 +1,15 @@
 # ClawControl Agent Template Guide
 
-Last updated: 2026-02-09
+Last updated: 2026-02-12
 
 This guide defines the authoring and import contract for user-provided agent templates in ClawControl.
 Use this as the single reference for building templates that pass validation and work reliably in the current system.
+
+Important scope:
+
+- This file covers **agent templates** only.
+- Workflow and bundle package artifacts are documented in [docs/packages-and-marketplace-artifacts.md](docs/packages-and-marketplace-artifacts.md).
+- Workflow authoring is documented in [docs/workflows.md](docs/workflows.md).
 
 ## 1. Scope and Compatibility
 

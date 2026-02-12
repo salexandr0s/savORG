@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { apiGet, apiPost } from '@/lib/http'
 
 export interface SyncStepStatus {
   success: boolean
@@ -31,9 +32,11 @@ const STATUS_POLL_INTERVAL_MS = 60_000
 const SYNC_POLL_INTERVAL_MS = 5 * 60_000
 
 async function fetchSyncStatus(): Promise<SyncStatusResponse | null> {
-  const res = await fetch('/api/sync/status', { cache: 'no-store' })
-  if (!res.ok) return null
-  return res.json()
+  try {
+    return await apiGet<SyncStatusResponse>('/api/sync/status')
+  } catch {
+    return null
+  }
 }
 
 async function runSync(): Promise<SyncRunStatus | null> {
@@ -41,16 +44,14 @@ async function runSync(): Promise<SyncRunStatus | null> {
 }
 
 async function runSyncWithSource(source: 'manual' | 'poll'): Promise<SyncRunStatus | null> {
-  const res = await fetch('/api/sync/run', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: JSON.stringify({ source }),
-  })
-  if (!res.ok) return null
-  return res.json()
+  try {
+    return await apiPost<SyncRunStatus, { source: 'manual' | 'poll' }>(
+      '/api/sync/run',
+      { source }
+    )
+  } catch {
+    return null
+  }
 }
 
 export function useSyncStatus(options: UseSyncStatusOptions = {}) {

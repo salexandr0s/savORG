@@ -10,6 +10,10 @@ import { getOpenClawConfig } from '@/lib/openclaw-client'
 import { readSettings, writeSettings } from '@/lib/settings/store'
 import { invalidateWorkspaceRootCache } from '@/lib/fs/path-policy'
 import { invalidateTemplatesCache } from '@/lib/templates'
+import {
+  clearWorkflowRegistryCache,
+  syncResolvedWorkflowSnapshots,
+} from '@/lib/workflows/registry'
 import { ensureWorkspaceScaffold } from '@/lib/workspace/bootstrap'
 
 interface EnvConfig {
@@ -18,7 +22,7 @@ interface EnvConfig {
   NODE_ENV: string | null
 }
 
-function applyRuntimeWorkspacePath(workspacePath: string | null): void {
+async function applyRuntimeWorkspacePath(workspacePath: string | null): Promise<void> {
   if (workspacePath) {
     process.env.OPENCLAW_WORKSPACE = workspacePath
     process.env.CLAWCONTROL_WORKSPACE_ROOT = workspacePath
@@ -28,6 +32,12 @@ function applyRuntimeWorkspacePath(workspacePath: string | null): void {
   }
   invalidateWorkspaceRootCache()
   invalidateTemplatesCache()
+  clearWorkflowRegistryCache()
+  try {
+    await syncResolvedWorkflowSnapshots({ forceReload: true })
+  } catch {
+    // Snapshot sync is best-effort during workspace transitions.
+  }
 }
 
 export async function GET() {
@@ -85,7 +95,7 @@ export async function PUT(request: Request) {
       const saved = await writeSettings({
         workspacePath: (workspace || null) as unknown as string | undefined,
       })
-      applyRuntimeWorkspacePath(saved.settings.workspacePath ?? null)
+      await applyRuntimeWorkspacePath(saved.settings.workspacePath ?? null)
       await ensureWorkspaceScaffold(saved.settings.workspacePath ?? null)
     }
 

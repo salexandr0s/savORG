@@ -12,7 +12,8 @@ ClawControl is a dashboard + orchestration layer for running governed multi-agen
 - Runs work through a **single workflow engine**: `work-order -> workflow -> stage -> operation -> completion`.
 - Enforces governance gates (approvals, risk controls, typed confirmations).
 - Streams real-time system and run activity.
-- Manages agents, templates, skills, plugins, and workspace files from one UI.
+- Manages agents, agent templates, teams, workflows, skills, plugins, and workspace files from one UI.
+- Supports import/deploy/export package artifacts (`.clawpack.zip`) for workflows, templates, teams, and bundles.
 
 ## Workflow Example
 
@@ -91,9 +92,12 @@ Some features are CLI-backed (Models, Plugins, Cron, Maintenance actions). If CL
 
 - Product/API docs (Mintlify): `mintlify/`
 - Agent template guide: [docs/agent-templates.md](docs/agent-templates.md)
+- Workflows guide: [docs/workflows.md](docs/workflows.md)
+- Packages and marketplace artifacts: [docs/packages-and-marketplace-artifacts.md](docs/packages-and-marketplace-artifacts.md)
 - Agent starter contract: [docs/AGENT_STARTER_TEMPLATE.md](docs/AGENT_STARTER_TEMPLATE.md)
 - Remote tunnel access: [docs/REMOTE_TAILSCALE.md](docs/REMOTE_TAILSCALE.md)
 - Local-only administration: [docs/local-only-admin.md](docs/local-only-admin.md)
+- Authoring guide: [TEMPLATE_GUIDE.md](TEMPLATE_GUIDE.md)
 
 ## Security and Operations
 

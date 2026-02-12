@@ -30,6 +30,7 @@ import { usePageReadyTiming } from '@/lib/perf/client-timing'
 import { AGENTS_TAB_STALE_TIME_MS, revalidateAgentsTabCache, useAgentsTabStore } from '@/lib/stores/agents-tab-store'
 import { StationsTab, StationUpsertModal } from './stations-tab'
 import { HierarchyView } from './hierarchy-view'
+import { TeamsTab } from './teams-tab'
 import {
   Bot,
   Plus,
@@ -182,7 +183,7 @@ export function AgentsClient() {
   const { stations } = useStations()
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<'agents' | 'stations'>('agents')
+  const [activeTab, setActiveTab] = useState<'agents' | 'teams' | 'stations'>('agents')
 
   // View mode state
   const [agentView, setAgentView] = useState<'list' | 'hierarchy'>('list')
@@ -508,7 +509,13 @@ export function AgentsClient() {
       <div className={cn('relative w-full space-y-4', editingFile && 'min-h-[70vh]')}>
         <PageHeader
           title="Agents"
-          subtitle={activeTab === 'agents' ? `${agents.length} agents configured` : `${stations.length} stations configured`}
+          subtitle={
+            activeTab === 'agents'
+              ? `${agents.length} agents configured`
+              : activeTab === 'teams'
+                ? 'Manage agent teams and linked workflows'
+                : `${stations.length} stations configured`
+          }
           actions={
             <div className="flex items-center gap-2">
               {/* Tab Switch */}
@@ -523,6 +530,17 @@ export function AgentsClient() {
                   )}
                 >
                   Agents
+                </button>
+                <button
+                  onClick={() => setActiveTab('teams')}
+                  className={cn(
+                    'px-2.5 py-1.5 text-xs font-medium rounded-[var(--radius-sm)] transition-colors',
+                    activeTab === 'teams'
+                      ? 'bg-bg-3 text-fg-0'
+                      : 'text-fg-2 hover:text-fg-1'
+                  )}
+                >
+                  Teams
                 </button>
                 <button
                   onClick={() => setActiveTab('stations')}
@@ -645,6 +663,8 @@ export function AgentsClient() {
 
         {activeTab === 'stations' ? (
           <StationsTab />
+        ) : activeTab === 'teams' ? (
+          <TeamsTab />
         ) : (
           <>
             {agentView === 'hierarchy' ? (

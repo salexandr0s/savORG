@@ -19,12 +19,14 @@ Purpose: complete endpoint inventory from `apps/clawcontrol/app/api/**/route.ts`
 - `/api/search`
 - `/api/sync/run`
 - `/api/sync/status`
-- `/api/workflows`
 
 ## Full Endpoint Inventory
 
 ```text
 /api/activities
+/api/agent-teams/[id]/export
+/api/agent-teams/[id]
+/api/agent-teams
 /api/agent-templates/[id]/export
 /api/agent-templates/[id]/files/[fileId]
 /api/agent-templates/[id]
@@ -82,6 +84,9 @@ Purpose: complete endpoint inventory from `apps/clawcontrol/app/api/**/route.ts`
 /api/operations/[id]
 /api/operations/[id]/stories
 /api/operations
+/api/packages/[id]/export
+/api/packages/deploy
+/api/packages/import
 /api/playbooks/[id]
 /api/playbooks/[id]/run
 /api/playbooks
@@ -113,6 +118,11 @@ Purpose: complete endpoint inventory from `apps/clawcontrol/app/api/**/route.ts`
 /api/work-orders/[id]
 /api/work-orders/[id]/start
 /api/work-orders
+/api/workflows/[id]/clone
+/api/workflows/[id]/export
+/api/workflows/[id]
+/api/workflows/import
+/api/workflows/selection
 /api/workflows
 /api/workspace/[id]
 /api/workspace/calendar

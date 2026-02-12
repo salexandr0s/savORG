@@ -265,7 +265,7 @@ function resolveWorkspaceRootEntry(): WorkspaceRootCacheEntry {
 }
 
 // Allowed top-level subdirectories within workspace
-const ALLOWED_SUBDIRS = ['agents', 'overlays', 'skills', 'playbooks', 'plugins', 'agent-templates', 'memory', 'life', 'docs', 'tools', 'templates', 'canvas', 'projects'] as const
+const ALLOWED_SUBDIRS = ['agents', 'overlays', 'skills', 'playbooks', 'plugins', 'agent-templates', 'workflows', 'workflow-packages', 'memory', 'life', 'docs', 'tools', 'templates', 'canvas', 'projects'] as const
 type AllowedSubdir = (typeof ALLOWED_SUBDIRS)[number]
 
 const ENFORCE_ROOT_ALLOWLIST = process.env.CLAWCONTROL_WORKSPACE_ALLOWLIST_ONLY === '1'

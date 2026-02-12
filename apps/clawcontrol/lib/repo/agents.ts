@@ -21,6 +21,7 @@ export interface UpdateAgentInput {
   displayName?: string
   role?: string
   station?: string
+  teamId?: string | null
   capabilities?: Record<string, boolean>
   wipLimit?: number
   sessionKey?: string
@@ -48,6 +49,7 @@ export interface CreateAgentInput {
   nameSource?: AgentNameSource
   role: string
   station: string
+  teamId?: string | null
   sessionKey: string
   capabilities: Record<string, boolean>
   wipLimit?: number
@@ -138,6 +140,7 @@ export function createDbAgentsRepo(): AgentsRepo {
           nameSource: input.nameSource ?? 'system',
           role: input.role,
           station: input.station,
+          ...(input.teamId !== undefined ? { teamId: input.teamId } : {}),
           status: 'idle',
           sessionKey: input.sessionKey,
           capabilities: JSON.stringify(input.capabilities),
@@ -166,6 +169,7 @@ export function createDbAgentsRepo(): AgentsRepo {
       }
       if (input.role !== undefined) updateData.role = input.role
       if (input.station !== undefined) updateData.station = input.station
+      if (input.teamId !== undefined) updateData.teamId = input.teamId
       if (input.capabilities !== undefined) updateData.capabilities = JSON.stringify(input.capabilities)
       if (input.wipLimit !== undefined) updateData.wipLimit = input.wipLimit
       if (input.sessionKey !== undefined) updateData.sessionKey = input.sessionKey
@@ -302,6 +306,7 @@ interface PrismaAgentRow {
   nameSource?: string | null
   role: string
   station: string
+  teamId?: string | null
   status: string
   sessionKey: string
   capabilities: string
@@ -333,6 +338,7 @@ function toDTO(row: PrismaAgentRow): AgentDTO {
     nameSource: (row.nameSource as AgentNameSource) || 'system',
     role: row.role,
     station: row.station,
+    teamId: row.teamId ?? null,
     status: row.status as AgentDTO['status'],
     sessionKey: row.sessionKey,
     capabilities: safeParseObject(row.capabilities),

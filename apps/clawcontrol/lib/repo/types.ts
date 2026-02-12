@@ -119,6 +119,7 @@ export interface AgentDTO {
   nameSource: AgentNameSource
   role: string
   station: string
+  teamId: string | null
   status: 'idle' | 'active' | 'blocked' | 'error'
   sessionKey: string
   capabilities: Record<string, boolean>
@@ -130,6 +131,30 @@ export interface AgentDTO {
   staleAt: Date | null
   lastSeenAt: Date | null
   lastHeartbeatAt: Date | null
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface AgentTeamMemberDTO {
+  id: string
+  displayName: string
+  slug: string
+  role: string
+  station: string
+  status: 'idle' | 'active' | 'blocked' | 'error'
+}
+
+export interface AgentTeamDTO {
+  id: string
+  slug: string
+  name: string
+  description: string | null
+  source: 'custom' | 'imported' | 'builtin'
+  workflowIds: string[]
+  templateIds: string[]
+  healthStatus: 'healthy' | 'warning' | 'degraded' | 'unknown'
+  memberCount: number
+  members: AgentTeamMemberDTO[]
   createdAt: Date
   updatedAt: Date
 }

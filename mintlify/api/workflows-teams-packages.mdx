@@ -1,0 +1,52 @@
+# API: Workflows + Teams + Packages
+
+This page covers the workflow/team/package API surface.
+
+## Workflows
+
+- `GET /api/workflows`
+- `POST /api/workflows`
+- `GET /api/workflows/:id`
+- `PATCH /api/workflows/:id`
+- `DELETE /api/workflows/:id`
+- `POST /api/workflows/:id/clone`
+- `POST /api/workflows/import`
+- `GET /api/workflows/:id/export`
+- `GET /api/workflows/selection`
+- `PUT /api/workflows/selection`
+
+Notes:
+
+- Built-in workflows are read-only.
+- Delete rejects active-in-use custom workflows.
+
+## Agent Teams
+
+- `GET /api/agent-teams`
+- `POST /api/agent-teams`
+- `GET /api/agent-teams/:id`
+- `PATCH /api/agent-teams/:id`
+- `DELETE /api/agent-teams/:id`
+- `GET /api/agent-teams/:id/export`
+
+## Packages
+
+- `POST /api/packages/import` (analyze/stage)
+- `POST /api/packages/deploy` (deploy staged package)
+- `GET /api/packages/:id/export?kind=<kind>`
+
+`kind` values:
+
+- `agent_template`
+- `agent_team`
+- `workflow`
+- `team_with_workflows`
+
+## Auth/Governance
+
+All mutating routes require operator session + CSRF and action-policy enforcement.
+
+## Related pages
+
+- [API Overview](/api/overview)
+- [API: Internal Endpoint Index](/api/internal-endpoint-index)

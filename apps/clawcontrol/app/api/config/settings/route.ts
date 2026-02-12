@@ -6,6 +6,10 @@ import { invalidateWorkspaceRootCache } from '@/lib/fs/path-policy'
 import { validateWorkspaceStructure } from '@/lib/workspace/validate'
 import { getOpenClawRuntimeDependencyStatus } from '@/lib/openclaw/runtime-deps'
 import { invalidateTemplatesCache } from '@/lib/templates'
+import {
+  clearWorkflowRegistryCache,
+  syncResolvedWorkflowSnapshots,
+} from '@/lib/workflows/registry'
 import { ensureWorkspaceScaffold } from '@/lib/workspace/bootstrap'
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]'])
@@ -49,7 +53,7 @@ function isLoopbackUrl(value: string): boolean {
   }
 }
 
-function applyRuntimeWorkspacePath(workspacePath: string | null | undefined): void {
+async function applyRuntimeWorkspacePath(workspacePath: string | null | undefined): Promise<void> {
   const normalized = normalizeString(workspacePath)
 
   if (normalized) {
@@ -62,6 +66,12 @@ function applyRuntimeWorkspacePath(workspacePath: string | null | undefined): vo
 
   invalidateWorkspaceRootCache()
   invalidateTemplatesCache()
+  clearWorkflowRegistryCache()
+  try {
+    await syncResolvedWorkflowSnapshots({ forceReload: true })
+  } catch {
+    // Snapshot sync is best-effort during workspace transitions.
+  }
 }
 
 async function buildResponseData() {
@@ -199,7 +209,7 @@ export async function PUT(request: Request) {
     const saved = await writeSettings(patch as Partial<ClawcontrolSettings>)
 
     if ('workspacePath' in patch) {
-      applyRuntimeWorkspacePath(saved.settings.workspacePath ?? null)
+      await applyRuntimeWorkspacePath(saved.settings.workspacePath ?? null)
     }
 
     const data = await buildResponseData()

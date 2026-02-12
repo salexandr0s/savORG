@@ -87,6 +87,25 @@ export type ActionKind =
   | 'template.export'
   | 'template.use'
   | 'template.use_invalid'
+  // Workflow actions
+  | 'workflow.create'
+  | 'workflow.edit'
+  | 'workflow.delete'
+  | 'workflow.import'
+  | 'workflow.export'
+  | 'workflow.clone'
+  | 'workflow.selection_update'
+  // Agent Team actions
+  | 'team.create'
+  | 'team.edit'
+  | 'team.delete'
+  | 'team.import'
+  | 'team.export'
+  | 'team.deploy'
+  // Package actions
+  | 'package.import'
+  | 'package.deploy'
+  | 'package.export'
   // Data actions
   | 'data.export'
   | 'data.import'
@@ -494,6 +513,116 @@ export const ACTION_POLICIES: Record<ActionKind, ActionPolicy> = {
     requiresApproval: true,
     approvalType: 'risky_action',
     description: 'Use an invalid template (override validation)',
+  },
+
+  // Workflow actions
+  'workflow.create': {
+    riskLevel: 'caution',
+    confirmMode: 'CONFIRM',
+    requiresApproval: false,
+    description: 'Create a custom workflow',
+  },
+  'workflow.edit': {
+    riskLevel: 'caution',
+    confirmMode: 'CONFIRM',
+    requiresApproval: false,
+    description: 'Edit a custom workflow',
+  },
+  'workflow.delete': {
+    riskLevel: 'danger',
+    confirmMode: 'CONFIRM',
+    requiresApproval: true,
+    approvalType: 'risky_action',
+    description: 'Delete a custom workflow',
+  },
+  'workflow.import': {
+    riskLevel: 'danger',
+    confirmMode: 'CONFIRM',
+    requiresApproval: true,
+    approvalType: 'external_side_effect',
+    description: 'Import workflow definitions',
+  },
+  'workflow.export': {
+    riskLevel: 'safe',
+    confirmMode: 'NONE',
+    requiresApproval: false,
+    description: 'Export workflow definition',
+  },
+  'workflow.clone': {
+    riskLevel: 'caution',
+    confirmMode: 'CONFIRM',
+    requiresApproval: false,
+    description: 'Clone workflow into custom workspace',
+  },
+  'workflow.selection_update': {
+    riskLevel: 'caution',
+    confirmMode: 'CONFIRM',
+    requiresApproval: true,
+    approvalType: 'scope_change',
+    description: 'Update workflow selection overlay rules',
+  },
+
+  // Agent team actions
+  'team.create': {
+    riskLevel: 'caution',
+    confirmMode: 'CONFIRM',
+    requiresApproval: false,
+    description: 'Create agent team',
+  },
+  'team.edit': {
+    riskLevel: 'caution',
+    confirmMode: 'CONFIRM',
+    requiresApproval: false,
+    description: 'Edit agent team',
+  },
+  'team.delete': {
+    riskLevel: 'danger',
+    confirmMode: 'CONFIRM',
+    requiresApproval: true,
+    approvalType: 'risky_action',
+    description: 'Delete agent team',
+  },
+  'team.import': {
+    riskLevel: 'danger',
+    confirmMode: 'CONFIRM',
+    requiresApproval: true,
+    approvalType: 'external_side_effect',
+    description: 'Import agent team package',
+  },
+  'team.export': {
+    riskLevel: 'safe',
+    confirmMode: 'NONE',
+    requiresApproval: false,
+    description: 'Export agent team package',
+  },
+  'team.deploy': {
+    riskLevel: 'caution',
+    confirmMode: 'CONFIRM',
+    requiresApproval: true,
+    approvalType: 'scope_change',
+    description: 'Deploy team package contents',
+  },
+
+  // Package actions
+  'package.import': {
+    riskLevel: 'danger',
+    confirmMode: 'CONFIRM',
+    requiresApproval: true,
+    approvalType: 'external_side_effect',
+    description: 'Import claw package archive',
+  },
+  'package.deploy': {
+    riskLevel: 'danger',
+    confirmMode: 'CONFIRM',
+    requiresApproval: true,
+    approvalType: 'scope_change',
+    description: 'Deploy imported claw package',
+  },
+  'package.export': {
+    riskLevel: 'safe',
+    confirmMode: 'NONE',
+    requiresApproval: false,
+    description: 'Export claw package archive',
   },
 
   // Data actions

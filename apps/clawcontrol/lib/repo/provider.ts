@@ -12,6 +12,7 @@ import { createDbApprovalsRepo, type ApprovalsRepo } from './approvals'
 import { createDbActivitiesRepo, type ActivitiesRepo } from './activities'
 import { createDbReceiptsRepo, type ReceiptsRepo } from './receipts'
 import { createDbSearchRepo, type SearchRepo } from './search'
+import { createDbAgentTeamsRepo, type AgentTeamsRepo } from './agentTeams'
 import { createFsSkillsRepo, type SkillsRepo } from './skills'
 import { createCliPluginsRepo, type PluginsRepo } from './plugins'
 import { createCliGatewayRepo, type GatewayRepo } from './gateway'
@@ -26,6 +27,7 @@ export interface Repos {
   workOrders: WorkOrdersRepo
   operations: OperationsRepo
   agents: AgentsRepo
+  agentTeams: AgentTeamsRepo
   stations: StationsRepo
   approvals: ApprovalsRepo
   activities: ActivitiesRepo
@@ -55,6 +57,7 @@ export function createRepos(): Repos {
     workOrders: createDbWorkOrdersRepo(),
     operations: createDbOperationsRepo(),
     agents: createDbAgentsRepo(),
+    agentTeams: createDbAgentTeamsRepo(),
     stations: createDbStationsRepo(),
     approvals: createDbApprovalsRepo(),
     activities: createDbActivitiesRepo(),

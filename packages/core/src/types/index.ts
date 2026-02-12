@@ -126,6 +126,7 @@ export interface Agent {
   name: string
   role: string
   station: StationId
+  teamId?: string | null
   status: AgentStatus
   sessionKey: string
   capabilities: Record<string, boolean>
@@ -135,6 +136,49 @@ export interface Agent {
   createdAt: Date
   updatedAt: Date
 }
+
+export type AgentTeamSource = 'custom' | 'imported' | 'builtin'
+export type AgentTeamHealth = 'healthy' | 'warning' | 'degraded' | 'unknown'
+
+export interface AgentTeam {
+  id: string
+  slug: string
+  name: string
+  description: string | null
+  source: AgentTeamSource
+  workflowIds: string[]
+  templateIds: string[]
+  healthStatus: AgentTeamHealth
+  createdAt: Date
+  updatedAt: Date
+}
+
+export type WorkflowSource = 'builtin' | 'custom'
+
+export interface WorkflowDefinition {
+  id: string
+  description: string
+  source: WorkflowSource
+  stages: Array<{
+    ref: string
+    agent: string
+    condition?: string
+    optional?: boolean
+    loopTarget?: string
+    maxIterations?: number
+    canVeto?: boolean
+    type?: 'single' | 'loop'
+    loop?: {
+      over: 'stories'
+      completion: 'all_done'
+      verifyEach?: boolean
+      verifyStageRef?: string
+      maxStories?: number
+    }
+  }>
+}
+
+export type PackageKind = 'agent_template' | 'agent_team' | 'workflow' | 'team_with_workflows'
 
 // Artifact types
 export type ArtifactType =
