@@ -48,6 +48,8 @@ type ModelsState = {
   error: string | null
 }
 
+type NoticeTone = 'success' | 'warning'
+
 export function ModelsClient() {
   const [state, setState] = useState<ModelsState>({
     isLoading: true,
@@ -61,7 +63,7 @@ export function ModelsClient() {
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [addModalInitialProviderId, setAddModalInitialProviderId] = useState<string | null>(null)
   const [addModalInitialAuthMethod, setAddModalInitialAuthMethod] = useState<ModelAuthMethod | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
+  const [notice, setNotice] = useState<{ message: string; tone: NoticeTone } | null>(null)
 
   const fetchData = useCallback(async (isRefresh = false) => {
     setState((prev) => ({
@@ -110,6 +112,14 @@ export function ModelsClient() {
     setAddModalInitialAuthMethod(null)
   }, [])
 
+  const showNotice = useCallback(
+    (message: string, tone: NoticeTone = 'success', durationMs = 2500) => {
+      setNotice({ message, tone })
+      window.setTimeout(() => setNotice(null), durationMs)
+    },
+    []
+  )
+
   useEffect(() => {
     fetchData()
   }, [fetchData])
@@ -151,10 +161,41 @@ export function ModelsClient() {
     .filter((provider) => !modelProviders.includes(provider))
   const providersToRender = [...modelProviders, ...authOnlyProviders]
 
-  const handleAuthRemediation = (providerAuth: NormalizedProviderAuth) => {
-    const action = getAuthAction(providerAuth.status, providerAuth.supportsOauth)
+  const getProviderAuthAction = (
+    providerAuth: NormalizedProviderAuth,
+    allowProactive = true
+  ) => getAuthAction(providerAuth.status, providerAuth.supportsOauth, {
+    allowProactive,
+    hasRemaining: providerAuth.remainingMs !== undefined,
+  })
+
+  const handleAuthRemediation = (
+    providerAuth: NormalizedProviderAuth,
+    allowProactive = true
+  ) => {
+    const action = getProviderAuthAction(providerAuth, allowProactive)
     if (!action) return
     openAddProviderModal(providerAuth.provider, action.authMethod)
+  }
+
+  const handleMissingModelFix = (
+    model: ModelListItem,
+    provider: string,
+    providerAuth?: NormalizedProviderAuth
+  ) => {
+    if (providerAuth) {
+      const authAction = getProviderAuthAction(providerAuth, false)
+      if (authAction) {
+        handleAuthRemediation(providerAuth, false)
+        return
+      }
+    }
+
+    showNotice(
+      `Model ${model.key} is unavailable. Verify provider "${provider}" has this model, then update your default/fallback model key and refresh.`,
+      'warning',
+      7000
+    )
   }
 
   return (
@@ -188,9 +229,21 @@ export function ModelsClient() {
 
       {/* Notice Banner */}
       {notice && (
-        <div className="p-3 rounded-md flex items-center gap-2 bg-status-success/10">
-          <CheckCircle className="w-4 h-4 text-status-success shrink-0" />
-          <span className="text-sm text-status-success">{notice}</span>
+        <div className={cn(
+          'p-3 rounded-md flex items-center gap-2',
+          notice.tone === 'warning' ? 'bg-status-warning/10' : 'bg-status-success/10'
+        )}>
+          {notice.tone === 'warning' ? (
+            <AlertTriangle className="w-4 h-4 text-status-warning shrink-0" />
+          ) : (
+            <CheckCircle className="w-4 h-4 text-status-success shrink-0" />
+          )}
+          <span className={cn(
+            'text-sm',
+            notice.tone === 'warning' ? 'text-status-warning' : 'text-status-success'
+          )}>
+            {notice.message}
+          </span>
         </div>
       )}
 
@@ -307,7 +360,14 @@ export function ModelsClient() {
                       <div className="bg-bg-2/50">
                         {providerModels.length > 0 ? (
                           providerModels.map((model, idx) => (
-                            <ModelRow key={model.key} model={model} isLast={idx === providerModels.length - 1} />
+                            <ModelRow
+                              key={model.key}
+                              model={model}
+                              provider={provider}
+                              providerAuth={providerAuth}
+                              isLast={idx === providerModels.length - 1}
+                              onFixMissing={handleMissingModelFix}
+                            />
                           ))
                         ) : (
                           <div className="px-4 py-3 text-xs text-fg-3">
@@ -352,8 +412,7 @@ export function ModelsClient() {
         initialProviderId={addModalInitialProviderId}
         initialAuthMethod={addModalInitialAuthMethod}
         onAdded={async () => {
-          setNotice('Provider authentication updated')
-          setTimeout(() => setNotice(null), 2500)
+          showNotice('Provider authentication updated')
           await fetchData(true)
         }}
       />
@@ -373,7 +432,10 @@ function ProviderAuthCard({
   onAuthenticate: (providerAuth: NormalizedProviderAuth) => void
 }) {
   const { provider, status, profiles, remainingMs, hasConfiguredAuth, supportsOauth } = providerAuth
-  const authAction = getAuthAction(status, supportsOauth)
+  const authAction = getAuthAction(status, supportsOauth, {
+    allowProactive: true,
+    hasRemaining: remainingMs !== undefined,
+  })
 
   const statusColors = {
     ok: 'bg-status-success/10',
@@ -452,7 +514,7 @@ function ProviderAuthCard({
           >
             {authAction.label}
           </Button>
-        </div>
+        )}
       </div>
     </div>
   )
@@ -500,10 +562,25 @@ function AuthStatusBadge({ status }: { status: 'ok' | 'expiring' | 'expired' | '
   )
 }
 
-function ModelRow({ model, isLast }: { model: ModelListItem; isLast: boolean }) {
+function ModelRow({
+  model,
+  provider,
+  providerAuth,
+  isLast,
+  onFixMissing,
+}: {
+  model: ModelListItem
+  provider: string
+  providerAuth?: NormalizedProviderAuth
+  isLast: boolean
+  onFixMissing: (model: ModelListItem, provider: string, providerAuth?: NormalizedProviderAuth) => void
+}) {
   const isDefault = model.tags.includes('default')
   const isFallback = model.tags.some((t) => t.startsWith('fallback'))
   const alias = model.tags.find((t) => t.startsWith('alias:'))?.replace('alias:', '')
+  const missingModelAuthAction = providerAuth
+    ? getAuthAction(providerAuth.status, providerAuth.supportsOauth)
+    : null
 
   return (
     <div className={cn(
@@ -540,33 +617,50 @@ function ModelRow({ model, isLast }: { model: ModelListItem; isLast: boolean }) 
           )}
         </div>
         <div className="text-xs text-fg-3 font-mono mt-0.5">{model.key}</div>
+        {model.missing && (
+          <div className="text-xs text-status-warning mt-1">
+            Configured model is unavailable for this provider.
+          </div>
+        )}
       </div>
 
       {/* Model attributes */}
-      <div className="flex items-center gap-4 text-xs text-fg-2 shrink-0">
-        {model.input && model.input !== '-' && (
-          <div className="flex items-center gap-1" title="Input type">
-            {model.input.includes('image') ? (
-              <Eye className="w-3 h-3" />
-            ) : (
-              <Cpu className="w-3 h-3" />
-            )}
-            <span>{model.input}</span>
-          </div>
-        )}
-        {model.contextWindow && (
-          <div className="flex items-center gap-1" title="Context window">
-            <span>{(model.contextWindow / 1000).toFixed(0)}k ctx</span>
-          </div>
-        )}
-        {model.local !== null && (
-          <div title={model.local ? 'Local model' : 'Cloud model'}>
-            {model.local ? (
-              <HardDrive className="w-3 h-3" />
-            ) : (
-              <Globe className="w-3 h-3" />
-            )}
-          </div>
+      <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-4 text-xs text-fg-2">
+          {model.input && model.input !== '-' && (
+            <div className="flex items-center gap-1" title="Input type">
+              {model.input.includes('image') ? (
+                <Eye className="w-3 h-3" />
+              ) : (
+                <Cpu className="w-3 h-3" />
+              )}
+              <span>{model.input}</span>
+            </div>
+          )}
+          {model.contextWindow && (
+            <div className="flex items-center gap-1" title="Context window">
+              <span>{(model.contextWindow / 1000).toFixed(0)}k ctx</span>
+            </div>
+          )}
+          {model.local !== null && (
+            <div title={model.local ? 'Local model' : 'Cloud model'}>
+              {model.local ? (
+                <HardDrive className="w-3 h-3" />
+              ) : (
+                <Globe className="w-3 h-3" />
+              )}
+            </div>
+          )}
+        </div>
+        {model.missing && (
+          <Button
+            type="button"
+            size="xs"
+            variant="secondary"
+            onClick={() => onFixMissing(model, provider, providerAuth)}
+          >
+            {missingModelAuthAction?.label ?? 'How to fix'}
+          </Button>
         )}
       </div>
     </div>

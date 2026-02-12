@@ -23,8 +23,15 @@ export interface NormalizedProviderAuth {
 
 export function getAuthAction(
   status: ProviderAuthUiStatus,
-  supportsOauth: boolean
+  supportsOauth: boolean,
+  options: {
+    allowProactive?: boolean
+    hasRemaining?: boolean
+  } = {}
 ): { label: 'Authenticate' | 'Re-authenticate'; authMethod: ModelAuthMethod } | null {
+  const allowProactive = options.allowProactive === true
+  const hasRemaining = options.hasRemaining === true
+
   if (status === 'missing') {
     return {
       label: 'Authenticate',
@@ -36,6 +43,17 @@ export function getAuthAction(
     return {
       label: 'Re-authenticate',
       authMethod: supportsOauth ? 'oauth' : 'apiKey',
+    }
+  }
+
+  if (
+    allowProactive
+    && supportsOauth
+    && (status === 'expiring' || (status === 'ok' && hasRemaining))
+  ) {
+    return {
+      label: 'Re-authenticate',
+      authMethod: 'oauth',
     }
   }
 

@@ -155,4 +155,20 @@ describe('models provider auth state', () => {
     expect(getAuthAction('ok', true)).toBeNull()
     expect(getAuthAction('expiring', true)).toBeNull()
   })
+
+  it('supports proactive OAuth re-authentication when credentials are expiring', () => {
+    expect(
+      getAuthAction('expiring', true, { allowProactive: true, hasRemaining: true })
+    ).toEqual({
+      label: 'Re-authenticate',
+      authMethod: 'oauth',
+    })
+
+    expect(
+      getAuthAction('ok', true, { allowProactive: true, hasRemaining: true })
+    ).toEqual({
+      label: 'Re-authenticate',
+      authMethod: 'oauth',
+    })
+  })
 })

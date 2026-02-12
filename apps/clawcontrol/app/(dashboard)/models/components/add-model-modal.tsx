@@ -14,13 +14,14 @@ import { LoadingSpinner } from '@/components/ui/loading-state'
 import { ProviderCard } from './provider-card'
 
 type Step = 'provider' | 'auth'
+type DesktopBridge = {
+  runModelAuthLogin?: (providerId: string) => Promise<{ ok: boolean; message?: string }>
+}
 
-declare global {
-  interface Window {
-    clawcontrolDesktop?: {
-      runModelAuthLogin?: (providerId: string) => Promise<{ ok: boolean; message?: string }>
-    }
-  }
+function getDesktopBridge(): DesktopBridge | null {
+  if (typeof window === 'undefined') return null
+  const scopedWindow = window as Window & { clawcontrolDesktop?: DesktopBridge }
+  return scopedWindow.clawcontrolDesktop ?? null
 }
 
 export function AddModelModal({
@@ -69,8 +70,7 @@ export function AddModelModal({
     setOauthNotice(null)
     setError(null)
     setCanRunOauthCommand(
-      typeof window !== 'undefined'
-      && typeof window.clawcontrolDesktop?.runModelAuthLogin === 'function'
+      typeof getDesktopBridge()?.runModelAuthLogin === 'function'
     )
 
     let cancelled = false
@@ -167,7 +167,7 @@ export function AddModelModal({
 
   const handleRunOauthCommand = async () => {
     if (!selectedProvider) return
-    const runLogin = window.clawcontrolDesktop?.runModelAuthLogin
+    const runLogin = getDesktopBridge()?.runModelAuthLogin
     if (typeof runLogin !== 'function') {
       setError('Run in Terminal is only available in the desktop app.')
       return
