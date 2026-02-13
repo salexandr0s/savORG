@@ -15,15 +15,45 @@ function listFiles(dir, predicate) {
   return out
 }
 
-function extractH1Title(source) {
+function extractFrontmatterTitle(source) {
   const lines = source.split('\n')
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!trimmed) continue
-    if (trimmed.startsWith('# ')) return trimmed.slice(2).trim()
-    return null
+  if ((lines[0] || '').trim() !== '---') return null
+
+  let end = -1
+  for (let i = 1; i < lines.length; i += 1) {
+    if (lines[i].trim() === '---') {
+      end = i
+      break
+    }
   }
+  if (end === -1) return null
+
+  for (const line of lines.slice(1, end)) {
+    const match = line.match(/^\s*title:\s*(.+?)\s*$/)
+    if (!match) continue
+    let title = match[1].trim()
+    if (
+      (title.startsWith('"') && title.endsWith('"'))
+      || (title.startsWith("'") && title.endsWith("'"))
+    ) {
+      title = title.slice(1, -1)
+    }
+    return title.trim() || null
+  }
+
   return null
+}
+
+function stripFrontmatter(source) {
+  if (!source.startsWith('---\n')) return source
+  const lines = source.split('\n')
+  if ((lines[0] || '').trim() !== '---') return source
+  for (let i = 1; i < lines.length; i += 1) {
+    if (lines[i].trim() === '---') {
+      return lines.slice(i + 1).join('\n')
+    }
+  }
+  return source
 }
 
 function collectNavPages(docsJson) {
@@ -52,16 +82,17 @@ const docsJson = JSON.parse(readFileSync(docsJsonPath, 'utf8'))
 const mdxFiles = listFiles(root, (p) => p.endsWith('.mdx'))
 const errors = []
 
-const bannedSnippets = [
-  'enforceTypedConfirm',
-  '# Feature:',
-  '# API:',
-  '# Operations:',
-  '# Developers:',
-  '# Security:',
-  '# Quickstart:',
-  '# Remote Access:',
-  '# Product:',
+const bannedSnippets = ['enforceTypedConfirm']
+
+const bannedTitlePrefixes = [
+  'Feature:',
+  'API:',
+  'Operations:',
+  'Developers:',
+  'Security:',
+  'Quickstart:',
+  'Remote Access:',
+  'Product:',
 ]
 
 for (const file of mdxFiles) {
@@ -71,6 +102,29 @@ for (const file of mdxFiles) {
     if (source.includes(snippet)) {
       errors.push(`${file}: banned snippet "${snippet}"`)
     }
+  }
+
+  const frontmatterTitle = extractFrontmatterTitle(source)
+  if (!frontmatterTitle) {
+    errors.push(`${file}: missing frontmatter title ("---\\ntitle: ...\\n---")`)
+  } else {
+    for (const prefix of bannedTitlePrefixes) {
+      if (frontmatterTitle.startsWith(prefix)) {
+        errors.push(`${file}: frontmatter title uses banned prefix "${prefix}"`)
+      }
+    }
+    if (frontmatterTitle.includes('+')) {
+      errors.push(`${file}: frontmatter title contains "+", use words and commas instead`)
+    }
+    if (frontmatterTitle.includes('/')) {
+      errors.push(`${file}: frontmatter title contains "/", avoid slash separators`)
+    }
+  }
+
+  const body = stripFrontmatter(source)
+  const firstLine = body.split('\n').find((line) => line.trim())?.trim() ?? ''
+  if (firstLine.startsWith('# ')) {
+    errors.push(`${file}: unexpected H1 ("# ..."). Use frontmatter title and start content at "##"`)
   }
 
   if (!source.includes('\n## Last updated\n')) {
@@ -100,14 +154,14 @@ for (const { page, title } of navPages) {
   }
 
   const source = readFileSync(file, 'utf8')
-  const h1 = extractH1Title(source)
-  if (!h1) {
-    errors.push(`${file}: missing H1 title ("# ...")`)
+  const fmTitle = extractFrontmatterTitle(source)
+  if (!fmTitle) {
+    errors.push(`${file}: missing frontmatter title ("---\\ntitle: ...\\n---")`)
     continue
   }
 
-  if (h1 !== title) {
-    errors.push(`${file}: docs.json title "${title}" does not match H1 "${h1}"`)
+  if (fmTitle !== title) {
+    errors.push(`${file}: docs.json title "${title}" does not match frontmatter title "${fmTitle}"`)
   }
 }
 
