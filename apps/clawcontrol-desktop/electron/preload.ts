@@ -26,6 +26,14 @@ interface DesktopUpdateInfo {
   error?: string
 }
 
+interface WhatsNewPayload {
+  version: string
+  title: string
+  publishedAt: string | null
+  highlights: string[]
+  releaseUrl: string
+}
+
 interface OpenExternalUrlResponse {
   ok: boolean
   message?: string
@@ -69,6 +77,12 @@ contextBridge.exposeInMainWorld('clawcontrolDesktop', {
 
   checkForUpdates: async (): Promise<DesktopUpdateInfo> =>
     ipcRenderer.invoke('clawcontrol:check-for-updates') as Promise<DesktopUpdateInfo>,
+
+  getWhatsNew: async (): Promise<WhatsNewPayload | null> =>
+    ipcRenderer.invoke('clawcontrol:get-whats-new') as Promise<WhatsNewPayload | null>,
+
+  ackWhatsNew: async (version: string): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('clawcontrol:ack-whats-new', { version }) as Promise<{ ok: boolean }>,
 
   openExternalUrl: async (url: string): Promise<OpenExternalUrlResponse> =>
     ipcRenderer.invoke('clawcontrol:open-external-url', { url }) as Promise<OpenExternalUrlResponse>,

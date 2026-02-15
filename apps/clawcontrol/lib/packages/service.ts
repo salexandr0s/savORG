@@ -2,7 +2,7 @@ import 'server-only'
 
 import { promises as fsp } from 'node:fs'
 import { dirname } from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import yaml from 'js-yaml'
 import JSZip from 'jszip'
 import Ajv from 'ajv'
@@ -12,9 +12,13 @@ import {
   type ClawPackageKind,
   type WorkflowConfig,
   type WorkflowSelectionConfig,
+  type ScanReport,
 } from '@clawcontrol/core'
+import { prisma } from '@/lib/db'
 import { getRepos } from '@/lib/repo'
 import { validateWorkspacePath } from '@/lib/fs/path-policy'
+import { scanClawpackPackage, type ScanFileInput } from '@/lib/security/clawpack-scan'
+import { ensureBlockedScanWorkOrder } from '@/lib/services/security-alerts'
 import {
   getTemplateById,
   getTemplateFileContent,
@@ -35,6 +39,8 @@ import {
   deleteWorkspaceSelectionOverlay,
   deleteWorkspaceWorkflowConfig,
   readWorkspaceSelectionOverlay,
+  readWorkspaceWorkflowConfigById,
+  writeWorkspaceWorkflowConfig,
   writeWorkspaceSelectionOverlay,
 } from '@/lib/workflows/storage'
 import {
@@ -85,22 +91,49 @@ interface ParsedPackage {
   selection: WorkflowSelectionConfig | null
   installDoc: { path: string; content: string } | null
   fileCount: number
+  totalBytes: number
+  scanFiles: ScanFileInput[]
 }
 
 interface StagedPackage {
   id: string
   fileName: string
   parsed: ParsedPackage
+  sha256: string
+  scan: ScanReport
+  blockedByScan: boolean
+  alertWorkOrderId: string | null
   createdAtMs: number
   expiresAtMs: number
 }
 
 const stagedPackages = new Map<string, StagedPackage>()
 
+export function getStagedPackageScanMeta(packageId: string): {
+  sha256: string
+  scan: ScanReport
+  blockedByScan: boolean
+  alertWorkOrderId: string | null
+} | null {
+  cleanupStagedPackages()
+  const staged = stagedPackages.get(packageId)
+  if (!staged) return null
+  return {
+    sha256: staged.sha256,
+    scan: staged.scan,
+    blockedByScan: staged.blockedByScan,
+    alertWorkOrderId: staged.alertWorkOrderId,
+  }
+}
+
 export interface PackageAnalysis {
   packageId: string
   fileName: string
+  sha256: string
   manifest: ClawPackageManifest
+  scan: ScanReport
+  blockedByScan: boolean
+  alertWorkOrderId: string | null
   summary: {
     templates: number
     workflows: number
@@ -121,6 +154,9 @@ export interface PackageDeployOptions {
   applyWorkflows?: boolean
   applyTeams?: boolean
   applySelection?: boolean
+  overwriteTemplates?: boolean
+  overwriteWorkflows?: boolean
+  overwriteTeams?: boolean
 }
 
 export interface PackageDeployResult {
@@ -156,6 +192,20 @@ function cleanupStagedPackages(): void {
 
 function normalizeZipEntryName(name: string): string {
   return name.replace(/\\/g, '/').replace(/^\.\//, '')
+}
+
+const SCAN_ALLOWED_EXTENSIONS = new Set(['.md', '.json', '.yaml', '.yml'])
+
+function getLowercaseExtension(path: string): string {
+  const base = path.split('/').at(-1) ?? path
+  const idx = base.lastIndexOf('.')
+  if (idx === -1) return ''
+  return base.slice(idx).toLowerCase()
+}
+
+function isScanTextLike(path: string): boolean {
+  const ext = getLowercaseExtension(path)
+  return SCAN_ALLOWED_EXTENSIONS.has(ext)
 }
 
 function shouldIgnoreZipEntry(name: string): boolean {
@@ -356,7 +406,17 @@ async function parsePackageBuffer(buffer: Buffer): Promise<ParsedPackage> {
     )
   }
 
-  const manifestRaw = await manifestEntry.zipEntry.async('string')
+  const scanFiles: ScanFileInput[] = []
+  let totalBytes = 0
+
+  const manifestBuffer = await manifestEntry.zipEntry.async('nodebuffer')
+  totalBytes += manifestBuffer.length
+  const manifestRaw = manifestBuffer.toString('utf8')
+  scanFiles.push({
+    path: manifestEntry.normalized,
+    bytes: manifestBuffer.length,
+    content: manifestRaw,
+  })
   const parsedManifest = parseYamlObject(manifestRaw, manifestEntry.normalized)
   const manifestValid = validateManifest(parsedManifest)
   if (!manifestValid) {
@@ -381,8 +441,18 @@ async function parsePackageBuffer(buffer: Buffer): Promise<ParsedPackage> {
       continue
     }
 
+    const entryBuffer = await entry.zipEntry.async('nodebuffer')
+    totalBytes += entryBuffer.length
+
+    const rawText = isScanTextLike(path) ? entryBuffer.toString('utf8') : null
+    scanFiles.push({
+      path,
+      bytes: entryBuffer.length,
+      content: rawText,
+    })
+
     if (path === 'POST_INSTALL.md') {
-      const raw = await entry.zipEntry.async('string')
+      const raw = rawText ?? ''
       installDoc = {
         path,
         content: raw,
@@ -401,20 +471,22 @@ async function parsePackageBuffer(buffer: Buffer): Promise<ParsedPackage> {
       if (!fileName) continue
 
       const artifact = templatesById.get(templateId) ?? { templateId, files: {} }
-      artifact.files[fileName] = await entry.zipEntry.async('string')
+      if (rawText !== null) {
+        artifact.files[fileName] = rawText
+      }
       templatesById.set(templateId, artifact)
       continue
     }
 
     if (path.startsWith('workflows/') && path.match(/\.ya?ml$/i)) {
-      const raw = await entry.zipEntry.async('string')
+      const raw = rawText ?? ''
       const parsed = parseYamlObject(raw, path)
       workflows.push(validateWorkflowFromPackage(parsed, path))
       continue
     }
 
     if (path.startsWith('teams/') && path.match(/\.ya?ml$/i)) {
-      const raw = await entry.zipEntry.async('string')
+      const raw = rawText ?? ''
       const parsed = parseYamlObject(raw, path)
       const teamId = path.split('/').at(-1)?.replace(/\.ya?ml$/i, '') || `team_${teams.length + 1}`
       teams.push(parseTeamArtifact(parsed, teamId))
@@ -422,7 +494,7 @@ async function parsePackageBuffer(buffer: Buffer): Promise<ParsedPackage> {
     }
 
     if ((path === 'selection/workflow-selection.yaml' || path === 'selection/workflow-selection.yml')) {
-      const raw = await entry.zipEntry.async('string')
+      const raw = rawText ?? ''
       const parsed = parseYamlObject(raw, path)
       selection = validateSelectionFromPackage(parsed, path)
       continue
@@ -471,6 +543,8 @@ async function parsePackageBuffer(buffer: Buffer): Promise<ParsedPackage> {
     selection,
     installDoc,
     fileCount: fileEntries.length,
+    totalBytes,
+    scanFiles,
   }
 }
 
@@ -544,13 +618,45 @@ async function writeHistoryRecord(event: {
 function defaultDeployOptions(kind: ClawPackageKind): Required<PackageDeployOptions> {
   switch (kind) {
     case 'agent_template':
-      return { applyTemplates: true, applyWorkflows: false, applyTeams: false, applySelection: false }
+      return {
+        applyTemplates: true,
+        applyWorkflows: false,
+        applyTeams: false,
+        applySelection: false,
+        overwriteTemplates: false,
+        overwriteWorkflows: false,
+        overwriteTeams: false,
+      }
     case 'workflow':
-      return { applyTemplates: false, applyWorkflows: true, applyTeams: false, applySelection: true }
+      return {
+        applyTemplates: false,
+        applyWorkflows: true,
+        applyTeams: false,
+        applySelection: true,
+        overwriteTemplates: false,
+        overwriteWorkflows: false,
+        overwriteTeams: false,
+      }
     case 'agent_team':
-      return { applyTemplates: false, applyWorkflows: false, applyTeams: true, applySelection: false }
+      return {
+        applyTemplates: false,
+        applyWorkflows: false,
+        applyTeams: true,
+        applySelection: false,
+        overwriteTemplates: false,
+        overwriteWorkflows: false,
+        overwriteTeams: false,
+      }
     case 'team_with_workflows':
-      return { applyTemplates: true, applyWorkflows: true, applyTeams: true, applySelection: true }
+      return {
+        applyTemplates: true,
+        applyWorkflows: true,
+        applyTeams: true,
+        applySelection: true,
+        overwriteTemplates: false,
+        overwriteWorkflows: false,
+        overwriteTeams: false,
+      }
   }
 }
 
@@ -561,6 +667,9 @@ function mergeDeployOptions(kind: ClawPackageKind, input?: PackageDeployOptions)
     applyWorkflows: input?.applyWorkflows ?? defaults.applyWorkflows,
     applyTeams: input?.applyTeams ?? defaults.applyTeams,
     applySelection: input?.applySelection ?? defaults.applySelection,
+    overwriteTemplates: input?.overwriteTemplates ?? defaults.overwriteTemplates,
+    overwriteWorkflows: input?.overwriteWorkflows ?? defaults.overwriteWorkflows,
+    overwriteTeams: input?.overwriteTeams ?? defaults.overwriteTeams,
   }
 }
 
@@ -609,7 +718,53 @@ export async function analyzePackageImport(file: File): Promise<PackageAnalysis>
   }
 
   const buffer = Buffer.from(await file.arrayBuffer())
+  const sha256 = createHash('sha256').update(buffer).digest('hex')
   const parsed = await parsePackageBuffer(buffer)
+  const scan = scanClawpackPackage({
+    files: parsed.scanFiles,
+    fileCount: parsed.fileCount,
+    totalBytes: parsed.totalBytes,
+  })
+
+  await prisma.artifactScanRecord.upsert({
+    where: {
+      artifactType_artifactKey: {
+        artifactType: 'package_zip',
+        artifactKey: sha256,
+      },
+    },
+    create: {
+      artifactType: 'package_zip',
+      artifactKey: sha256,
+      manifestId: parsed.manifest.id,
+      manifestVersion: parsed.manifest.version,
+      outcome: scan.outcome,
+      blocked: scan.blocked,
+      scannerVersion: scan.scannerVersion,
+      summaryJson: JSON.stringify(scan.summaryCounts),
+      findingsJson: JSON.stringify(scan.findings),
+    },
+    update: {
+      manifestId: parsed.manifest.id,
+      manifestVersion: parsed.manifest.version,
+      outcome: scan.outcome,
+      blocked: scan.blocked,
+      scannerVersion: scan.scannerVersion,
+      summaryJson: JSON.stringify(scan.summaryCounts),
+      findingsJson: JSON.stringify(scan.findings),
+    },
+  })
+
+  let alertWorkOrderId: string | null = null
+  if (scan.blocked) {
+    const alert = await ensureBlockedScanWorkOrder({
+      sha256,
+      manifest: parsed.manifest,
+      scan,
+    })
+    alertWorkOrderId = alert.workOrderId
+  }
+
   const conflicts = await detectConflicts(parsed)
 
   const packageId = randomUUID()
@@ -620,6 +775,10 @@ export async function analyzePackageImport(file: File): Promise<PackageAnalysis>
     id: packageId,
     fileName: file.name,
     parsed,
+    sha256,
+    scan,
+    blockedByScan: scan.blocked,
+    alertWorkOrderId,
     createdAtMs,
     expiresAtMs: stagedUntilMs,
   })
@@ -629,7 +788,13 @@ export async function analyzePackageImport(file: File): Promise<PackageAnalysis>
     payload: {
       packageId,
       fileName: file.name,
+      sha256,
       manifest: parsed.manifest,
+      scan: {
+        outcome: scan.outcome,
+        summaryCounts: scan.summaryCounts,
+        scannerVersion: scan.scannerVersion,
+      },
       summary: {
         templates: parsed.templates.length,
         workflows: parsed.workflows.length,
@@ -643,7 +808,11 @@ export async function analyzePackageImport(file: File): Promise<PackageAnalysis>
   return {
     packageId,
     fileName: file.name,
+    sha256,
     manifest: parsed.manifest,
+    scan,
+    blockedByScan: scan.blocked,
+    alertWorkOrderId,
     summary: {
       templates: parsed.templates.length,
       workflows: parsed.workflows.length,
@@ -661,28 +830,66 @@ export async function analyzePackageImport(file: File): Promise<PackageAnalysis>
   }
 }
 
-async function deployTemplates(templates: PackageTemplateArtifact[]): Promise<{ deployed: string[]; createdDirs: string[] }> {
+type TemplateWrite = {
+  templateId: string
+  templateDir: string
+  backupDir: string | null
+}
+
+type WorkflowWrite =
+  | { workflowId: string; mode: 'created' }
+  | { workflowId: string; mode: 'overwritten'; previous: WorkflowConfig }
+
+async function deployTemplates(
+  templates: PackageTemplateArtifact[],
+  options: { overwriteExisting: boolean }
+): Promise<{ deployed: string[]; writes: TemplateWrite[] }> {
   const deployed: string[] = []
-  const createdDirs: string[] = []
+  const writes: TemplateWrite[] = []
 
   for (const template of templates) {
     const templatePath = `/agent-templates/${template.templateId}`
-    if (await ensurePathExists(templatePath)) {
-      throw new PackageServiceError(
-        `Template already exists: ${template.templateId}`,
-        'PACKAGE_DEPLOY_FAILED',
-        409,
-        { templateId: template.templateId }
-      )
-    }
+    const exists = await ensurePathExists(templatePath)
 
     const dirResult = validateWorkspacePath(templatePath)
     if (!dirResult.valid || !dirResult.resolvedPath) {
       throw new PackageServiceError(dirResult.error || `Invalid template path: ${templatePath}`, 'PACKAGE_DEPLOY_FAILED', 400)
     }
 
-    await fsp.mkdir(dirResult.resolvedPath, { recursive: false })
-    createdDirs.push(dirResult.resolvedPath)
+    if (exists) {
+      if (!options.overwriteExisting) {
+        throw new PackageServiceError(
+          `Template already exists: ${template.templateId}`,
+          'PACKAGE_DEPLOY_FAILED',
+          409,
+          { templateId: template.templateId }
+        )
+      }
+
+      const backupPath = `/agent-templates/.clawcontrol-backups/${template.templateId}-${randomUUID()}`
+      const backupResult = validateWorkspacePath(backupPath)
+      if (!backupResult.valid || !backupResult.resolvedPath) {
+        throw new PackageServiceError(backupResult.error || `Invalid backup path: ${backupPath}`, 'PACKAGE_DEPLOY_FAILED', 400)
+      }
+
+      await fsp.mkdir(dirname(backupResult.resolvedPath), { recursive: true })
+      await fsp.rename(dirResult.resolvedPath, backupResult.resolvedPath)
+
+      writes.push({
+        templateId: template.templateId,
+        templateDir: dirResult.resolvedPath,
+        backupDir: backupResult.resolvedPath,
+      })
+
+      await fsp.mkdir(dirResult.resolvedPath, { recursive: false })
+    } else {
+      await fsp.mkdir(dirResult.resolvedPath, { recursive: false })
+      writes.push({
+        templateId: template.templateId,
+        templateDir: dirResult.resolvedPath,
+        backupDir: null,
+      })
+    }
 
     const fileNames = Object.keys(template.files).sort((left, right) => left.localeCompare(right))
     for (const fileName of fileNames) {
@@ -710,13 +917,28 @@ async function deployTemplates(templates: PackageTemplateArtifact[]): Promise<{ 
   }
 
   invalidateTemplatesCache()
-  return { deployed, createdDirs }
+  return { deployed, writes }
 }
 
-async function rollbackTemplateDirs(paths: string[]): Promise<void> {
-  for (const path of [...paths].reverse()) {
+async function rollbackTemplateWrites(writes: TemplateWrite[]): Promise<void> {
+  for (const write of [...writes].reverse()) {
+    if (write.backupDir) {
+      try {
+        await fsp.rm(write.templateDir, { recursive: true, force: true })
+      } catch {
+        // Best-effort rollback.
+      }
+
+      try {
+        await fsp.rename(write.backupDir, write.templateDir)
+      } catch {
+        // Best-effort rollback.
+      }
+      continue
+    }
+
     try {
-      await fsp.rm(path, { recursive: true, force: true })
+      await fsp.rm(write.templateDir, { recursive: true, force: true })
     } catch {
       // Best-effort rollback.
     }
@@ -724,9 +946,96 @@ async function rollbackTemplateDirs(paths: string[]): Promise<void> {
   invalidateTemplatesCache()
 }
 
+async function cleanupTemplateBackups(writes: TemplateWrite[]): Promise<void> {
+  const backups = writes.map((write) => write.backupDir).filter((item): item is string => Boolean(item))
+  for (const backupDir of backups) {
+    try {
+      await fsp.rm(backupDir, { recursive: true, force: true })
+    } catch {
+      // best-effort cleanup
+    }
+  }
+}
+
+async function deployWorkflows(
+  workflows: WorkflowConfig[],
+  options: { overwriteExisting: boolean }
+): Promise<{ deployed: string[]; writes: WorkflowWrite[] }> {
+  if (workflows.length === 0) return { deployed: [], writes: [] }
+
+  if (!options.overwriteExisting) {
+    const result = await importCustomWorkflows(workflows)
+    return {
+      deployed: result.imported.map((workflow) => workflow.id),
+      writes: result.imported.map((workflow) => ({ workflowId: workflow.id, mode: 'created' })),
+    }
+  }
+
+  const snapshot = await getWorkflowRegistrySnapshot({ forceReload: true })
+  const definitionsById = new Map(snapshot.definitions.map((def) => [def.id, def]))
+
+  const deployed: string[] = []
+  const writes: WorkflowWrite[] = []
+
+  for (const workflow of workflows) {
+    const existing = definitionsById.get(workflow.id)
+    if (!existing) {
+      await writeWorkspaceWorkflowConfig(workflow)
+      deployed.push(workflow.id)
+      writes.push({ workflowId: workflow.id, mode: 'created' })
+      continue
+    }
+
+    if (existing.source === 'built_in') {
+      throw new PackageServiceError(
+        `Cannot overwrite built-in workflow: ${workflow.id}`,
+        'WORKFLOW_DEPLOY_FAILED',
+        409,
+        { workflowId: workflow.id }
+      )
+    }
+
+    const previous = await readWorkspaceWorkflowConfigById(workflow.id)
+    if (!previous) {
+      throw new PackageServiceError(
+        `Existing workflow definition not found for overwrite: ${workflow.id}`,
+        'WORKFLOW_DEPLOY_FAILED',
+        409,
+        { workflowId: workflow.id }
+      )
+    }
+
+    writes.push({ workflowId: workflow.id, mode: 'overwritten', previous })
+    await writeWorkspaceWorkflowConfig(workflow)
+    deployed.push(workflow.id)
+  }
+
+  return { deployed, writes }
+}
+
+async function rollbackWorkflowWrites(writes: WorkflowWrite[]): Promise<void> {
+  for (const write of [...writes].reverse()) {
+    if (write.mode === 'created') {
+      try {
+        await deleteWorkspaceWorkflowConfig(write.workflowId)
+      } catch {
+        // best-effort rollback
+      }
+      continue
+    }
+
+    try {
+      await writeWorkspaceWorkflowConfig(write.previous)
+    } catch {
+      // best-effort rollback
+    }
+  }
+}
+
 export async function deployStagedPackage(input: {
   packageId: string
   options?: PackageDeployOptions
+  overrideScanBlock?: boolean
 }): Promise<PackageDeployResult> {
   cleanupStagedPackages()
 
@@ -735,27 +1044,56 @@ export async function deployStagedPackage(input: {
     throw new PackageServiceError('Staged package not found or expired', 'PACKAGE_DEPLOY_FAILED', 404)
   }
 
+  if (staged.blockedByScan && !input.overrideScanBlock) {
+    throw new PackageServiceError(
+      'Package blocked by security scan',
+      'PACKAGE_BLOCKED_BY_SCAN',
+      409,
+      {
+        sha256: staged.sha256,
+        scan: {
+          outcome: staged.scan.outcome,
+          summaryCounts: staged.scan.summaryCounts,
+          scannerVersion: staged.scan.scannerVersion,
+        },
+      }
+    )
+  }
+
   const parsed = staged.parsed
   const deployOptions = mergeDeployOptions(parsed.manifest.kind, input.options)
   const repos = getRepos()
 
   const deployedTemplates: string[] = []
-  const createdTemplateDirs: string[] = []
+  const templateWrites: TemplateWrite[] = []
   const deployedWorkflows: string[] = []
+  const workflowWrites: WorkflowWrite[] = []
   const deployedTeams: string[] = []
+  const createdTeamIds: string[] = []
+  const updatedTeams: Array<{
+    teamId: string
+    previous: {
+      name: string
+      description: string | null
+      workflowIds: string[]
+      templateIds: string[]
+      healthStatus: 'healthy' | 'warning' | 'degraded' | 'unknown'
+    }
+  }> = []
   let selectionApplied = false
   let previousSelection: WorkflowSelectionConfig | null = null
 
   try {
     if (deployOptions.applyTemplates && parsed.templates.length > 0) {
-      const templateResult = await deployTemplates(parsed.templates)
+      const templateResult = await deployTemplates(parsed.templates, { overwriteExisting: deployOptions.overwriteTemplates })
       deployedTemplates.push(...templateResult.deployed)
-      createdTemplateDirs.push(...templateResult.createdDirs)
+      templateWrites.push(...templateResult.writes)
     }
 
     if (deployOptions.applyWorkflows && parsed.workflows.length > 0) {
-      const workflowResult = await importCustomWorkflows(parsed.workflows)
-      deployedWorkflows.push(...workflowResult.imported.map((item) => item.id))
+      const workflowResult = await deployWorkflows(parsed.workflows, { overwriteExisting: deployOptions.overwriteWorkflows })
+      deployedWorkflows.push(...workflowResult.deployed)
+      workflowWrites.push(...workflowResult.writes)
     }
 
     if (deployOptions.applyTeams && parsed.teams.length > 0) {
@@ -763,12 +1101,37 @@ export async function deployStagedPackage(input: {
         if (team.slug) {
           const existing = await repos.agentTeams.getBySlug(team.slug)
           if (existing) {
-            throw new PackageServiceError(
-              `Team slug already exists: ${team.slug}`,
-              'TEAM_DEPLOY_FAILED',
-              409,
-              { slug: team.slug }
-            )
+            if (!deployOptions.overwriteTeams) {
+              throw new PackageServiceError(
+                `Team slug already exists: ${team.slug}`,
+                'TEAM_DEPLOY_FAILED',
+                409,
+                { slug: team.slug }
+              )
+            }
+
+            updatedTeams.push({
+              teamId: existing.id,
+              previous: {
+                name: existing.name,
+                description: existing.description,
+                workflowIds: existing.workflowIds,
+                templateIds: existing.templateIds,
+                healthStatus: existing.healthStatus,
+              },
+            })
+
+            await repos.agentTeams.update(existing.id, {
+              name: team.name,
+              description: team.description ?? null,
+              workflowIds: team.workflowIds,
+              templateIds: team.templateIds,
+              healthStatus: team.healthStatus,
+              // Keep existing membership stable on update.
+            })
+
+            deployedTeams.push(existing.id)
+            continue
           }
         }
 
@@ -782,6 +1145,7 @@ export async function deployStagedPackage(input: {
           memberAgentIds: team.memberAgentIds,
           healthStatus: team.healthStatus,
         })
+        createdTeamIds.push(created.id)
         deployedTeams.push(created.id)
       }
     }
@@ -819,6 +1183,10 @@ export async function deployStagedPackage(input: {
       },
     })
 
+    await cleanupTemplateBackups(templateWrites).catch(() => {
+      // best-effort cleanup; do not fail deploy
+    })
+
     return {
       packageId: input.packageId,
       deployed: {
@@ -829,25 +1197,26 @@ export async function deployStagedPackage(input: {
       },
     }
   } catch (error) {
-    await rollbackTemplateDirs(createdTemplateDirs)
+    await rollbackTemplateWrites(templateWrites)
+    await rollbackWorkflowWrites(workflowWrites)
 
-    for (const workflowId of deployedWorkflows) {
-      try {
-        await deleteWorkspaceWorkflowConfig(workflowId)
-      } catch {
-        // best-effort rollback
-      }
-    }
-
-    if (deployedWorkflows.length > 0) {
+    if (workflowWrites.length > 0) {
       await syncResolvedWorkflowSnapshots({ forceReload: true }).catch(() => {
         // best-effort rollback
       })
     }
 
-    for (const teamId of deployedTeams) {
+    for (const teamId of createdTeamIds) {
       try {
         await repos.agentTeams.delete(teamId)
+      } catch {
+        // best-effort rollback
+      }
+    }
+
+    for (const updated of [...updatedTeams].reverse()) {
+      try {
+        await repos.agentTeams.update(updated.teamId, updated.previous)
       } catch {
         // best-effort rollback
       }

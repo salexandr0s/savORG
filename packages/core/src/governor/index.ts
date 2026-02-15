@@ -106,6 +106,7 @@ export type ActionKind =
   // Package actions
   | 'package.import'
   | 'package.deploy'
+  | 'package.deploy.override_scan_block'
   | 'package.export'
   // Data actions
   | 'data.export'
@@ -124,6 +125,11 @@ export type ActionKind =
 export interface ActionPolicy {
   riskLevel: RiskLevel
   confirmMode: ConfirmMode
+  /**
+   * For CONFIRM mode, override the required typed confirmation string.
+   * Defaults to "CONFIRM" when omitted.
+   */
+  confirmText?: string
   requiresApproval: boolean
   approvalType?: ApprovalType
   description: string
@@ -625,6 +631,14 @@ export const ACTION_POLICIES: Record<ActionKind, ActionPolicy> = {
     approvalType: 'scope_change',
     description: 'Deploy imported claw package',
   },
+  'package.deploy.override_scan_block': {
+    riskLevel: 'danger',
+    confirmMode: 'CONFIRM',
+    confirmText: 'OVERRIDE_SCAN_BLOCK',
+    requiresApproval: true,
+    approvalType: 'risky_action',
+    description: 'Override blocked security scan and deploy package',
+  },
   'package.export': {
     riskLevel: 'safe',
     confirmMode: 'NONE',
@@ -735,17 +749,22 @@ export function getApprovalType(actionKind: ActionKind): ApprovalType | undefine
 export function validateTypedConfirm(
   confirmMode: ConfirmMode,
   inputValue: string,
-  workOrderCode?: string
+  workOrderCode?: string,
+  expectedConfirmText?: string
 ): { valid: boolean; error?: string } {
   switch (confirmMode) {
     case 'NONE':
       return { valid: true }
 
     case 'CONFIRM':
-      if (inputValue.toUpperCase() !== 'CONFIRM') {
-        return { valid: false, error: 'Please type "CONFIRM" to proceed' }
+      {
+        const expected = (expectedConfirmText ?? 'CONFIRM').trim()
+        const normalizedExpected = expected.toUpperCase()
+        if (inputValue.trim().toUpperCase() !== normalizedExpected) {
+          return { valid: false, error: `Please type "${expected}" to proceed` }
+        }
+        return { valid: true }
       }
-      return { valid: true }
 
     case 'WO_CODE':
       if (!workOrderCode) {

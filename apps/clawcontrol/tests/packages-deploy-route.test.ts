@@ -4,6 +4,8 @@ const mocks = vi.hoisted(() => ({
   verifyOperatorRequest: vi.fn(),
   enforceActionPolicy: vi.fn(),
   deployStagedPackage: vi.fn(),
+  getStagedPackageScanMeta: vi.fn(),
+  activitiesCreate: vi.fn(),
 }))
 
 vi.mock('@/lib/auth/operator-auth', () => ({
@@ -20,6 +22,7 @@ vi.mock('@/lib/with-governor', () => ({
 
 vi.mock('@/lib/packages/service', () => ({
   deployStagedPackage: mocks.deployStagedPackage,
+  getStagedPackageScanMeta: mocks.getStagedPackageScanMeta,
   PackageServiceError: class PackageServiceError extends Error {
     constructor(
       message: string,
@@ -33,11 +36,21 @@ vi.mock('@/lib/packages/service', () => ({
   },
 }))
 
+vi.mock('@/lib/repo', () => ({
+  getRepos: () => ({
+    activities: {
+      create: mocks.activitiesCreate,
+    },
+  }),
+}))
+
 beforeEach(() => {
   vi.resetModules()
   mocks.verifyOperatorRequest.mockReset()
   mocks.enforceActionPolicy.mockReset()
   mocks.deployStagedPackage.mockReset()
+  mocks.getStagedPackageScanMeta.mockReset()
+  mocks.activitiesCreate.mockReset()
 
   mocks.verifyOperatorRequest.mockReturnValue({
     ok: true,
@@ -53,6 +66,8 @@ beforeEach(() => {
     allowed: true,
     policy: { requiresApproval: false, confirmMode: 'CONFIRM' },
   })
+
+  mocks.getStagedPackageScanMeta.mockReturnValue(null)
 })
 
 describe('packages deploy route', () => {
@@ -107,6 +122,86 @@ describe('packages deploy route', () => {
     expect(mocks.deployStagedPackage).toHaveBeenCalledWith({
       packageId: 'pkg_1',
       options: { applyTemplates: true },
+      overrideScanBlock: false,
     })
+  })
+
+  it('short-circuits when blocked by scan and no override is provided', async () => {
+    mocks.getStagedPackageScanMeta.mockReturnValue({
+      sha256: 'sha_1',
+      blockedByScan: true,
+      alertWorkOrderId: 'wo_1',
+      scan: {
+        outcome: 'block',
+        blocked: true,
+        summaryCounts: { danger: 1, warning: 0, info: 0 },
+        findings: [],
+        scannerVersion: 'v1',
+      },
+    })
+
+    const route = await import('@/app/api/packages/deploy/route')
+    const request = new Request('http://localhost/api/packages/deploy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        packageId: 'pkg_1',
+        typedConfirmText: 'CONFIRM',
+      }),
+    })
+
+    const response = await route.POST(request as never)
+    const payload = (await response.json()) as { code: string }
+
+    expect(response.status).toBe(409)
+    expect(payload.code).toBe('PACKAGE_BLOCKED_BY_SCAN')
+    expect(mocks.deployStagedPackage).not.toHaveBeenCalled()
+  })
+
+  it('allows governed override when blocked and overrideScanBlock is true', async () => {
+    mocks.getStagedPackageScanMeta.mockReturnValue({
+      sha256: 'sha_1',
+      blockedByScan: true,
+      alertWorkOrderId: 'wo_1',
+      scan: {
+        outcome: 'block',
+        blocked: true,
+        summaryCounts: { danger: 1, warning: 0, info: 0 },
+        findings: [],
+        scannerVersion: 'v1',
+      },
+    })
+
+    mocks.deployStagedPackage.mockResolvedValue({
+      packageId: 'pkg_1',
+      deployed: { templates: [], workflows: [], teams: [], selectionApplied: false },
+    })
+
+    mocks.enforceActionPolicy.mockImplementation(async (params: { actionKind: string }) => {
+      if (params.actionKind === 'package.deploy.override_scan_block') {
+        return { allowed: true, policy: { requiresApproval: true, confirmMode: 'CONFIRM' } }
+      }
+      return { allowed: true, policy: { requiresApproval: true, confirmMode: 'CONFIRM' } }
+    })
+
+    const route = await import('@/app/api/packages/deploy/route')
+    const request = new Request('http://localhost/api/packages/deploy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        packageId: 'pkg_1',
+        typedConfirmText: 'OVERRIDE_SCAN_BLOCK',
+        overrideScanBlock: true,
+      }),
+    })
+
+    const response = await route.POST(request as never)
+    expect(response.status).toBe(200)
+    expect(mocks.deployStagedPackage).toHaveBeenCalledWith({
+      packageId: 'pkg_1',
+      options: undefined,
+      overrideScanBlock: true,
+    })
+    expect(mocks.activitiesCreate).toHaveBeenCalled()
   })
 })

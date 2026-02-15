@@ -251,6 +251,8 @@ export interface Activity {
   id: string
   ts: Date
   type: string
+  category?: string
+  riskLevel?: RiskLevel
   actor: string
   entityType: string
   entityId: string
@@ -335,6 +337,8 @@ export interface SkillManifest {
   exportedAt: Date
   files: string[]
 }
+
+export * from './security-scan'
 
 // Plugin types
 export type PluginSourceType = 'local' | 'npm' | 'tgz' | 'git'

@@ -2151,6 +2151,7 @@ export type ClawPackageKind = 'agent_template' | 'agent_team' | 'workflow' | 'te
 export interface PackageImportAnalysis {
   packageId: string
   fileName: string
+  sha256: string
   manifest: {
     id: string
     name: string
@@ -2160,6 +2161,24 @@ export interface PackageImportAnalysis {
     createdAt?: string
     createdBy?: string
   }
+  scan: {
+    outcome: 'pass' | 'warn' | 'block'
+    blocked: boolean
+    summaryCounts: { info: number; warning: number; danger: number }
+    findings: Array<{
+      code: string
+      severity: 'info' | 'warning' | 'danger'
+      category: string
+      title: string
+      message: string
+      path?: string
+      evidenceHash?: string
+      recommendation?: string
+    }>
+    scannerVersion: string
+  }
+  blockedByScan: boolean
+  alertWorkOrderId: string | null
   summary: {
     templates: number
     workflows: number
@@ -2355,7 +2374,10 @@ export const packagesApi = {
     applyWorkflows?: boolean
     applyTeams?: boolean
     applySelection?: boolean
-  }; typedConfirmText?: string }) =>
+    overwriteTemplates?: boolean
+    overwriteWorkflows?: boolean
+    overwriteTeams?: boolean
+  }; typedConfirmText?: string; overrideScanBlock?: boolean }) =>
     apiPost<{ data: PackageDeployResult }, {
       packageId: string
       options?: {
@@ -2363,8 +2385,12 @@ export const packagesApi = {
         applyWorkflows?: boolean
         applyTeams?: boolean
         applySelection?: boolean
+        overwriteTemplates?: boolean
+        overwriteWorkflows?: boolean
+        overwriteTeams?: boolean
       }
       typedConfirmText?: string
+      overrideScanBlock?: boolean
     }>('/api/packages/deploy', data),
 
   export: (id: string, kind: ClawPackageKind, confirm?: string) => {

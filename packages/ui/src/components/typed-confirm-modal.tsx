@@ -28,6 +28,8 @@ export interface TypedConfirmModalProps {
   actionDescription: string
   /** Optional: Work Order code for WO_CODE mode */
   workOrderCode?: string
+  /** Optional: Expected typed confirmation text for CONFIRM mode (defaults to "CONFIRM") */
+  confirmText?: string
   /** Optional: Entity being affected */
   entityName?: string
   /** Whether the action is in progress */
@@ -49,6 +51,7 @@ export function TypedConfirmModal({
   actionTitle,
   actionDescription,
   workOrderCode,
+  confirmText,
   entityName,
   isLoading = false,
   settingsHref = '/settings',
@@ -68,13 +71,13 @@ export function TypedConfirmModal({
   const getExpectedValue = useCallback((): string => {
     switch (confirmMode) {
       case 'CONFIRM':
-        return 'CONFIRM'
+        return (confirmText ?? 'CONFIRM').trim() || 'CONFIRM'
       case 'WO_CODE':
         return workOrderCode || ''
       default:
         return ''
     }
-  }, [confirmMode, workOrderCode])
+  }, [confirmMode, workOrderCode, confirmText])
 
   // Check if input matches expected value
   const isValid = useCallback((): boolean => {

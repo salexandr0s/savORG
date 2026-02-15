@@ -23,6 +23,14 @@ declare global {
         notes: string | null
         error?: string
       }>
+      getWhatsNew?: () => Promise<{
+        version: string
+        title: string
+        publishedAt: string | null
+        highlights: string[]
+        releaseUrl: string
+      } | null>
+      ackWhatsNew?: (version: string) => Promise<{ ok: boolean }>
       openExternalUrl?: (url: string) => Promise<{ ok: boolean; message?: string }>
     }
   }

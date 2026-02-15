@@ -27,6 +27,8 @@ import { VisualizerView } from './visualizer'
 
 type ActivityType = 'all' | 'work_order' | 'operation' | 'agent' | 'system' | 'approval'
 type ViewMode = 'timeline' | 'visualizer'
+type RiskFilter = 'all' | 'safe' | 'caution' | 'danger'
+type CategoryFilter = 'all' | 'shell' | 'file' | 'network' | 'browser' | 'message' | 'system' | 'memory' | 'governance' | 'security'
 
 export function LiveClient() {
   const [viewMode, setViewMode] = useState<ViewMode>('timeline')
@@ -35,6 +37,9 @@ export function LiveClient() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<ActivityType>('all')
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all')
+  const [riskFilter, setRiskFilter] = useState<RiskFilter>('all')
+  const [query, setQuery] = useState('')
   const [tailMode, setTailMode] = useState(true)
   const timelineRef = useRef<HTMLDivElement>(null)
 
@@ -81,10 +86,37 @@ export function LiveClient() {
     }
   }, [activities, tailMode])
 
-  const filteredActivities =
-    filter === 'all'
-      ? activities
-      : activities.filter((a) => a.type.startsWith(filter))
+  const normalizedQuery = query.trim().toLowerCase()
+  const filteredActivities = activities.filter((a) => {
+    if (filter !== 'all' && !a.type.startsWith(filter)) return false
+    if (categoryFilter !== 'all' && (a.category ?? '').toLowerCase() !== categoryFilter) return false
+    if (riskFilter !== 'all' && (a.riskLevel ?? '').toLowerCase() !== riskFilter) return false
+    if (normalizedQuery) {
+      const haystack = `${a.summary} ${a.type} ${a.actor}`.toLowerCase()
+      if (!haystack.includes(normalizedQuery)) return false
+    }
+    return true
+  })
+
+  const exportJson = useCallback(() => {
+    const payload = JSON.stringify(filteredActivities, null, 2)
+    downloadText(`clawcontrol-activities-${new Date().toISOString()}.json`, payload, 'application/json')
+  }, [filteredActivities])
+
+  const exportCsv = useCallback(() => {
+    const header = ['id', 'ts', 'actor', 'type', 'category', 'riskLevel', 'summary']
+    const rows = filteredActivities.map((a) => ([
+      a.id,
+      typeof a.ts === 'string' ? a.ts : new Date(a.ts).toISOString(),
+      a.actor,
+      a.type,
+      a.category ?? '',
+      a.riskLevel ?? '',
+      a.summary,
+    ]).map(csvCell).join(','))
+    const payload = [header.join(','), ...rows].join('\n')
+    downloadText(`clawcontrol-activities-${new Date().toISOString()}.csv`, payload, 'text/csv')
+  }, [filteredActivities])
 
   if (loading) {
     return <LoadingState height="viewport" />
@@ -165,6 +197,58 @@ export function LiveClient() {
                     { value: 'system', label: 'System' },
                   ]}
                 />
+
+                {/* Category */}
+                <SelectDropdown
+                  value={categoryFilter}
+                  onChange={(nextValue) => setCategoryFilter(nextValue as CategoryFilter)}
+                  ariaLabel="Category filter"
+                  tone="toolbar"
+                  size="sm"
+                  options={[
+                    { value: 'all', label: 'All categories' },
+                    { value: 'security', label: 'Security' },
+                    { value: 'governance', label: 'Governance' },
+                    { value: 'system', label: 'System' },
+                    { value: 'shell', label: 'Shell' },
+                    { value: 'file', label: 'File' },
+                    { value: 'network', label: 'Network' },
+                    { value: 'browser', label: 'Browser' },
+                    { value: 'message', label: 'Message' },
+                    { value: 'memory', label: 'Memory' },
+                  ]}
+                />
+
+                {/* Risk */}
+                <SelectDropdown
+                  value={riskFilter}
+                  onChange={(nextValue) => setRiskFilter(nextValue as RiskFilter)}
+                  ariaLabel="Risk filter"
+                  tone="toolbar"
+                  size="sm"
+                  options={[
+                    { value: 'all', label: 'All risk' },
+                    { value: 'safe', label: 'Safe' },
+                    { value: 'caution', label: 'Caution' },
+                    { value: 'danger', label: 'Danger' },
+                  ]}
+                />
+
+                {/* Search */}
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search…"
+                  className="h-8 w-44 rounded-[var(--radius-md)] border border-bd-0 bg-bg-2 px-2 text-xs text-fg-0 placeholder:text-fg-3 focus:outline-none focus:ring-1 focus:ring-status-progress/40"
+                />
+
+                {/* Export */}
+                <Button onClick={exportJson} variant="secondary" size="sm">
+                  Export JSON
+                </Button>
+                <Button onClick={exportCsv} variant="secondary" size="sm">
+                  Export CSV
+                </Button>
 
                 {/* Tail Mode Toggle */}
                 <Button
@@ -329,6 +413,9 @@ function ActivityRow({
         <p className="text-sm text-fg-0">{activity.summary}</p>
         <div className="flex items-center gap-2 mt-1">
           <span className="text-xs text-fg-2 font-mono">{activity.type}</span>
+          <span className="text-fg-3">•</span>
+          <span className="text-xs text-fg-2 font-mono">{(activity.category ?? 'system')}</span>
+          <RiskPill riskLevel={activity.riskLevel ?? 'safe'} />
           {activity.actor !== 'system' && (
             <>
               <span className="text-fg-3">•</span>
@@ -370,4 +457,42 @@ function formatRelativeTime(date: Date | string): string {
   if (mins < 60) return `${mins}m ago`
   if (hours < 24) return `${hours}h ago`
   return `${days}d ago`
+}
+
+function csvCell(value: string): string {
+  const normalized = value.replace(/\r?\n/g, ' ').trim()
+  if (!normalized) return '""'
+  const escaped = normalized.replace(/"/g, '""')
+  return `"${escaped}"`
+}
+
+function downloadText(fileName: string, content: string, mime: string): void {
+  const blob = new Blob([content], { type: mime })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = fileName
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+function RiskPill({ riskLevel }: { riskLevel: 'safe' | 'caution' | 'danger' }) {
+  const cfg = riskLevel === 'danger'
+    ? 'bg-status-danger/10 text-status-danger border-status-danger/40'
+    : riskLevel === 'caution'
+      ? 'bg-status-warning/10 text-status-warning border-status-warning/40'
+      : 'bg-status-success/10 text-status-success border-status-success/40'
+
+  return (
+    <span
+      className={cn(
+        'ml-1 inline-flex items-center rounded-[var(--radius-sm)] border px-1.5 py-0.5 text-[10px] font-mono',
+        cfg
+      )}
+    >
+      {riskLevel}
+    </span>
+  )
 }

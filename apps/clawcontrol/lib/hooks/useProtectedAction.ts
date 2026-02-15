@@ -39,6 +39,7 @@ export interface UseProtectedActionReturn {
   policy: ActionPolicy | null
   riskLevel: RiskLevel
   confirmMode: ConfirmMode
+  confirmText: string
   trigger: (config: ProtectedActionConfig) => void
   confirm: (typedConfirmText: string) => Promise<void>
   cancel: () => void
@@ -72,6 +73,7 @@ export function useProtectedAction(options: UseProtectedActionOptions = {}): Use
   const policy = state.actionKind ? ACTION_POLICIES[state.actionKind] : null
   const riskLevel: RiskLevel = policy?.riskLevel ?? 'safe'
   const confirmMode: ConfirmMode = policy?.confirmMode ?? 'NONE'
+  const confirmText = (policy?.confirmText ?? 'CONFIRM').trim() || 'CONFIRM'
 
   const trigger = useCallback((config: ProtectedActionConfig) => {
     const actionPolicy = ACTION_POLICIES[config.actionKind]
@@ -87,7 +89,7 @@ export function useProtectedAction(options: UseProtectedActionOptions = {}): Use
     // If skip typed confirm is enabled, auto-confirm with the expected value
     if (skipTypedConfirm) {
       const autoConfirmText = actionPolicy.confirmMode === 'CONFIRM'
-        ? 'CONFIRM'
+        ? ((actionPolicy.confirmText ?? 'CONFIRM').trim() || 'CONFIRM')
         : config.workOrderCode || 'CONFIRM'
       config.onConfirm(autoConfirmText).catch((err) => {
         config.onError?.(err instanceof Error ? err : new Error(String(err)))
@@ -145,6 +147,7 @@ export function useProtectedAction(options: UseProtectedActionOptions = {}): Use
     policy,
     riskLevel,
     confirmMode,
+    confirmText,
     trigger,
     confirm,
     cancel,

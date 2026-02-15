@@ -491,20 +491,58 @@ model Activity {
   id          String   @id @default(cuid())
   ts          DateTime @default(now())
   type        String   // work_order.*, operation.*, agent.*, system.*, cron.*, etc.
+  category    String   @default("system") // security|governance|system|file|network|browser|message|memory|etc.
   actor       String   // system|user|agent:<name>
   actorType   String   @default("system") @map("actor_type") // user|agent|system
   actorAgentId String? @map("actor_agent_id")
   entityType  String   @map("entity_type")
   entityId    String   @map("entity_id")
   summary     String
+  riskLevel   String   @default("safe") @map("risk_level") // safe|caution|danger
   payloadJson String   @default("{}") @map("payload_json") // JSON
 
   @@index([ts])
   @@index([type])
+  @@index([category])
+  @@index([riskLevel])
   @@index([actorType])
   @@index([actorAgentId])
   @@index([entityType, entityId])
   @@map("activities")
+}
+
+// ============================================================================
+// ARTIFACT SCANS (SECURITY)
+// ============================================================================
+
+model ArtifactScanRecord {
+  id             String   @id @default(cuid())
+  artifactType   String   @map("artifact_type") // e.g., package_zip
+  artifactKey    String   @map("artifact_key") // sha256
+  manifestId     String?  @map("manifest_id")
+  manifestVersion String? @map("manifest_version")
+  outcome        String   // pass|warn|block
+  blocked        Boolean  @default(false)
+  scannerVersion String   @map("scanner_version")
+  summaryJson    String   @default("{}") @map("summary_json")
+  findingsJson   String   @default("[]") @map("findings_json")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@unique([artifactType, artifactKey])
+  @@index([artifactType])
+  @@index([artifactKey])
+  @@map("artifact_scan_records")
+}
+
+model SecurityAlert {
+  id          String   @id @default(cuid())
+  artifactKey String   @unique @map("artifact_key") // sha256
+  workOrderId String   @map("work_order_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([workOrderId])
+  @@map("security_alerts")
 }
 
 // ============================================================================

@@ -9,6 +9,7 @@ import { LoadingState } from '@/components/ui/loading-state'
 import { WorkflowEditorModal } from '@/components/workflows/workflow-editor-modal'
 import { WorkflowVisualization } from '@/components/workflows/workflow-visualization'
 import { ImportPackageModal } from '@/components/packages/import-package-modal'
+import { TrustBadge } from '@/components/trust/trust-badge'
 import { useProtectedAction } from '@/lib/hooks/useProtectedAction'
 import { useSettings } from '@/lib/settings-context'
 import { packagesApi, workflowsApi, type WorkflowDetail, type WorkflowListItem } from '@/lib/http'
@@ -55,6 +56,18 @@ const workflowColumns: Column<WorkflowListItem>[] = [
     width: '100px',
     render: (row) => (
       <StatusPill tone={row.source === 'built_in' ? 'info' : 'success'} label={row.source === 'built_in' ? 'Built-in' : 'Custom'} />
+    ),
+  },
+  {
+    key: 'trust',
+    header: 'Trust',
+    width: '140px',
+    render: (row) => (
+      <TrustBadge
+        level={row.source === 'built_in' ? 'verified' : 'unscanned'}
+        title={row.source === 'built_in' ? 'Verified' : 'Unscanned'}
+        subtitle={row.source === 'built_in' ? 'Built-in workflow' : 'Custom workflow (no scan metadata)'}
+      />
     ),
   },
   {

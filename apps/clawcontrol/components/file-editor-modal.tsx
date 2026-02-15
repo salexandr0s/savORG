@@ -202,6 +202,7 @@ export function FileEditorModal({
         actionTitle={protectedAction.state.actionTitle}
         actionDescription={protectedAction.state.actionDescription}
         confirmMode={protectedAction.confirmMode}
+        confirmText={protectedAction.confirmMode === 'CONFIRM' ? protectedAction.confirmText : undefined}
         riskLevel={protectedAction.riskLevel}
         workOrderCode={protectedAction.state.workOrderCode}
         entityName={protectedAction.state.entityName}
