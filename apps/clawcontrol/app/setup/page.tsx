@@ -188,7 +188,7 @@ export default function SetupPage() {
 
   return (
     <div className="h-screen overflow-y-auto overscroll-contain bg-bg-0 text-fg-0">
-      <div className="max-w-3xl mx-auto p-6 pb-10 space-y-6">
+      <div className="max-w-3xl mx-auto p-6 pb-12 space-y-6">
         <header>
           <h1 className="text-2xl font-semibold">Setup ClawControl</h1>
           <p className="text-sm text-fg-2 mt-1">
