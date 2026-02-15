@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { prisma } from '../db'
+import { getRepos } from '../repo'
 
 export interface ToolRequest {
   agentId?: string
@@ -225,23 +226,24 @@ export function withToolPolicy<
         const entityType = resolved.operationId ? 'operation' : 'agent'
         const entityId = resolved.operationId ? String(resolved.operationId) : actorToken
 
-        await prisma.activity
+        await getRepos()
+          .activities
           .create({
-            data: {
-              type: 'policy.tool_denied',
-              actor: `agent:${actorToken}`,
-              actorType: 'agent',
-              actorAgentId: resolvedAgentId ?? null,
-              entityType,
-              entityId,
-              summary: `Tool policy denied: ${resolved.tool}`,
-              payloadJson: JSON.stringify({
-                agentId: resolvedAgentId ?? resolved.agentId ?? null,
-                agentName: resolved.agentName ?? result.resolvedAgentName ?? null,
-                tool: resolved.tool,
-                args: resolved.args ?? null,
-                reason: result.reason ?? null,
-              }),
+            type: 'policy.tool_denied',
+            actor: `agent:${actorToken}`,
+            actorType: 'agent',
+            actorAgentId: resolvedAgentId ?? null,
+            entityType,
+            entityId,
+            category: 'system',
+            riskLevel: 'danger',
+            summary: `Tool policy denied: ${resolved.tool}`,
+            payloadJson: {
+              agentId: resolvedAgentId ?? resolved.agentId ?? null,
+              agentName: resolved.agentName ?? result.resolvedAgentName ?? null,
+              tool: resolved.tool,
+              args: resolved.args ?? null,
+              reason: result.reason ?? null,
             },
           })
           .catch(() => {})

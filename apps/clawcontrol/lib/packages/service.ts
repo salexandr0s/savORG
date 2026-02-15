@@ -2,7 +2,7 @@ import 'server-only'
 
 import { promises as fsp } from 'node:fs'
 import { dirname } from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import yaml from 'js-yaml'
 import JSZip from 'jszip'
 import Ajv from 'ajv'
@@ -12,9 +12,13 @@ import {
   type ClawPackageKind,
   type WorkflowConfig,
   type WorkflowSelectionConfig,
+  type ScanReport,
 } from '@clawcontrol/core'
+import { prisma } from '@/lib/db'
 import { getRepos } from '@/lib/repo'
 import { validateWorkspacePath } from '@/lib/fs/path-policy'
+import { scanClawpackPackage, type ScanFileInput } from '@/lib/security/clawpack-scan'
+import { ensureBlockedScanWorkOrder } from '@/lib/services/security-alerts'
 import {
   getTemplateById,
   getTemplateFileContent,
@@ -87,22 +91,49 @@ interface ParsedPackage {
   selection: WorkflowSelectionConfig | null
   installDoc: { path: string; content: string } | null
   fileCount: number
+  totalBytes: number
+  scanFiles: ScanFileInput[]
 }
 
 interface StagedPackage {
   id: string
   fileName: string
   parsed: ParsedPackage
+  sha256: string
+  scan: ScanReport
+  blockedByScan: boolean
+  alertWorkOrderId: string | null
   createdAtMs: number
   expiresAtMs: number
 }
 
 const stagedPackages = new Map<string, StagedPackage>()
 
+export function getStagedPackageScanMeta(packageId: string): {
+  sha256: string
+  scan: ScanReport
+  blockedByScan: boolean
+  alertWorkOrderId: string | null
+} | null {
+  cleanupStagedPackages()
+  const staged = stagedPackages.get(packageId)
+  if (!staged) return null
+  return {
+    sha256: staged.sha256,
+    scan: staged.scan,
+    blockedByScan: staged.blockedByScan,
+    alertWorkOrderId: staged.alertWorkOrderId,
+  }
+}
+
 export interface PackageAnalysis {
   packageId: string
   fileName: string
+  sha256: string
   manifest: ClawPackageManifest
+  scan: ScanReport
+  blockedByScan: boolean
+  alertWorkOrderId: string | null
   summary: {
     templates: number
     workflows: number
@@ -161,6 +192,20 @@ function cleanupStagedPackages(): void {
 
 function normalizeZipEntryName(name: string): string {
   return name.replace(/\\/g, '/').replace(/^\.\//, '')
+}
+
+const SCAN_ALLOWED_EXTENSIONS = new Set(['.md', '.json', '.yaml', '.yml'])
+
+function getLowercaseExtension(path: string): string {
+  const base = path.split('/').at(-1) ?? path
+  const idx = base.lastIndexOf('.')
+  if (idx === -1) return ''
+  return base.slice(idx).toLowerCase()
+}
+
+function isScanTextLike(path: string): boolean {
+  const ext = getLowercaseExtension(path)
+  return SCAN_ALLOWED_EXTENSIONS.has(ext)
 }
 
 function shouldIgnoreZipEntry(name: string): boolean {
@@ -361,7 +406,17 @@ async function parsePackageBuffer(buffer: Buffer): Promise<ParsedPackage> {
     )
   }
 
-  const manifestRaw = await manifestEntry.zipEntry.async('string')
+  const scanFiles: ScanFileInput[] = []
+  let totalBytes = 0
+
+  const manifestBuffer = await manifestEntry.zipEntry.async('nodebuffer')
+  totalBytes += manifestBuffer.length
+  const manifestRaw = manifestBuffer.toString('utf8')
+  scanFiles.push({
+    path: manifestEntry.normalized,
+    bytes: manifestBuffer.length,
+    content: manifestRaw,
+  })
   const parsedManifest = parseYamlObject(manifestRaw, manifestEntry.normalized)
   const manifestValid = validateManifest(parsedManifest)
   if (!manifestValid) {
@@ -386,8 +441,18 @@ async function parsePackageBuffer(buffer: Buffer): Promise<ParsedPackage> {
       continue
     }
 
+    const entryBuffer = await entry.zipEntry.async('nodebuffer')
+    totalBytes += entryBuffer.length
+
+    const rawText = isScanTextLike(path) ? entryBuffer.toString('utf8') : null
+    scanFiles.push({
+      path,
+      bytes: entryBuffer.length,
+      content: rawText,
+    })
+
     if (path === 'POST_INSTALL.md') {
-      const raw = await entry.zipEntry.async('string')
+      const raw = rawText ?? ''
       installDoc = {
         path,
         content: raw,
@@ -406,20 +471,22 @@ async function parsePackageBuffer(buffer: Buffer): Promise<ParsedPackage> {
       if (!fileName) continue
 
       const artifact = templatesById.get(templateId) ?? { templateId, files: {} }
-      artifact.files[fileName] = await entry.zipEntry.async('string')
+      if (rawText !== null) {
+        artifact.files[fileName] = rawText
+      }
       templatesById.set(templateId, artifact)
       continue
     }
 
     if (path.startsWith('workflows/') && path.match(/\.ya?ml$/i)) {
-      const raw = await entry.zipEntry.async('string')
+      const raw = rawText ?? ''
       const parsed = parseYamlObject(raw, path)
       workflows.push(validateWorkflowFromPackage(parsed, path))
       continue
     }
 
     if (path.startsWith('teams/') && path.match(/\.ya?ml$/i)) {
-      const raw = await entry.zipEntry.async('string')
+      const raw = rawText ?? ''
       const parsed = parseYamlObject(raw, path)
       const teamId = path.split('/').at(-1)?.replace(/\.ya?ml$/i, '') || `team_${teams.length + 1}`
       teams.push(parseTeamArtifact(parsed, teamId))
@@ -427,7 +494,7 @@ async function parsePackageBuffer(buffer: Buffer): Promise<ParsedPackage> {
     }
 
     if ((path === 'selection/workflow-selection.yaml' || path === 'selection/workflow-selection.yml')) {
-      const raw = await entry.zipEntry.async('string')
+      const raw = rawText ?? ''
       const parsed = parseYamlObject(raw, path)
       selection = validateSelectionFromPackage(parsed, path)
       continue
@@ -476,6 +543,8 @@ async function parsePackageBuffer(buffer: Buffer): Promise<ParsedPackage> {
     selection,
     installDoc,
     fileCount: fileEntries.length,
+    totalBytes,
+    scanFiles,
   }
 }
 
@@ -649,7 +718,53 @@ export async function analyzePackageImport(file: File): Promise<PackageAnalysis>
   }
 
   const buffer = Buffer.from(await file.arrayBuffer())
+  const sha256 = createHash('sha256').update(buffer).digest('hex')
   const parsed = await parsePackageBuffer(buffer)
+  const scan = scanClawpackPackage({
+    files: parsed.scanFiles,
+    fileCount: parsed.fileCount,
+    totalBytes: parsed.totalBytes,
+  })
+
+  await prisma.artifactScanRecord.upsert({
+    where: {
+      artifactType_artifactKey: {
+        artifactType: 'package_zip',
+        artifactKey: sha256,
+      },
+    },
+    create: {
+      artifactType: 'package_zip',
+      artifactKey: sha256,
+      manifestId: parsed.manifest.id,
+      manifestVersion: parsed.manifest.version,
+      outcome: scan.outcome,
+      blocked: scan.blocked,
+      scannerVersion: scan.scannerVersion,
+      summaryJson: JSON.stringify(scan.summaryCounts),
+      findingsJson: JSON.stringify(scan.findings),
+    },
+    update: {
+      manifestId: parsed.manifest.id,
+      manifestVersion: parsed.manifest.version,
+      outcome: scan.outcome,
+      blocked: scan.blocked,
+      scannerVersion: scan.scannerVersion,
+      summaryJson: JSON.stringify(scan.summaryCounts),
+      findingsJson: JSON.stringify(scan.findings),
+    },
+  })
+
+  let alertWorkOrderId: string | null = null
+  if (scan.blocked) {
+    const alert = await ensureBlockedScanWorkOrder({
+      sha256,
+      manifest: parsed.manifest,
+      scan,
+    })
+    alertWorkOrderId = alert.workOrderId
+  }
+
   const conflicts = await detectConflicts(parsed)
 
   const packageId = randomUUID()
@@ -660,6 +775,10 @@ export async function analyzePackageImport(file: File): Promise<PackageAnalysis>
     id: packageId,
     fileName: file.name,
     parsed,
+    sha256,
+    scan,
+    blockedByScan: scan.blocked,
+    alertWorkOrderId,
     createdAtMs,
     expiresAtMs: stagedUntilMs,
   })
@@ -669,7 +788,13 @@ export async function analyzePackageImport(file: File): Promise<PackageAnalysis>
     payload: {
       packageId,
       fileName: file.name,
+      sha256,
       manifest: parsed.manifest,
+      scan: {
+        outcome: scan.outcome,
+        summaryCounts: scan.summaryCounts,
+        scannerVersion: scan.scannerVersion,
+      },
       summary: {
         templates: parsed.templates.length,
         workflows: parsed.workflows.length,
@@ -683,7 +808,11 @@ export async function analyzePackageImport(file: File): Promise<PackageAnalysis>
   return {
     packageId,
     fileName: file.name,
+    sha256,
     manifest: parsed.manifest,
+    scan,
+    blockedByScan: scan.blocked,
+    alertWorkOrderId,
     summary: {
       templates: parsed.templates.length,
       workflows: parsed.workflows.length,
@@ -906,12 +1035,29 @@ async function rollbackWorkflowWrites(writes: WorkflowWrite[]): Promise<void> {
 export async function deployStagedPackage(input: {
   packageId: string
   options?: PackageDeployOptions
+  overrideScanBlock?: boolean
 }): Promise<PackageDeployResult> {
   cleanupStagedPackages()
 
   const staged = stagedPackages.get(input.packageId)
   if (!staged) {
     throw new PackageServiceError('Staged package not found or expired', 'PACKAGE_DEPLOY_FAILED', 404)
+  }
+
+  if (staged.blockedByScan && !input.overrideScanBlock) {
+    throw new PackageServiceError(
+      'Package blocked by security scan',
+      'PACKAGE_BLOCKED_BY_SCAN',
+      409,
+      {
+        sha256: staged.sha256,
+        scan: {
+          outcome: staged.scan.outcome,
+          summaryCounts: staged.scan.summaryCounts,
+          scannerVersion: staged.scan.scannerVersion,
+        },
+      }
+    )
   }
 
   const parsed = staged.parsed

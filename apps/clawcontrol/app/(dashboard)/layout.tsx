@@ -7,6 +7,7 @@ import { SearchModal, useSearchModal } from '@/components/shell/search-modal'
 import { ProtectedActionProvider } from '@/components/protected-action-modal'
 import { SyncBanner } from '@/components/sync-banner'
 import { LoadingState } from '@/components/ui/loading-state'
+import { DesktopStartupModals } from '@/components/desktop/desktop-startup-modals'
 import { usePathname, useRouter } from 'next/navigation'
 
 const INIT_STATUS_CACHE_TTL_MS = 15_000
@@ -105,6 +106,7 @@ export default function DashboardLayout({
         )}
       </AppShell>
       <SearchModal open={search.open} onClose={search.onClose} />
+      <DesktopStartupModals />
     </ProtectedActionProvider>
   )
 }

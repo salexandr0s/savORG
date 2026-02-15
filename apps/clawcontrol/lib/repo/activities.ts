@@ -23,6 +23,8 @@ export interface CreateActivityInput {
   entityType: string
   entityId: string
   summary: string
+  category?: string
+  riskLevel?: 'safe' | 'caution' | 'danger'
   payloadJson?: Record<string, unknown>
 }
 
@@ -85,12 +87,14 @@ export function createDbActivitiesRepo(): ActivitiesRepo {
           id,
           ts: new Date(),
           type: input.type,
+          category: input.category ?? 'system',
           actor: actorRef.actor,
           actorType: actorRef.actorType,
           actorAgentId: actorRef.actorAgentId,
           entityType: input.entityType,
           entityId: input.entityId,
           summary: input.summary,
+          riskLevel: input.riskLevel ?? 'safe',
           payloadJson: JSON.stringify(input.payloadJson ?? {}),
         },
       })
@@ -120,6 +124,12 @@ function buildWhere(filters?: ActivityFilters) {
   if (filters.type) {
     where.type = filters.type
   }
+  if (filters.category) {
+    where.category = filters.category
+  }
+  if (filters.riskLevel) {
+    where.riskLevel = filters.riskLevel
+  }
   return where
 }
 
@@ -148,18 +158,22 @@ function toDTO(row: {
   id: string
   ts: Date
   type: string
+  category: string
   actor: string
   actorType?: string | null
   actorAgentId?: string | null
   entityType: string
   entityId: string
   summary: string
+  riskLevel: string
   payloadJson: string
 }): ActivityDTO {
   return {
     id: row.id,
     ts: row.ts,
     type: row.type,
+    category: row.category ?? 'system',
+    riskLevel: (row.riskLevel as ActivityDTO['riskLevel']) ?? 'safe',
     actor: row.actor,
     actorType: ((row.actorType ?? 'system') as ActivityDTO['actorType']),
     actorAgentId: row.actorAgentId ?? null,

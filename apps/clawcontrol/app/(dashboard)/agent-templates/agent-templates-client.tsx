@@ -6,6 +6,7 @@ import { CanonicalTable, type Column } from '@/components/ui/canonical-table'
 import { StatusPill } from '@/components/ui/status-pill'
 import { LoadingSpinner, LoadingState } from '@/components/ui/loading-state'
 import { RightDrawer } from '@/components/shell/right-drawer'
+import { TrustBadge } from '@/components/trust/trust-badge'
 import { useProtectedAction } from '@/lib/hooks/useProtectedAction'
 import { useSettings } from '@/lib/settings-context'
 import {
@@ -346,6 +347,18 @@ const templateColumns: Column<AgentTemplate>[] = [
     width: '100px',
     render: (row) => (
       <TemplateStatusPill isValid={row.isValid} warningCount={row.validationWarnings.length} />
+    ),
+  },
+  {
+    key: 'trust',
+    header: 'Trust',
+    width: '140px',
+    render: () => (
+      <TrustBadge
+        level="unscanned"
+        title="Unscanned"
+        subtitle="Template files are not yet associated with a scan record"
+      />
     ),
   },
 ]

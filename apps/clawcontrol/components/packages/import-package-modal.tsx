@@ -8,6 +8,7 @@ import { useSettings } from '@/lib/settings-context'
 import { packagesApi, type PackageImportAnalysis } from '@/lib/http'
 import { cn } from '@/lib/utils'
 import { CheckCircle, FileArchive, Upload, AlertTriangle, Rocket, RotateCcw } from 'lucide-react'
+import { TrustBadge } from '@/components/trust/trust-badge'
 
 interface ImportPackageModalProps {
   open: boolean
@@ -35,6 +36,7 @@ export function ImportPackageModal({
   const [overwriteTemplates, setOverwriteTemplates] = useState(false)
   const [overwriteWorkflows, setOverwriteWorkflows] = useState(false)
   const [overwriteTeams, setOverwriteTeams] = useState(false)
+  const [overrideScanBlock, setOverrideScanBlock] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -49,6 +51,7 @@ export function ImportPackageModal({
     setOverwriteTemplates(false)
     setOverwriteWorkflows(false)
     setOverwriteTeams(false)
+    setOverrideScanBlock(false)
   }, [open])
 
   const hasConflicts = useMemo(() => {
@@ -104,7 +107,9 @@ export function ImportPackageModal({
     if (!analysis) return
 
     protectedAction.trigger({
-      actionKind: 'package.deploy',
+      actionKind: analysis.blockedByScan && overrideScanBlock
+        ? 'package.deploy.override_scan_block'
+        : 'package.deploy',
       actionTitle: 'Deploy Package',
       actionDescription: `Deploy package ${analysis.manifest.name} (${analysis.manifest.kind})`,
       entityName: analysis.manifest.name,
@@ -116,6 +121,7 @@ export function ImportPackageModal({
             packageId: analysis.packageId,
             options: deployOptions,
             typedConfirmText,
+            overrideScanBlock: analysis.blockedByScan ? overrideScanBlock : undefined,
           })
 
           await onDeployed?.()
@@ -273,16 +279,68 @@ export function ImportPackageModal({
                 </div>
               )}
 
+              {analysis.blockedByScan && (
+                <div className="rounded-[var(--radius-sm)] border border-status-danger/40 bg-status-danger/10 p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-xs font-medium text-status-danger">Blocked by security scan</div>
+                    <div className="text-[11px] text-fg-2 font-mono">
+                      sha256 {analysis.sha256.slice(0, 12)}…
+                    </div>
+                  </div>
+
+                  <div className="text-[11px] text-fg-1">
+                    Danger {analysis.scan.summaryCounts.danger} • Warning {analysis.scan.summaryCounts.warning} • Info {analysis.scan.summaryCounts.info}
+                  </div>
+
+                  {analysis.scan.findings.length > 0 && (
+                    <div className="text-[11px] text-fg-1">
+                      <div className="text-fg-2 mb-1">Top findings</div>
+                      <ul className="list-disc pl-4 space-y-0.5">
+                        {analysis.scan.findings.slice(0, 4).map((f, idx) => (
+                          <li key={`${f.code}-${idx}`}>
+                            <span className="font-mono text-fg-2">[{f.severity}]</span>{' '}
+                            {f.title}
+                            {f.path ? <span className="text-fg-2"> ({f.path})</span> : null}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {analysis.alertWorkOrderId ? (
+                    <div className="text-[11px] text-fg-1">
+                      Incident created:{' '}
+                      <a
+                        className="text-status-info hover:underline underline-offset-2 font-mono"
+                        href={`/work-orders/${analysis.alertWorkOrderId}`}
+                      >
+                        {analysis.alertWorkOrderId}
+                      </a>
+                    </div>
+                  ) : null}
+
+                  <label className="flex items-center gap-2 text-[11px] text-fg-1 pt-1">
+                    <input
+                      type="checkbox"
+                      checked={overrideScanBlock}
+                      onChange={(e) => setOverrideScanBlock(e.target.checked)}
+                      disabled={isWorking}
+                    />
+                    Override scan block (requires additional approvals)
+                  </label>
+                </div>
+              )}
+
               <div className="flex items-center gap-2">
                 <Button
                   type="button"
                   onClick={handleDeploy}
-                  disabled={isWorking}
+                  disabled={isWorking || (analysis.blockedByScan && !overrideScanBlock)}
                   variant="primary"
                   size="sm"
                 >
                   <Rocket className="w-3.5 h-3.5" />
-                  Deploy
+                  {analysis.blockedByScan && overrideScanBlock ? 'Override & Deploy' : 'Deploy'}
                 </Button>
                 <Button
                   type="button"
@@ -311,9 +369,28 @@ export function ImportPackageModal({
           )}
 
           {!error && analysis && (
-            <div className="rounded-[var(--radius-sm)] border border-status-success/40 bg-status-success/10 p-2 text-sm text-status-success flex items-center gap-2">
-              <CheckCircle className="w-4 h-4" />
-              Package analyzed. Review options then deploy.
+            <div className="rounded-[var(--radius-sm)] border border-bd-0 bg-bg-2 p-2 text-sm text-fg-1 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <CheckCircle className="w-4 h-4 text-status-success shrink-0" />
+                <span className="truncate">Package analyzed. Review options then deploy.</span>
+              </div>
+              <TrustBadge
+                level={
+                  analysis.blockedByScan
+                    ? 'blocked'
+                    : (analysis.scan.outcome === 'pass' || analysis.scan.outcome === 'warn')
+                      ? 'scanned'
+                      : 'unscanned'
+                }
+                title={
+                  analysis.blockedByScan
+                    ? 'Blocked by scan'
+                    : analysis.scan.outcome === 'warn'
+                      ? 'Scanned (warnings)'
+                      : 'Scanned'
+                }
+                subtitle={`sha256 ${analysis.sha256.slice(0, 12)}… • ${analysis.scan.scannerVersion}`}
+              />
             </div>
           )}
         </div>
@@ -326,6 +403,7 @@ export function ImportPackageModal({
         actionTitle={protectedAction.state.actionTitle}
         actionDescription={protectedAction.state.actionDescription}
         confirmMode={protectedAction.confirmMode}
+        confirmText={protectedAction.confirmMode === 'CONFIRM' ? protectedAction.confirmText : undefined}
         riskLevel={protectedAction.riskLevel}
         entityName={protectedAction.state.entityName}
         isLoading={protectedAction.state.isLoading}

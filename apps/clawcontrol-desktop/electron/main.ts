@@ -5,6 +5,7 @@ import http from 'node:http'
 import path from 'node:path'
 import { ensurePackagedDatabaseSchema } from './schema-bootstrap'
 import { getAssetPath, isDev } from './utils'
+import { buildWhatsNewPayload, type WhatsNewPayload } from './whats-new'
 
 let mainWindow: BrowserWindow | null = null
 let serverProcess: ChildProcess | null = null
@@ -27,6 +28,8 @@ const TEST_GATEWAY_CHANNEL = 'clawcontrol:test-gateway'
 const RUN_MODEL_AUTH_LOGIN_CHANNEL = 'clawcontrol:run-model-auth-login'
 const CHECK_FOR_UPDATES_CHANNEL = 'clawcontrol:check-for-updates'
 const OPEN_EXTERNAL_URL_CHANNEL = 'clawcontrol:open-external-url'
+const GET_WHATS_NEW_CHANNEL = 'clawcontrol:get-whats-new'
+const ACK_WHATS_NEW_CHANNEL = 'clawcontrol:ack-whats-new'
 const GITHUB_REPOSITORY = 'salexandr0s/ClawControl'
 const GITHUB_API_RELEASES_BASE = `https://api.github.com/repos/${GITHUB_REPOSITORY}/releases`
 const DEFAULT_RELEASE_PAGE_URL = `https://github.com/${GITHUB_REPOSITORY}/releases`
@@ -82,6 +85,8 @@ interface DesktopUpdateInfo {
   notes: string | null
   error?: string
 }
+
+let pendingWhatsNew: WhatsNewPayload | null = null
 
 interface OpenExternalUrlResponse {
   ok: boolean
@@ -269,26 +274,17 @@ async function maybeShowWhatsNew(): Promise<void> {
   const releaseTitle = typeof release?.name === 'string' && release.name.trim().length > 0
     ? release.name.trim()
     : `ClawControl v${currentVersion}`
-  const releaseNotes = sanitizeReleaseNotes(release?.body) ?? 'No release notes were published for this version.'
-  const messageBoxOptions: Electron.MessageBoxOptions = {
-    type: 'info',
-    title: `What’s New in v${currentVersion}`,
-    message: releaseTitle,
-    detail: releaseNotes,
-    buttons: ['OK'],
-    defaultId: 0,
-    noLink: true,
-  }
+  const releaseUrl = isTrustedGithubReleaseUrl(release?.html_url)
+    ? (release?.html_url as string)
+    : DEFAULT_RELEASE_PAGE_URL
 
-  try {
-    if (mainWindow) {
-      await dialog.showMessageBox(mainWindow, messageBoxOptions)
-    } else {
-      await dialog.showMessageBox(messageBoxOptions)
-    }
-  } finally {
-    writeDesktopUpdateState({ lastSeenVersion: currentVersion })
-  }
+  pendingWhatsNew = buildWhatsNewPayload({
+    version: currentVersion,
+    title: releaseTitle,
+    publishedAt: typeof release?.published_at === 'string' ? release.published_at : null,
+    body: release?.body,
+    releaseUrl,
+  })
 }
 
 function installStdIoGuards(): void {
@@ -1109,6 +1105,28 @@ ipcMain.handle(
 
 ipcMain.handle(CHECK_FOR_UPDATES_CHANNEL, async (): Promise<DesktopUpdateInfo> => {
   return getDesktopUpdateInfo()
+})
+
+ipcMain.handle(GET_WHATS_NEW_CHANNEL, async (): Promise<WhatsNewPayload | null> => {
+  return pendingWhatsNew
+})
+
+ipcMain.handle(ACK_WHATS_NEW_CHANNEL, async (_event, payload: { version?: unknown }): Promise<{ ok: boolean }> => {
+  const currentVersion = app.getVersion()
+  const requested = typeof payload?.version === 'string' ? normalizeVersionInput(payload.version) : null
+  const next = requested ?? currentVersion
+
+  // Never regress the last-seen marker.
+  const state = readDesktopUpdateState()
+  const lastSeen = normalizeVersionInput(state.lastSeenVersion)
+  if (lastSeen && compareVersions(next, lastSeen) <= 0) {
+    pendingWhatsNew = null
+    return { ok: true }
+  }
+
+  writeDesktopUpdateState({ lastSeenVersion: next })
+  pendingWhatsNew = null
+  return { ok: true }
 })
 
 ipcMain.handle(

@@ -29,7 +29,7 @@ interface ProtectedActionProviderProps {
  */
 export function ProtectedActionProvider({ children }: ProtectedActionProviderProps) {
   const { skipTypedConfirm } = useSettings()
-  const { state, riskLevel, confirmMode, trigger, confirm, cancel } = useProtectedAction({ skipTypedConfirm })
+  const { state, riskLevel, confirmMode, confirmText, trigger, confirm, cancel } = useProtectedAction({ skipTypedConfirm })
 
   return (
     <ProtectedActionContext.Provider value={{ trigger }}>
@@ -39,6 +39,7 @@ export function ProtectedActionProvider({ children }: ProtectedActionProviderPro
         onClose={cancel}
         onConfirm={confirm}
         confirmMode={confirmMode}
+        confirmText={confirmMode === 'CONFIRM' ? confirmText : undefined}
         riskLevel={riskLevel}
         actionTitle={state.actionTitle}
         actionDescription={state.actionDescription}

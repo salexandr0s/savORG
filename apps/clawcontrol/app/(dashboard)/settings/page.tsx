@@ -74,6 +74,14 @@ declare global {
       pickDirectory: (defaultPath?: string) => Promise<string | null>
       restartServer?: () => Promise<{ ok: boolean; message: string }>
       checkForUpdates?: () => Promise<DesktopUpdateInfo>
+      getWhatsNew?: () => Promise<{
+        version: string
+        title: string
+        publishedAt: string | null
+        highlights: string[]
+        releaseUrl: string
+      } | null>
+      ackWhatsNew?: (version: string) => Promise<{ ok: boolean }>
       openExternalUrl?: (url: string) => Promise<{ ok: boolean; message?: string }>
     }
   }

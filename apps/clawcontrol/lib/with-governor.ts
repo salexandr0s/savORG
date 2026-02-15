@@ -91,6 +91,7 @@ export function withGovernor<T>(
 ): (request: NextRequest, context: { params: Promise<Record<string, string>> }) => Promise<NextResponse<T | GovernorError>> {
   return async (request, context) => {
     const policy = ACTION_POLICIES[config.actionKind]
+    const expectedConfirmText = policy.confirmText
 
     // Parse body for POST/PATCH/PUT/DELETE requests
     let body: unknown = undefined
@@ -218,7 +219,9 @@ export function withGovernor<T>(
             details: {
               actionKind: config.actionKind,
               confirmMode: policy.confirmMode,
-              required: policy.confirmMode === 'WO_CODE' ? workOrderCode : 'CONFIRM',
+              required: policy.confirmMode === 'WO_CODE'
+                ? workOrderCode
+                : (expectedConfirmText ?? 'CONFIRM'),
             },
           },
           { status: 403 }
@@ -226,7 +229,12 @@ export function withGovernor<T>(
       }
 
       // Validate the typed confirm value
-      const validation = validateTypedConfirm(policy.confirmMode, typedConfirmText, workOrderCode)
+      const validation = validateTypedConfirm(
+        policy.confirmMode,
+        typedConfirmText,
+        workOrderCode,
+        expectedConfirmText
+      )
       if (!validation.valid) {
         return NextResponse.json(
           {
@@ -235,7 +243,9 @@ export function withGovernor<T>(
             details: {
               actionKind: config.actionKind,
               confirmMode: policy.confirmMode,
-              required: policy.confirmMode === 'WO_CODE' ? workOrderCode : 'CONFIRM',
+              required: policy.confirmMode === 'WO_CODE'
+                ? workOrderCode
+                : (expectedConfirmText ?? 'CONFIRM'),
             },
           },
           { status: 403 }
@@ -290,9 +300,15 @@ export async function enforceGovernor(params: {
   operationId?: string | null
   actor: string
   typedConfirmText?: string
+  /**
+   * Override the expected typed confirmation string for CONFIRM mode.
+   * Defaults to the value defined in ACTION_POLICIES (or "CONFIRM").
+   */
+  expectedConfirmText?: string
 }): Promise<{ allowed: true; gateResult: ApprovalGateResult } | { allowed: false; error: GovernorError; status: number }> {
   const { actionKind, workOrderId, operationId, actor, typedConfirmText } = params
   const policy = ACTION_POLICIES[actionKind]
+  const expectedConfirmText = params.expectedConfirmText ?? policy.confirmText
   const repos = getRepos()
 
   // Check approval gate
@@ -370,14 +386,21 @@ export async function enforceGovernor(params: {
           details: {
             actionKind,
             confirmMode: policy.confirmMode,
-            required: policy.confirmMode === 'WO_CODE' ? workOrderCode : 'CONFIRM',
+            required: policy.confirmMode === 'WO_CODE'
+              ? workOrderCode
+              : (expectedConfirmText ?? 'CONFIRM'),
           },
         },
         status: 403,
       }
     }
 
-    const validation = validateTypedConfirm(policy.confirmMode, typedConfirmText, workOrderCode)
+    const validation = validateTypedConfirm(
+      policy.confirmMode,
+      typedConfirmText,
+      workOrderCode,
+      expectedConfirmText
+    )
     if (!validation.valid) {
       return {
         allowed: false,
@@ -387,7 +410,9 @@ export async function enforceGovernor(params: {
           details: {
             actionKind,
             confirmMode: policy.confirmMode,
-            required: policy.confirmMode === 'WO_CODE' ? workOrderCode : 'CONFIRM',
+            required: policy.confirmMode === 'WO_CODE'
+              ? workOrderCode
+              : (expectedConfirmText ?? 'CONFIRM'),
           },
         },
         status: 403,
@@ -437,6 +462,11 @@ export async function enforceActionPolicy(params: {
   workOrderId?: string | null
   operationId?: string | null
   fallbackWorkOrderId?: string
+  /**
+   * Override the expected typed confirmation string for CONFIRM mode.
+   * Defaults to the value defined in ACTION_POLICIES (or "CONFIRM").
+   */
+  expectedConfirmText?: string
 }): Promise<ActionPolicyEnforcementResult> {
   const {
     actionKind,
@@ -445,6 +475,7 @@ export async function enforceActionPolicy(params: {
     workOrderId,
     operationId,
     fallbackWorkOrderId = 'system',
+    expectedConfirmText,
   } = params
   const policy = ACTION_POLICIES[actionKind]
 
@@ -456,6 +487,7 @@ export async function enforceActionPolicy(params: {
       operationId,
       actor,
       typedConfirmText,
+      expectedConfirmText,
     })
 
     if (!result.allowed) {
@@ -480,21 +512,31 @@ export async function enforceActionPolicy(params: {
   }
 
   if (!typedConfirmText) {
+    const required = policy.confirmMode === 'WO_CODE'
+      ? undefined
+      : (expectedConfirmText ?? policy.confirmText ?? 'CONFIRM')
     return {
       allowed: false,
       errorType: 'TYPED_CONFIRM_REQUIRED',
       policy,
       status: 428,
+      details: required ? { required } : undefined,
     }
   }
 
-  const validation = validateTypedConfirm(policy.confirmMode, typedConfirmText)
+  const validation = validateTypedConfirm(
+    policy.confirmMode,
+    typedConfirmText,
+    undefined,
+    expectedConfirmText ?? policy.confirmText
+  )
   if (!validation.valid) {
     return {
       allowed: false,
       errorType: 'TYPED_CONFIRM_INVALID',
       policy,
       status: 403,
+      details: validation.error ? { error: validation.error } : undefined,
     }
   }
 

@@ -209,6 +209,8 @@ export interface ActivityDTO {
   id: string
   ts: Date
   type: string
+  category: string
+  riskLevel: 'safe' | 'caution' | 'danger'
   actor: string
   actorType: ActorType
   actorAgentId: string | null
@@ -223,6 +225,8 @@ export interface ActivityFilters {
   entityType?: string
   entityId?: string
   type?: string
+  category?: string
+  riskLevel?: string
 }
 
 export interface PaginationOptions {

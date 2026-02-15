@@ -97,6 +97,8 @@ const originalOpenClawWorkspace = process.env.OPENCLAW_WORKSPACE
 const originalSettingsPath = process.env.CLAWCONTROL_SETTINGS_PATH
 const originalClawcontrolWorkspaceRoot = process.env.CLAWCONTROL_WORKSPACE_ROOT
 const originalWorkspaceRoot = process.env.WORKSPACE_ROOT
+const originalDatabaseUrl = process.env.DATABASE_URL
+const originalMigrationsDir = process.env.CLAWCONTROL_MIGRATIONS_DIR
 
 let tempWorkspace = ''
 
@@ -163,7 +165,7 @@ async function buildTestPackZip(input: {
     'agent-templates/test_template/template.json',
     JSON.stringify({ id: 'test_template', name: 'Test Template', version: '1.0.0' }, null, 2)
   )
-  zip.file('agent-templates/test_template/notes.txt', input.templateNotes)
+  zip.file('agent-templates/test_template/notes.md', input.templateNotes)
 
   // `File` expects web-ish BlobParts. Convert to a plain ArrayBuffer to satisfy TS' `BlobPart` types
   // (typed arrays are generic over ArrayBufferLike in newer TS libs).
@@ -192,19 +194,37 @@ beforeEach(async () => {
     JSON.stringify({ workspacePath: tempWorkspace, updatedAt: new Date().toISOString() })
   )
 
+  const dbPath = join(tempWorkspace, 'test.db')
+  process.env.DATABASE_URL = `file:${dbPath}`
+  process.env.CLAWCONTROL_MIGRATIONS_DIR = join(process.cwd(), 'prisma', 'migrations')
+
   invalidateWorkspaceRootCache()
   clearWorkflowRegistryCache()
+  delete (globalThis as { prisma?: unknown }).prisma
   vi.resetModules()
+
+  const { ensureDatabaseInitialized } = await import('@/lib/db/init')
+  await ensureDatabaseInitialized()
 })
 
 afterEach(async () => {
+  try {
+    const { prisma } = await import('@/lib/db')
+    await prisma.$disconnect()
+  } catch {
+    // ignore
+  }
+
   restoreEnv('OPENCLAW_WORKSPACE', originalOpenClawWorkspace)
   restoreEnv('CLAWCONTROL_SETTINGS_PATH', originalSettingsPath)
   restoreEnv('CLAWCONTROL_WORKSPACE_ROOT', originalClawcontrolWorkspaceRoot)
   restoreEnv('WORKSPACE_ROOT', originalWorkspaceRoot)
+  restoreEnv('DATABASE_URL', originalDatabaseUrl)
+  restoreEnv('CLAWCONTROL_MIGRATIONS_DIR', originalMigrationsDir)
 
   invalidateWorkspaceRootCache()
   clearWorkflowRegistryCache()
+  delete (globalThis as { prisma?: unknown }).prisma
   vi.resetModules()
 
   const workspaceToRemove = tempWorkspace
@@ -235,7 +255,7 @@ describe('package deploy update flow', () => {
     })
 
     const workflowPath = join(tempWorkspace, 'workflows', 'test_flow.yaml')
-    const templatePath = join(tempWorkspace, 'agent-templates', 'test_template', 'notes.txt')
+    const templatePath = join(tempWorkspace, 'agent-templates', 'test_template', 'notes.md')
 
     expect(await fsp.readFile(workflowPath, 'utf8')).toContain('description: v1 workflow')
     expect(await fsp.readFile(templatePath, 'utf8')).toBe('v1 notes')
