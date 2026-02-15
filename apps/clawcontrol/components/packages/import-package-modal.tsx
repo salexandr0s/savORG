@@ -32,6 +32,9 @@ export function ImportPackageModal({
   const [applyWorkflows, setApplyWorkflows] = useState(true)
   const [applyTeams, setApplyTeams] = useState(true)
   const [applySelection, setApplySelection] = useState(true)
+  const [overwriteTemplates, setOverwriteTemplates] = useState(false)
+  const [overwriteWorkflows, setOverwriteWorkflows] = useState(false)
+  const [overwriteTeams, setOverwriteTeams] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -43,6 +46,9 @@ export function ImportPackageModal({
     setApplyWorkflows(true)
     setApplyTeams(true)
     setApplySelection(true)
+    setOverwriteTemplates(false)
+    setOverwriteWorkflows(false)
+    setOverwriteTeams(false)
   }, [open])
 
   const hasConflicts = useMemo(() => {
@@ -59,7 +65,10 @@ export function ImportPackageModal({
     applyWorkflows,
     applyTeams,
     applySelection,
-  }), [applyTemplates, applyWorkflows, applyTeams, applySelection])
+    overwriteTemplates: overwriteTemplates && applyTemplates,
+    overwriteWorkflows: overwriteWorkflows && applyWorkflows,
+    overwriteTeams: overwriteTeams && applyTeams,
+  }), [applyTemplates, applyWorkflows, applyTeams, applySelection, overwriteTemplates, overwriteWorkflows, overwriteTeams])
 
   const handleAnalyze = () => {
     if (!file) return
@@ -230,6 +239,37 @@ export function ImportPackageModal({
                   {analysis.conflicts.teams.length > 0 && (
                     <div>Teams: {analysis.conflicts.teams.join(', ')}</div>
                   )}
+
+                  <div className="pt-2 space-y-1 text-fg-1">
+                    <div className="text-[11px] text-fg-2">Update options (overwrite existing)</div>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={overwriteTemplates}
+                        onChange={(e) => setOverwriteTemplates(e.target.checked)}
+                        disabled={!applyTemplates || analysis.conflicts.templates.length === 0}
+                      />
+                      Overwrite templates
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={overwriteWorkflows}
+                        onChange={(e) => setOverwriteWorkflows(e.target.checked)}
+                        disabled={!applyWorkflows || analysis.conflicts.workflows.length === 0}
+                      />
+                      Overwrite workflows
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={overwriteTeams}
+                        onChange={(e) => setOverwriteTeams(e.target.checked)}
+                        disabled={!applyTeams || analysis.conflicts.teams.length === 0}
+                      />
+                      Update teams by slug
+                    </label>
+                  </div>
                 </div>
               )}
 

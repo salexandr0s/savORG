@@ -2355,6 +2355,9 @@ export const packagesApi = {
     applyWorkflows?: boolean
     applyTeams?: boolean
     applySelection?: boolean
+    overwriteTemplates?: boolean
+    overwriteWorkflows?: boolean
+    overwriteTeams?: boolean
   }; typedConfirmText?: string }) =>
     apiPost<{ data: PackageDeployResult }, {
       packageId: string
@@ -2363,6 +2366,9 @@ export const packagesApi = {
         applyWorkflows?: boolean
         applyTeams?: boolean
         applySelection?: boolean
+        overwriteTemplates?: boolean
+        overwriteWorkflows?: boolean
+        overwriteTeams?: boolean
       }
       typedConfirmText?: string
     }>('/api/packages/deploy', data),
