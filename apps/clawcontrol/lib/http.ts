@@ -1912,6 +1912,25 @@ export interface AgentTeamSummary {
   updatedAt: string
 }
 
+export interface TeamInstantiateAgentsOutcome {
+  templateId: string
+  status: 'created' | 'existing'
+  agentId: string
+  agentSlug: string
+  filesWritten: string[]
+  filesSkipped: string[]
+}
+
+export interface TeamInstantiateAgentsResult {
+  teamId: string
+  createdAgents: Array<{ id: string; slug: string; displayName: string }>
+  existingAgents: Array<{ id: string; slug: string; displayName: string }>
+  outcomes: TeamInstantiateAgentsOutcome[]
+  filesWritten: string[]
+  filesSkipped: string[]
+  receiptId: string
+}
+
 export type ClawPackageKind = 'agent_template' | 'agent_team' | 'workflow' | 'team_with_workflows'
 
 export interface PackageImportAnalysis {
@@ -1937,6 +1956,7 @@ export interface PackageImportAnalysis {
     workflows: string[]
     teams: string[]
   }
+  installDoc?: { path: string; preview: string } | null
   stagedUntil: string
 }
 
@@ -2074,6 +2094,12 @@ export const agentTeamsApi = {
 
   delete: (id: string, data: { typedConfirmText?: string }) =>
     apiDeleteJson<{ success: true }, { typedConfirmText?: string }>(`/api/agent-teams/${id}`, data),
+
+  instantiateAgents: (id: string, data: { typedConfirmText?: string }) =>
+    apiPost<{ data: TeamInstantiateAgentsResult }, { typedConfirmText?: string }>(
+      `/api/agent-teams/${id}/instantiate`,
+      data
+    ),
 
   export: (id: string, confirm?: string) => {
     const query = confirm ? `?confirm=${encodeURIComponent(confirm)}` : ''
